@@ -1,0 +1,28 @@
+[package]
+name = "wasm-smtp-cloudflare"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Cloudflare Workers socket adapter for wasm-smtp-core."
+readme = "../../README.md"
+keywords = ["smtp", "email", "cloudflare", "workers", "wasm"]
+categories = ["email", "network-programming", "wasm"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+wasm-smtp-core = { path = "../core", version = "0.1.0" }
+worker = "0.8"
+tokio = { version = "1", default-features = false, features = ["io-util"] }
+
+[dev-dependencies]
+tokio = { version = "1", default-features = false, features = ["io-util", "macros", "rt"] }
+tokio-test = "0.4"
+
+[lints]
+workspace = true

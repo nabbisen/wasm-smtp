@@ -1,0 +1,21 @@
+[package]
+name = "wasm-smtp-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Environment-independent SMTP client core for WASM and other constrained runtimes."
+readme = "../../README.md"
+keywords = ["smtp", "email", "wasm", "client", "async"]
+categories = ["email", "network-programming", "wasm"]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+
+[lints]
+workspace = true
