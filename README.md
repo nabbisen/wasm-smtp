@@ -1,5 +1,14 @@
 # wasm-smtp
 
+[![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](https://github.com/nabbisen/wasm-smtp/blob/main/LICENSE)
+
+[![crates.io](https://img.shields.io/crates/v/wasm-smtp-core?label=core)](https://crates.io/crates/wasm-smtp-core)
+[![crates.io](https://img.shields.io/crates/v/wasm-smtp-cloudflare?label=cloudflare)](https://crates.io/crates/wasm-smtp-cloudflare)
+[![Rust Documentation](https://docs.rs/wasm-smtp-core/badge.svg?version=latest)](https://docs.rs/wasm-smtp-core)
+[![Rust Documentation](https://docs.rs/wasm-smtp-cloudflare/badge.svg?version=latest)](https://docs.rs/wasm-smtp-cloudflare)
+[![Dependency Status](https://deps.rs/crate/wasm-smtp-core/latest/status.svg)](https://deps.rs/crate/wasm-smtp-core)
+[![Dependency Status](https://deps.rs/crate/wasm-smtp-cloudflare/latest/status.svg)](https://deps.rs/crate/wasm-smtp-cloudflare)
+
 Rust crates for sending mail by SMTP from WebAssembly runtimes. The
 project separates the protocol implementation from the runtime-specific
 socket code so that the same SMTP engine can be reused on every host.
@@ -125,10 +134,6 @@ operating policy of any SMTP server. See [`TERMS_OF_USE.md`].
 Long-form documentation lives in [`docs/src`]. The mdBook structure
 covers project architecture, the SMTP protocol surface, the error
 taxonomy, and end-to-end usage.
-
-## License
-
-Apache-2.0. See [`LICENSE`] and [`NOTICE`].
 
 [`Transport`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/trait.Transport.html
 [`docs/src`]: ./docs/src

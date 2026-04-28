@@ -132,6 +132,24 @@ impl<T: Transport> SmtpClient<T> {
     /// May only be called immediately after [`Self::connect`]. Calling it
     /// a second time, or after [`Self::send_mail`], returns
     /// [`InvalidInputError`].
+    ///
+    /// # Credential lifetime and zeroization
+    ///
+    /// `wasm-smtp-core` does not retain copies of `user` or `pass` after
+    /// this call returns: the credentials are passed by reference, used
+    /// once to build a base64-encoded SASL payload, and dropped together
+    /// with that payload at the end of the call. The crate also never
+    /// includes credentials in [`Debug`](core::fmt::Debug) output, error
+    /// messages, or [`Display`](core::fmt::Display) text.
+    ///
+    /// What the crate cannot do is securely erase the bytes the caller
+    /// supplied — that storage belongs to the caller. If your threat
+    /// model includes memory disclosure (a process dump, a debugger
+    /// attached to the running Worker, etc.), wrap the password in a
+    /// type that zeroes its backing memory on drop (the `zeroize` crate
+    /// is the conventional choice) and pass `&z.expose_secret()` only at
+    /// the call site. Concretely, avoid pulling the password out of an
+    /// environment variable into a long-lived `String`.
     pub async fn login(&mut self, user: &str, pass: &str) -> Result<(), SmtpError> {
         if let Some(mech) = select_auth_mechanism(&self.capabilities) {
             self.login_with(mech, user, pass).await
@@ -361,6 +379,18 @@ impl<T: Transport> SmtpClient<T> {
     ///
     /// On success the client is left in a state where another `send_mail`
     /// may be issued, or `quit` may be called to close the session.
+    ///
+    /// # Body size
+    ///
+    /// `wasm-smtp-core` does not impose an upper bound on `body.len()`;
+    /// the body is dot-stuffed into a single `Vec<u8>` and written in
+    /// one [`crate::Transport::write_all`] call.
+    /// In practice the caller (or a layer above this crate) should
+    /// enforce a sane application-specific limit, both to avoid the
+    /// allocation cost on a malicious body and to stay within the
+    /// `SIZE` limit (RFC 1870) the server may have advertised in its
+    /// `EHLO` response. A typical safe default for transactional mail
+    /// is 10 MiB; submission relays such as Gmail enforce 25-50 MiB.
     pub async fn send_mail(
         &mut self,
         from: &str,
@@ -814,6 +844,33 @@ impl<T: StartTlsCapable> SmtpClient<T> {
         self.transition(SessionState::StartTls)?;
         self.write_all(&format_command("STARTTLS")).await?;
         self.expect_code(220, SmtpOp::StartTls).await?;
+
+        // STARTTLS injection / pipelining defense (RFC 3207 §5):
+        //
+        // Between the `220` reply and the TLS handshake the channel is
+        // still plaintext. An attacker who is willing to corrupt the
+        // server's reply stream may try to pipeline additional SMTP
+        // commands ("EHLO ..\r\nMAIL FROM:..\r\n") onto the buffer
+        // before the TLS upgrade, hoping the client will read those
+        // bytes back AFTER the upgrade and treat them as if they had
+        // arrived over the secured channel. (See CVE-2011-1575 for the
+        // historical Postfix case; equivalent client-side bugs exist.)
+        //
+        // The defense is to refuse to start TLS when there are any
+        // unread bytes in the receive buffer after the 220. Honest
+        // servers do not pipeline data into the STARTTLS handshake
+        // window — they wait for the client to begin the TLS
+        // ClientHello. Any bytes here are therefore evidence of an
+        // injection or of a server bug that we want to surface
+        // loudly rather than silently absorb.
+        let residue = self.rx_buf.len() - self.rx_pos;
+        if residue > 0 {
+            self.mark_closed_on_logical_failure();
+            return Err(ProtocolError::StartTlsBufferResidue {
+                byte_count: residue,
+            }
+            .into());
+        }
 
         // Upgrade the transport. Discard previously-advertised
         // capabilities: RFC 3207 §4.2 mandates that the server may

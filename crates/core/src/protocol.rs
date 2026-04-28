@@ -32,6 +32,19 @@ pub const MAX_REPLY_LINE_LEN: usize = 998;
 /// prevents an unbounded server from causing unbounded allocation.
 pub const MAX_REPLY_LINES: usize = 128;
 
+/// Maximum length of an envelope address (RFC 5321 §4.5.3.1.3).
+///
+/// The standard's `Path` limit is 256 octets, including the angle
+/// brackets that frame the address on the wire. With brackets
+/// stripped, the validated address may be at most 254 octets.
+pub const MAX_ADDRESS_LEN: usize = 254;
+
+/// Maximum length of an address local-part (RFC 5321 §4.5.3.1.1).
+pub const MAX_LOCAL_PART_LEN: usize = 64;
+
+/// Maximum length of an address domain (RFC 5321 §4.5.3.1.2).
+pub const MAX_DOMAIN_LEN: usize = 255;
+
 // -----------------------------------------------------------------------------
 // Reply parsing
 // -----------------------------------------------------------------------------
@@ -249,6 +262,19 @@ impl Reply {
     /// If an enhanced status code prefix is present, it is preserved in
     /// the output; use [`Self::message_text`] for a presentation that
     /// hides it.
+    ///
+    /// # Caveat for log handlers
+    ///
+    /// The returned `String` may contain `\n` (used internally to
+    /// separate multi-line replies). It does **not** contain `\r` —
+    /// CRLF is stripped by the reply parser before storage — but
+    /// applications that forward this text to line-oriented loggers
+    /// (`syslog`, journald, structured JSON, etc.) should still
+    /// escape or render newlines explicitly to avoid log injection
+    /// where one logical reply renders as multiple log records. The
+    /// same caveat applies to anything else that consumes the
+    /// `Display` output of [`crate::ProtocolError`] or
+    /// [`crate::AuthError`], since those types embed reply text.
     pub fn joined_text(&self) -> String {
         self.lines.join("\n")
     }
@@ -446,18 +472,31 @@ fn push_b64(out: &mut String, n: u32, count: u8) {
 ///
 /// The check is intentionally conservative: it rejects the characters that
 /// would either inject SMTP commands or violate the framing of `<addr>`.
-/// It does not attempt full RFC 5321 grammar validation.
-/// Validate an envelope address (the `<…>` content in `MAIL FROM` /
-/// `RCPT TO`). The check is conservative — it does not parse RFC 5321
-/// grammar in detail, but it forbids any byte that would corrupt the
-/// command framing.
+/// Validate an envelope address (used in MAIL FROM / RCPT TO) against
+/// RFC 5321 grammar and the length limits in §4.5.3.1.
+///
+/// The check is conservative — it does not parse RFC 5321 grammar in
+/// detail, but it forbids any byte that would corrupt the command
+/// framing, and rejects values that exceed the standard's per-field
+/// length limits.
 ///
 /// In particular:
+///
 /// - non-empty;
 /// - ASCII only — UTF-8 addresses require the `smtputf8` feature
 ///   (which exposes a separate UTF-8-permissive validator);
 /// - no `\r`, `\n`, or `\0`;
-/// - no `<`, `>`, or space (which would corrupt the angle-bracket framing).
+/// - no `<`, `>`, or space (which would corrupt the angle-bracket framing);
+/// - the whole address (local-part + `@` + domain) must be no longer
+///   than 254 octets — RFC 5321 §4.5.3.1.3 specifies 256 for the
+///   `Path` token including angle brackets, leaving 254 for the
+///   bracket-stripped address;
+/// - if an `@` is present, the local-part is no longer than 64 octets
+///   and the domain is no longer than 255 octets (§4.5.3.1.1 /
+///   §4.5.3.1.2). These limits are advisory: many real-world relays
+///   accept longer values, but rejecting at the client boundary
+///   prevents a misformed input from generating a wire `MAIL FROM`
+///   line that exceeds the SMTP line-length limit (§4.5.3.1.5).
 pub fn validate_address(addr: &str) -> Result<(), InvalidInputError> {
     if addr.is_empty() {
         return Err(InvalidInputError::new("mail address must not be empty"));
@@ -466,6 +505,26 @@ pub fn validate_address(addr: &str) -> Result<(), InvalidInputError> {
         return Err(InvalidInputError::new(
             "mail address must be ASCII (SMTPUTF8 is not supported)",
         ));
+    }
+    if addr.len() > MAX_ADDRESS_LEN {
+        return Err(InvalidInputError::new(
+            "mail address exceeds RFC 5321 §4.5.3.1.3 length limit (254 octets)",
+        ));
+    }
+    if let Some(at_pos) = addr.rfind('@') {
+        let (local, domain) = addr.split_at(at_pos);
+        // domain still has the leading '@' — strip it.
+        let domain = &domain[1..];
+        if local.len() > MAX_LOCAL_PART_LEN {
+            return Err(InvalidInputError::new(
+                "mail address local-part exceeds RFC 5321 §4.5.3.1.1 length limit (64 octets)",
+            ));
+        }
+        if domain.len() > MAX_DOMAIN_LEN {
+            return Err(InvalidInputError::new(
+                "mail address domain exceeds RFC 5321 §4.5.3.1.2 length limit (255 octets)",
+            ));
+        }
     }
     for b in addr.bytes() {
         match b {
@@ -517,19 +576,26 @@ pub fn validate_ehlo_domain(domain: &str) -> Result<(), InvalidInputError> {
 }
 
 /// Validate the username supplied to `AUTH LOGIN`.
+///
+/// As of v0.5.0 this is a thin alias for [`validate_plain_username`]:
+/// the two SASL mechanisms (PLAIN and LOGIN) accept the same shape
+/// of credential string and the same constraints apply. NUL bytes
+/// are rejected because they would corrupt the SASL framing on the
+/// post-base64 server side.
+///
+/// The function is retained for source compatibility with v0.4.x
+/// callers, but new code should use [`validate_plain_username`]
+/// directly. A future major release may remove this alias.
 pub fn validate_login_username(user: &str) -> Result<(), InvalidInputError> {
-    if user.is_empty() {
-        return Err(InvalidInputError::new("AUTH username must not be empty"));
-    }
-    Ok(())
+    validate_plain_username(user)
 }
 
 /// Validate the password supplied to `AUTH LOGIN`.
+///
+/// As of v0.5.0 this is a thin alias for [`validate_plain_password`].
+/// See [`validate_login_username`] for the rationale.
 pub fn validate_login_password(pass: &str) -> Result<(), InvalidInputError> {
-    if pass.is_empty() {
-        return Err(InvalidInputError::new("AUTH password must not be empty"));
-    }
-    Ok(())
+    validate_plain_password(pass)
 }
 
 // -----------------------------------------------------------------------------
@@ -880,6 +946,28 @@ pub fn ehlo_advertises_smtputf8<S: AsRef<str>>(capability_lines: &[S]) -> bool {
 pub fn validate_address_utf8(addr: &str) -> Result<(), InvalidInputError> {
     if addr.is_empty() {
         return Err(InvalidInputError::new("mail address must not be empty"));
+    }
+    // RFC 5321 / 6531 length limits apply on octet counts, not on
+    // character counts — UTF-8 encoded length is what travels on the
+    // wire and what counts toward the 254-octet path limit.
+    if addr.len() > MAX_ADDRESS_LEN {
+        return Err(InvalidInputError::new(
+            "mail address exceeds RFC 5321 §4.5.3.1.3 length limit (254 octets)",
+        ));
+    }
+    if let Some(at_pos) = addr.rfind('@') {
+        let (local, domain) = addr.split_at(at_pos);
+        let domain = &domain[1..];
+        if local.len() > MAX_LOCAL_PART_LEN {
+            return Err(InvalidInputError::new(
+                "mail address local-part exceeds RFC 5321 §4.5.3.1.1 length limit (64 octets)",
+            ));
+        }
+        if domain.len() > MAX_DOMAIN_LEN {
+            return Err(InvalidInputError::new(
+                "mail address domain exceeds RFC 5321 §4.5.3.1.2 length limit (255 octets)",
+            ));
+        }
     }
     for ch in addr.chars() {
         match ch {

@@ -24,6 +24,27 @@ use std::error::Error as StdError;
 use crate::protocol::EnhancedStatus;
 
 /// Top-level error type for all SMTP operations.
+///
+/// # Logging caveat
+///
+/// The [`Display`](core::fmt::Display) output of `SmtpError` (and of
+/// the variants `Protocol(ProtocolError)` and `Auth(AuthError)` in
+/// particular) embeds the server's reply text verbatim. SMTP servers
+/// commonly include the rejected envelope address in their reply
+/// — e.g. `550 5.1.1 <user@example.com>: recipient does not exist`
+/// — and may include other PII the application would not log of its
+/// own accord. When emitting these errors to a shared log channel,
+/// consider:
+///
+/// - Logging only the structured fields you care about
+///   (`during`, `actual`, `enhanced`, `code`) and not the free-text
+///   `message` field.
+/// - Truncating the message to a fixed length.
+/// - Filtering / redacting addresses with an application-level
+///   regex if your compliance posture requires it.
+///
+/// `joined_text()` (the source of the `message` fields) is documented
+/// to potentially contain `\n`; see [`crate::protocol::Reply::joined_text`].
 #[derive(Debug)]
 pub enum SmtpError {
     /// Underlying transport (socket) failure, including connection close.
@@ -262,6 +283,30 @@ pub enum ProtocolError {
         /// (e.g. `"STARTTLS"`).
         name: &'static str,
     },
+    /// Bytes were observed in the receive buffer between the server's
+    /// `220` reply to `STARTTLS` and the start of the TLS handshake.
+    ///
+    /// This is the signature of a [STARTTLS injection][rfc3207-sec5]
+    /// (also known as "STARTTLS command injection" or
+    /// CVE-2011-1575-class) attack: an attacker pipelines additional
+    /// SMTP commands on top of `STARTTLS` while the channel is still
+    /// plaintext, hoping the client will treat them as commands sent
+    /// over the secured channel after the upgrade. Robust clients
+    /// detect any unread bytes at the moment of upgrade and abort
+    /// the session rather than risk silently treating attacker-
+    /// injected plaintext as authenticated post-TLS traffic.
+    ///
+    /// `byte_count` is the number of bytes that were already in the
+    /// receive buffer when the upgrade was about to begin. Any
+    /// non-zero value is suspicious; zero is the safe case and never
+    /// produces this error.
+    ///
+    /// [rfc3207-sec5]: https://www.rfc-editor.org/rfc/rfc3207#section-5
+    StartTlsBufferResidue {
+        /// Number of unread bytes observed in the receive buffer
+        /// after the `220` STARTTLS reply.
+        byte_count: usize,
+    },
 }
 
 impl fmt::Display for ProtocolError {
@@ -294,6 +339,13 @@ impl fmt::Display for ProtocolError {
             }
             Self::ExtensionUnavailable { name } => {
                 write!(f, "server did not advertise the {name} extension")
+            }
+            Self::StartTlsBufferResidue { byte_count } => {
+                write!(
+                    f,
+                    "{byte_count} unread byte(s) in receive buffer after STARTTLS reply \
+                     (possible command-injection attack — aborting upgrade)"
+                )
             }
         }
     }

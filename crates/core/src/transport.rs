@@ -40,6 +40,31 @@ use crate::error::IoError;
 /// Async byte-oriented transport contract used by [`crate::SmtpClient`].
 ///
 /// See the [module-level documentation](self) for the contract.
+///
+/// # Security responsibilities of implementors
+///
+/// `wasm-smtp-core` deliberately knows nothing about TLS, certificates,
+/// or peer identity. The transport implementation is the entire trust
+/// boundary for the encrypted byte stream:
+///
+/// - **Certificate validation must be enforced.** When the transport
+///   wraps a TLS stream, certificate-chain validation, hostname
+///   matching, and trust-anchor selection are the implementor's
+///   responsibility. Disabling verification (e.g. rustls'
+///   `dangerous_configuration` builder) is appropriate only in tests
+///   against an offline server; never ship such a transport in
+///   production code.
+/// - **The SNI / hostname presented at handshake time must match the
+///   `host` argument the caller passed to the connect helper.** Without
+///   this, an attacker who can redirect TCP traffic could hand you a
+///   valid certificate for a different domain.
+/// - **Failures during the TLS handshake should surface as
+///   [`IoError`].** Do not paper over verification failures — a
+///   silently-downgraded connection is worse than a hard error.
+///
+/// [`crate::SmtpClient`] depends on the transport upholding these
+/// invariants; it has no way to detect their violation from inside
+/// the SMTP state machine.
 #[allow(async_fn_in_trait)]
 // Single-threaded WASM runtimes (the primary target) do not need a `Send`
 // bound on the returned futures. Adapter crates that target multi-threaded

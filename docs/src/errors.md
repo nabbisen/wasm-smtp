@@ -102,7 +102,7 @@ Common enhanced codes worth handling:
 
 ## STARTTLS-specific errors
 
-Two `ProtocolError` variants are observable only on the STARTTLS
+Three `ProtocolError` variants are observable only on the STARTTLS
 flow:
 
 - `ProtocolError::ExtensionUnavailable { name: "STARTTLS" }` — the
@@ -112,6 +112,17 @@ flow:
   `Closed` to prevent accidental fallback to plaintext.
 - `ProtocolError::UnexpectedCode { during: SmtpOp::StartTls, .. }`
   — the server rejected the `STARTTLS` command with a non-220 reply.
+- `ProtocolError::StartTlsBufferResidue { byte_count }` *(v0.5.0+)*
+  — bytes were observed in the receive buffer between the server's
+  `220` reply and the start of the TLS handshake. This is the
+  signature of a [STARTTLS injection][rfc3207-sec5] attack
+  (CVE-2011-1575-class): an attacker pipelines additional SMTP
+  commands on top of the plaintext channel, hoping the client will
+  read them after the upgrade and treat them as authenticated
+  post-TLS traffic. The crate refuses the upgrade and closes the
+  session in this case.
+
+[rfc3207-sec5]: https://www.rfc-editor.org/rfc/rfc3207#section-5
 
 Transport-level upgrade failures (e.g. the TLS handshake itself
 fails, or `worker::Socket::start_tls` returns an error) surface as

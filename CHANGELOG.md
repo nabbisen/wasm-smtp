@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-04-28
+
+### Added (security hardening — Phase 9)
+
+This release is a security-focused minor bump. Following an internal
+audit, eight findings were addressed across the SMTP, WASM, and
+general internet-security threat surfaces. None of the findings were
+rated critical or high; the changes below collectively raise the
+defensive posture of the crate.
+
+- **STARTTLS injection defense (RFC 3207 §5).** The new
+  `ProtocolError::StartTlsBufferResidue { byte_count }` variant is
+  raised when bytes remain in the receive buffer at the moment of
+  TLS upgrade. This is the signature of a CVE-2011-1575-class
+  attack: an attacker pipelines additional SMTP commands onto the
+  plaintext channel after the `220` reply, hoping the client will
+  read them after the upgrade and treat them as authenticated
+  post-TLS traffic. `SmtpClient::starttls` and
+  `SmtpClient::connect_starttls` now refuse to upgrade and close
+  the session in this case rather than silently absorbing the
+  injected bytes.
+- **RFC 5321 length limits enforced in address validation.**
+  `validate_address` and `validate_address_utf8` now reject:
+  - addresses longer than 254 octets total (§4.5.3.1.3),
+  - local-parts longer than 64 octets (§4.5.3.1.1), and
+  - domains longer than 255 octets (§4.5.3.1.2).
+
+  Three new public constants — `MAX_ADDRESS_LEN`,
+  `MAX_LOCAL_PART_LEN`, `MAX_DOMAIN_LEN` — expose these values for
+  callers that want to validate before invocation.
+- **`validate_login_username` / `validate_login_password` are now
+  thin aliases for the corresponding `validate_plain_*` functions.**
+  Previously they performed only an empty-string check, which would
+  accept NUL bytes and other characters that corrupt SASL framing
+  on the post-base64 server side. The aliases preserve source
+  compatibility for v0.4.x callers; new code should call the
+  `validate_plain_*` functions directly.
+
+### Documentation
+
+- `Reply::joined_text` documents that the returned text may contain
+  `\n`, with explicit guidance for log-handler implementors to
+  escape newlines and avoid log injection.
+- `SmtpError`'s top-level doc carries a "Logging caveat" section
+  explaining that `Display` output embeds server reply text, which
+  may include envelope addresses or other PII. Suggests structured-
+  field logging instead.
+- `SmtpClient::login` documents that the crate does not retain
+  credentials after the call, with a "Credential lifetime and
+  zeroization" section pointing callers to the `zeroize` crate for
+  caller-side memory hygiene.
+- `Transport` trait gains a "Security responsibilities of
+  implementors" section explicitly requiring certificate-chain
+  validation, hostname matching, and no-fallback handshake failure
+  semantics. Aimed at out-of-tree adapter authors.
+- `SmtpClient::send_mail` carries a "Body size" note: the crate
+  does not impose a body-length limit; callers should enforce
+  application-appropriate caps and respect any `SIZE` advertised
+  by the server (RFC 1870).
+
+### Changed
+
+- `ProtocolError` is `non_exhaustive`, so adding the
+  `StartTlsBufferResidue` variant is not a SemVer-breaking change
+  for callers using a wildcard arm in their pattern matches.
+- The MockTransport test harness's `with_starttls` constructor now
+  takes separate `pre_chunks` / `post_chunks` parameters, modelling
+  real-server behavior where post-TLS reply bytes are not delivered
+  on the plaintext channel. This affects internal tests only;
+  callers do not depend on `MockTransport`.
+
 ## [0.4.0] — 2026-04-27
 
 ### Added
@@ -206,7 +277,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.1.0...v0.2.0

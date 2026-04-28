@@ -34,7 +34,7 @@ xoauth2 = ["wasm-smtp-core/xoauth2"]
 smtputf8 = ["wasm-smtp-core/smtputf8"]
 
 [dependencies]
-wasm-smtp-core = { path = "../core", version = "0.4.0", default-features = false }
+wasm-smtp-core = { path = "../core", version = "0.5.0", default-features = false }
 worker = "0.8"
 tokio = { version = "1", default-features = false, features = ["io-util"] }
 

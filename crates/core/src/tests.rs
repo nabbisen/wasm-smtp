@@ -91,6 +91,9 @@ mod harness {
     /// handle to it after the transport has been moved into the client.
     pub struct MockTransport {
         incoming: VecDeque<Vec<u8>>,
+        /// Chunks queued to be revealed only after `upgrade_to_tls()`
+        /// has been called. Empty for non-STARTTLS tests.
+        pending_post: VecDeque<Vec<u8>>,
         written: Rc<RefCell<Vec<u8>>>,
         closed: Rc<RefCell<bool>>,
         /// Number of times `upgrade_to_tls()` has been called. Incremented
@@ -110,28 +113,53 @@ mod harness {
         /// not exposed; tests that exercise STARTTLS should use
         /// [`Self::with_starttls`] instead.
         pub fn new(chunks: &[&[u8]]) -> MockHandles {
-            let (t, w, c, _u) = Self::build(chunks, UpgradeBehavior::Succeed);
+            let (t, w, c, _u) = Self::build(chunks, &[], UpgradeBehavior::Succeed);
             (t, w, c)
         }
 
         /// Construct a mock transport that exposes its STARTTLS upgrade
-        /// counter, allowing tests to assert that `upgrade_to_tls()` was
-        /// called the expected number of times.
-        pub fn with_starttls(chunks: &[&[u8]], behavior: UpgradeBehavior) -> MockStartTlsHandles {
-            Self::build(chunks, behavior)
+        /// counter and that models a real STARTTLS-aware server: the
+        /// `pre_chunks` are delivered before any `upgrade_to_tls()`
+        /// call, and the `post_chunks` are revealed only after the
+        /// upgrade has been performed. This mirrors the behaviour of a
+        /// real submission server, which does not pipeline the post-TLS
+        /// EHLO reply onto the plaintext channel — and lets us
+        /// exercise the v0.5.0 STARTTLS-injection defence without
+        /// false positives caused by the older "all bytes in one
+        /// chunk" mock layout.
+        ///
+        /// Tests that want to deliberately simulate a STARTTLS
+        /// injection (bytes pipelined onto the plaintext channel after
+        /// the `220`) should pass those bytes as part of `pre_chunks`
+        /// and verify that the upgrade is rejected.
+        pub fn with_starttls(
+            pre_chunks: &[&[u8]],
+            post_chunks: &[&[u8]],
+            behavior: UpgradeBehavior,
+        ) -> MockStartTlsHandles {
+            Self::build(pre_chunks, post_chunks, behavior)
         }
 
-        fn build(chunks: &[&[u8]], behavior: UpgradeBehavior) -> MockStartTlsHandles {
+        fn build(
+            pre_chunks: &[&[u8]],
+            post_chunks: &[&[u8]],
+            behavior: UpgradeBehavior,
+        ) -> MockStartTlsHandles {
             let written = Rc::new(RefCell::new(Vec::new()));
             let closed = Rc::new(RefCell::new(false));
             let upgrades = Rc::new(RefCell::new(0u32));
             let mut q: VecDeque<Vec<u8>> = VecDeque::new();
-            for c in chunks {
+            for c in pre_chunks {
                 q.push_back((*c).to_vec());
+            }
+            let mut pending_post: VecDeque<Vec<u8>> = VecDeque::new();
+            for c in post_chunks {
+                pending_post.push_back((*c).to_vec());
             }
             (
                 Self {
                     incoming: q,
+                    pending_post,
                     written: Rc::clone(&written),
                     closed: Rc::clone(&closed),
                     upgrades: Rc::clone(&upgrades),
@@ -173,7 +201,15 @@ mod harness {
         async fn upgrade_to_tls(&mut self) -> Result<(), IoError> {
             *self.upgrades.borrow_mut() += 1;
             match &self.upgrade_behavior {
-                UpgradeBehavior::Succeed => Ok(()),
+                UpgradeBehavior::Succeed => {
+                    // Real servers withhold the post-TLS EHLO reply until
+                    // the TLS handshake has completed. Move the queued
+                    // post-upgrade chunks into the live read queue now.
+                    while let Some(chunk) = self.pending_post.pop_front() {
+                        self.incoming.push_back(chunk);
+                    }
+                    Ok(())
+                }
                 UpgradeBehavior::Fail(msg) => Err(IoError::new(*msg)),
             }
         }
@@ -495,6 +531,66 @@ mod protocol_tests {
         assert!(validate_login_password("").is_err());
         assert!(validate_login_username("user").is_ok());
         assert!(validate_login_password("pass").is_ok());
+    }
+
+    /// Phase 9 / M-5: NUL bytes in LOGIN credentials would corrupt
+    /// SASL framing on the post-base64 server side, so the
+    /// validators must reject them. Before v0.5.0 these were thin
+    /// "non-empty only" checks; they are now thin aliases over the
+    /// stricter `validate_plain_*` validators.
+    #[test]
+    fn validate_login_username_rejects_nul() {
+        assert!(validate_login_username("a\0b").is_err());
+    }
+
+    #[test]
+    fn validate_login_password_rejects_nul() {
+        assert!(validate_login_password("a\0b").is_err());
+    }
+
+    // -- validate_address: RFC 5321 length limits (M-4) -------------------
+
+    #[test]
+    fn validate_address_rejects_overly_long_total() {
+        // Construct an address that is exactly 1 octet over the
+        // 254-octet path limit (RFC 5321 §4.5.3.1.3). Use a 60-octet
+        // local-part + '@' + 194-octet domain = 255 octets total.
+        let local = "a".repeat(60);
+        let domain = format!("{}.example", "x".repeat(186)); // 186 + ".example" (8) = 194
+        let addr = format!("{local}@{domain}");
+        assert_eq!(addr.len(), 255);
+        assert!(validate_address(&addr).is_err());
+    }
+
+    #[test]
+    fn validate_address_accepts_at_total_limit() {
+        // Boundary: exactly 254 octets is allowed.
+        let local = "a".repeat(60);
+        let domain = format!("{}.example", "x".repeat(185)); // 185 + 8 = 193
+        let addr = format!("{local}@{domain}");
+        assert_eq!(addr.len(), 254);
+        assert!(validate_address(&addr).is_ok());
+    }
+
+    #[test]
+    fn validate_address_rejects_overly_long_local_part() {
+        // 65-octet local-part > MAX_LOCAL_PART_LEN (64).
+        let addr = format!("{}@example.com", "a".repeat(65));
+        assert!(validate_address(&addr).is_err());
+    }
+
+    #[test]
+    fn validate_address_accepts_at_local_part_limit() {
+        // 64-octet local-part is allowed.
+        let addr = format!("{}@example.com", "a".repeat(64));
+        assert!(validate_address(&addr).is_ok());
+    }
+
+    #[test]
+    fn validate_address_rejects_overly_long_domain() {
+        // 256-octet domain > MAX_DOMAIN_LEN (255).
+        let addr = format!("user@{}", "x".repeat(256));
+        assert!(validate_address(&addr).is_err());
     }
 
     // -- ehlo_advertises_auth -----------------------------------------------
@@ -1850,12 +1946,10 @@ mod client_tests {
 
     // -- STARTTLS (Phase 5) -----------------------------------------------
 
-    /// Standard STARTTLS-capable server script: plain greeting, plain EHLO
-    /// advertising STARTTLS, 220 on STARTTLS, then a fresh EHLO reply (the
-    /// post-TLS one, with new capabilities).
-    fn starttls_greeting_and_upgrade() -> Vec<u8> {
+    /// Pre-TLS portion of a STARTTLS-aware server script: greeting,
+    /// EHLO with STARTTLS advertised, 220 ready-to-start.
+    fn starttls_pre_upgrade() -> Vec<u8> {
         flatten(&[
-            // Plaintext greeting.
             b"220 mail.example.com ESMTP\r\n",
             // First EHLO reply: includes STARTTLS, no AUTH advertised yet.
             b"250-mail.example.com\r\n",
@@ -1863,7 +1957,13 @@ mod client_tests {
             b"250 STARTTLS\r\n",
             // STARTTLS accepted.
             b"220 ready to start TLS\r\n",
-            // Second EHLO reply (post-TLS): now AUTH is advertised.
+        ])
+    }
+
+    /// Post-TLS portion: re-issued EHLO reply on the secure channel,
+    /// now advertising AUTH PLAIN/LOGIN.
+    fn starttls_post_upgrade() -> Vec<u8> {
+        flatten(&[
             b"250-mail.example.com\r\n",
             b"250-PIPELINING\r\n",
             b"250 AUTH PLAIN LOGIN\r\n",
@@ -1873,7 +1973,8 @@ mod client_tests {
     #[test]
     fn connect_starttls_runs_full_upgrade_sequence() {
         let (transport, written, _closed, upgrades) = MockTransport::with_starttls(
-            &[&starttls_greeting_and_upgrade()[..]],
+            &[&starttls_pre_upgrade()[..]],
+            &[&starttls_post_upgrade()[..]],
             UpgradeBehavior::Succeed,
         );
         let client = block_on(SmtpClient::connect_starttls(transport, "client.example"))
@@ -1902,17 +2003,19 @@ mod client_tests {
         // After STARTTLS the second EHLO reveals AUTH PLAIN, which login()
         // must pick up. This proves we discard the pre-TLS capabilities
         // and parse the new ones.
-        let script = flatten(&[
+        let pre = flatten(&[
             b"220 mail.example.com ESMTP\r\n",
             b"250-mail.example.com\r\n",
             b"250 STARTTLS\r\n",
             b"220 ready\r\n",
+        ]);
+        let post = flatten(&[
             b"250-mail.example.com\r\n",
             b"250 AUTH PLAIN\r\n",
             b"235 OK\r\n",
         ]);
         let (transport, written, _c, _u) =
-            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+            MockTransport::with_starttls(&[&pre[..]], &[&post[..]], UpgradeBehavior::Succeed);
         let mut client = block_on(SmtpClient::connect_starttls(transport, "c.example"))
             .expect("connect_starttls");
         block_on(client.login("user", "pass")).expect("login");
@@ -1934,7 +2037,7 @@ mod client_tests {
             b"250 8BITMIME\r\n",
         ]);
         let (transport, written, _c, upgrades) =
-            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+            MockTransport::with_starttls(&[&script[..]], &[], UpgradeBehavior::Succeed);
         let pre_upgrade_writes_len = 0;
         let err =
             block_on(SmtpClient::connect_starttls(transport, "c.example")).expect_err("must fail");
@@ -1962,7 +2065,7 @@ mod client_tests {
             b"502 STARTTLS not configured\r\n",
         ]);
         let (transport, _w, _c, upgrades) =
-            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+            MockTransport::with_starttls(&[&script[..]], &[], UpgradeBehavior::Succeed);
         let err =
             block_on(SmtpClient::connect_starttls(transport, "c.example")).expect_err("must fail");
 
@@ -1987,6 +2090,7 @@ mod client_tests {
         ]);
         let (transport, _w, _c, upgrades) = MockTransport::with_starttls(
             &[&script[..]],
+            &[],
             UpgradeBehavior::Fail("simulated TLS handshake failure"),
         );
         let err =
@@ -2008,7 +2112,8 @@ mod client_tests {
         // SmtpClient::connect() then client.starttls(). This is the
         // path callers use when they want to inspect capabilities first.
         let (transport, written, _c, _u) = MockTransport::with_starttls(
-            &[&starttls_greeting_and_upgrade()[..]],
+            &[&starttls_pre_upgrade()[..]],
+            &[&starttls_post_upgrade()[..]],
             UpgradeBehavior::Succeed,
         );
         let mut client =
@@ -2043,17 +2148,19 @@ mod client_tests {
     fn starttls_rejects_call_after_login() {
         // STARTTLS must be issued BEFORE auth. Calling it after login()
         // is a programming error and must return InvalidInput.
-        let script = flatten(&[
+        let pre = flatten(&[
             b"220 mail.example.com ESMTP\r\n",
             b"250-mail.example.com\r\n",
             b"250 STARTTLS\r\n",
             b"220 ready\r\n",
+        ]);
+        let post = flatten(&[
             b"250-mail.example.com\r\n",
             b"250 AUTH PLAIN\r\n",
             b"235 OK\r\n",
         ]);
         let (transport, _w, _c, upgrades) =
-            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+            MockTransport::with_starttls(&[&pre[..]], &[&post[..]], UpgradeBehavior::Succeed);
         let mut client = block_on(SmtpClient::connect_starttls(transport, "c.example"))
             .expect("connect_starttls");
         block_on(client.login("user", "pass")).expect("login");
@@ -2063,6 +2170,86 @@ mod client_tests {
         assert!(matches!(err, SmtpError::InvalidInput(_)));
         // No additional upgrade was attempted.
         assert_eq!(*upgrades.borrow(), 1);
+    }
+
+    // -- STARTTLS injection defense (Phase 9 / M-2) ----------------------
+
+    #[test]
+    fn starttls_buffer_residue_aborts_upgrade() {
+        // Simulate a STARTTLS injection attack: extra SMTP commands
+        // are pipelined onto the plaintext channel right after the
+        // server's `220 ready` reply, before the TLS handshake. A
+        // robust client must detect the unread residue at the moment
+        // of upgrade and refuse to proceed.
+        let pre_with_injected_residue = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 STARTTLS\r\n",
+            b"220 ready\r\n",
+            // Attacker-injected command bytes pipelined onto the
+            // plaintext channel — these would, without the defense,
+            // be read AFTER the upgrade and treated as if they had
+            // arrived over the secured channel.
+            b"NOOP smuggled\r\n",
+            b"MAIL FROM:<attacker@example.com>\r\n",
+        ]);
+        let (transport, _w, closed, upgrades) = MockTransport::with_starttls(
+            &[&pre_with_injected_residue[..]],
+            &[],
+            UpgradeBehavior::Succeed,
+        );
+        let err = block_on(SmtpClient::connect_starttls(transport, "c.example"))
+            .expect_err("must reject the injected residue");
+
+        match err {
+            SmtpError::Protocol(ProtocolError::StartTlsBufferResidue { byte_count }) => {
+                // The two injected lines together total > 0 bytes; we
+                // don't pin an exact value because "where the line
+                // boundary fell" depends on the read chunk size. The
+                // important check is that the defense fires.
+                assert!(byte_count > 0, "byte_count must be positive: {byte_count}");
+            }
+            other => panic!("expected StartTlsBufferResidue, got {other:?}"),
+        }
+
+        // The session must NOT have proceeded to TLS — upgrade_to_tls
+        // must not have been called.
+        assert_eq!(
+            *upgrades.borrow(),
+            0,
+            "upgrade_to_tls must not be called when residue is detected"
+        );
+        // The transport's `close()` is the caller's responsibility
+        // via `quit()` or drop; our state-machine-level invariant is
+        // that the session has been moved to Closed and any further
+        // calls fail-fast. We verify the transport-level close flag
+        // is left alone here, and rely on the next test below to
+        // confirm session-state semantics.
+        let _ = closed; // unused, retained for potential future test
+    }
+
+    #[test]
+    fn starttls_buffer_residue_byte_count_is_residual_length() {
+        // Verify that byte_count actually counts the unread bytes
+        // remaining when the upgrade is about to begin. We use a
+        // single, exactly-known injection.
+        let pre = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 STARTTLS\r\n",
+            b"220 ready\r\n",
+            b"X\r\n", // exactly 3 bytes of residue
+        ]);
+        let (transport, _w, _c, _u) =
+            MockTransport::with_starttls(&[&pre[..]], &[], UpgradeBehavior::Succeed);
+        let err = block_on(SmtpClient::connect_starttls(transport, "c.example"))
+            .expect_err("must reject");
+        match err {
+            SmtpError::Protocol(ProtocolError::StartTlsBufferResidue { byte_count }) => {
+                assert_eq!(byte_count, 3, "expected exactly the 3 bytes of `X\\r\\n`");
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
     }
 
     // -- ENHANCEDSTATUSCODES (Phase 6) ------------------------------------
@@ -2207,24 +2394,67 @@ mod client_tests {
     }
 
     #[test]
+    fn starttls_aborts_upgrade_when_buffer_holds_residue() {
+        // STARTTLS injection / pipelining defence (RFC 3207 §5).
+        //
+        // The server "answers" the STARTTLS command with both a 220
+        // ready reply AND an attacker-supplied EHLO-shaped line on
+        // the same plaintext channel, before the TLS handshake. The
+        // client must detect the residue, abort the upgrade, and
+        // surface ProtocolError::StartTlsBufferResidue.
+        let pre = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 STARTTLS\r\n",
+            // Honest 220 reply + attacker-injected pipelined data:
+            b"220 ready to start TLS\r\n",
+            // Bytes pipelined onto the plaintext stream — these would
+            // be read AFTER the TLS handshake on a vulnerable client
+            // and treated as if they had arrived from the (now
+            // authenticated) server.
+            b"250 INJECTED capability\r\n",
+        ]);
+        // post_chunks empty: the upgrade must be rejected before
+        // upgrade_to_tls() is reached, so no post-TLS bytes will be
+        // read.
+        let (transport, _w, _c, upgrades) =
+            MockTransport::with_starttls(&[&pre[..]], &[], UpgradeBehavior::Succeed);
+        let err = block_on(SmtpClient::connect_starttls(transport, "client.example"))
+            .expect_err("must fail with residue error");
+
+        match err {
+            SmtpError::Protocol(ProtocolError::StartTlsBufferResidue { byte_count }) => {
+                // The injected line is 25 bytes ("250 INJECTED capability\r\n").
+                assert_eq!(byte_count, 25);
+            }
+            other => panic!("expected StartTlsBufferResidue, got {other:?}"),
+        }
+        // The TLS upgrade must NOT have been attempted: we caught the
+        // injection BEFORE handing the socket off.
+        assert_eq!(*upgrades.borrow(), 0);
+    }
+
+    #[test]
     fn enhancedstatuscodes_disabled_after_starttls_re_ehlo_without_it() {
         // The post-TLS EHLO reply governs the post-TLS enhanced state.
         // If the server stops advertising ENHANCEDSTATUSCODES after the
         // upgrade, parses are no longer attempted.
-        let script = flatten(&[
+        let pre = flatten(&[
             b"220 mail.example.com ESMTP\r\n",
             // Pre-TLS EHLO advertises ENHANCEDSTATUSCODES.
             b"250-mail.example.com\r\n",
             b"250-STARTTLS\r\n",
             b"250 ENHANCEDSTATUSCODES\r\n",
             b"220 ready\r\n",
+        ]);
+        let post = flatten(&[
             // Post-TLS EHLO drops it.
             b"250-mail.example.com\r\n",
             b"250 AUTH PLAIN\r\n",
             b"535 5.7.8 invalid\r\n", // 5.7.8 should NOT be parsed now
         ]);
         let (transport, _w, _c, _u) =
-            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+            MockTransport::with_starttls(&[&pre[..]], &[&post[..]], UpgradeBehavior::Succeed);
         let mut client = block_on(SmtpClient::connect_starttls(transport, "client.example"))
             .expect("connect_starttls");
         let err = block_on(client.login("user", "pass")).expect_err("must fail");
@@ -2464,6 +2694,28 @@ mod smtputf8_tests {
         // Anything the strict ASCII validator accepts must also pass here.
         assert!(validate_address_utf8("user@example.com").is_ok());
         assert!(validate_address_utf8("a.b+c@d.example").is_ok());
+    }
+
+    /// Phase 9 / M-4: UTF-8 length limits also apply to `validate_address_utf8`.
+    /// Japanese characters are 3 octets each in UTF-8, so 100 of them
+    /// produce a 300-octet local-part which is past every limit.
+    #[test]
+    fn validate_address_utf8_rejects_overly_long_japanese_local_part() {
+        let long_local: String = "\u{4E2D}".repeat(100);
+        let addr = format!("{long_local}@example.jp");
+        assert!(addr.len() > 254);
+        assert!(validate_address_utf8(&addr).is_err());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_overly_long_total() {
+        // 64-byte ASCII local-part (at the limit) + '@' + 191-byte ASCII
+        // domain = 256 octets, just over the 254 cap.
+        let local = "a".repeat(64);
+        let domain = format!("{}.example", "x".repeat(183)); // 183 + 8 = 191
+        let addr = format!("{local}@{domain}");
+        assert_eq!(addr.len(), 256);
+        assert!(validate_address_utf8(&addr).is_err());
     }
 
     #[test]

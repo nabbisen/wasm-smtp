@@ -46,6 +46,26 @@ the EHLO domain. These checks happen *before* anything is written to
 the transport, which is what allows `InvalidInputError` to be raised
 without disrupting the SMTP session.
 
+### Address length limits (RFC 5321 §4.5.3.1)
+
+`validate_address` (and its UTF-8 sibling `validate_address_utf8`,
+behind the `smtputf8` feature) enforce the path-length limits from
+RFC 5321 §4.5.3.1:
+
+- the entire address must be ≤ **254 octets** (§4.5.3.1.3 — the
+  `Path` token is 256 octets including angle brackets, leaving 254
+  for the bracket-stripped address);
+- the local-part must be ≤ **64 octets** (§4.5.3.1.1);
+- the domain must be ≤ **255 octets** (§4.5.3.1.2).
+
+These limits are exposed as the public constants `MAX_ADDRESS_LEN`,
+`MAX_LOCAL_PART_LEN`, and `MAX_DOMAIN_LEN`, so callers building
+addresses programmatically can validate before invocation. Rejecting
+overly-long addresses at the client boundary prevents a misformed
+input from generating a wire `MAIL FROM` line that would exceed the
+SMTP line-length limit (§4.5.3.1.5) and be reflexively rejected by
+the server.
+
 ## State machine
 
 The states tracked by the client are:
@@ -340,6 +360,22 @@ Two protocol-level details deserve attention:
    command is reported as `ProtocolError::UnexpectedCode { during:
    SmtpOp::StartTls, .. }` and ends the session.
 
+3. **Injection defence (v0.5.0+).** Between the server's `220` reply
+   to `STARTTLS` and the start of the TLS handshake the channel is
+   still plaintext. An attacker willing to corrupt the server's
+   reply stream may pipeline additional SMTP commands onto the
+   plaintext channel, hoping the client will read them after the
+   upgrade and treat them as authenticated post-TLS traffic
+   (CVE-2011-1575-class). `SmtpClient::starttls` checks the receive
+   buffer for unread bytes at the moment of upgrade; any residue
+   produces `ProtocolError::StartTlsBufferResidue { byte_count }`
+   and aborts the upgrade. Honest servers do not pipeline data
+   into the STARTTLS handshake window.
+
 The TLS handshake itself, in either model, is the transport's job.
 The state machine sees only an opaque byte stream and a single
-upgrade signal.
+upgrade signal. The transport implementation must enforce
+certificate-chain validation and SNI/hostname matching; see the
+[`Transport`][transport-doc] trait for the security contract.
+
+[transport-doc]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/transport/trait.Transport.html

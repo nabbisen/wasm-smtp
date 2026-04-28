@@ -144,15 +144,13 @@ feature-gated capability.
   did not advertise it returns `ProtocolError::ExtensionUnavailable
   { name: "SMTPUTF8" }` and closes the session.
 
-## Phase 8 — Retrofit feature gates *(in progress)*
+## Phase 8 — Retrofit feature gates *(complete)*
 
 Phase 7 introduced the project's first feature flag. The same
 treatment is justified for several pieces of existing functionality
 that some callers will never use; gating them lets size-sensitive
 consumers (Cloudflare Workers' 3 MiB cap, in particular) pick only
 what they need.
-
-Status:
 
 - ✅ **`xoauth2`** (default-on, completed in v0.4.0). Gates
   `SmtpClient::login_xoauth2`, the `XOAuth2` arm of `login_with`,
@@ -166,7 +164,7 @@ Status:
 - ✅ **`smtputf8`** (default-off, completed in v0.4.0). Already
   gated when introduced in Phase 7.
 
-Future candidates (not scheduled):
+Future feature-gate candidates (not scheduled):
 
 | Feature              | Default | Gates                                                    | Rationale                                |
 |----------------------|---------|----------------------------------------------------------|------------------------------------------|
@@ -177,7 +175,46 @@ Future candidates (not scheduled):
 Each of these would be SemVer-evaluated individually before being
 introduced. The above table is intentionally tentative.
 
-## Phase 9 — Future work *(not scheduled)*
+## Phase 9 — Security hardening *(complete)*
+
+Internal security audit (v0.4.0) covering the SMTP, WASM, and
+internet-security threat surfaces produced eight findings, all
+rated low or medium. The Phase 9 release (v0.5.0) addresses them.
+None of the findings indicated existing exploitable conditions; the
+work is precautionary defence-in-depth.
+
+- ✅ **STARTTLS injection (RFC 3207 §5).** New
+  `ProtocolError::StartTlsBufferResidue { byte_count }` variant.
+  At the moment of TLS upgrade, `starttls()` checks the receive
+  buffer for unread bytes; any residue causes the upgrade to be
+  refused and the session closed. Defends against a class of
+  injection attacks where pipelined plaintext commands persist
+  across the upgrade boundary.
+- ✅ **RFC 5321 §4.5.3.1 length limits.** `validate_address` and
+  `validate_address_utf8` now enforce the 254-octet path limit, the
+  64-octet local-part limit, and the 255-octet domain limit. New
+  public constants `MAX_ADDRESS_LEN`, `MAX_LOCAL_PART_LEN`,
+  `MAX_DOMAIN_LEN`.
+- ✅ **`validate_login_*` realiased.** Now thin aliases for
+  `validate_plain_*`, picking up the NUL-byte check the original
+  helpers were missing. Source-compatible for v0.4.x callers.
+- ✅ **Documentation: log injection / PII echo.** `Reply::joined_text`
+  and `SmtpError` document that returned text may contain `\n` or
+  server-supplied envelope addresses; suggest structured-field
+  logging.
+- ✅ **Documentation: credential lifetime.** `SmtpClient::login`
+  documents that the crate retains no credential bytes after the
+  call, and points callers at `zeroize` for caller-side memory
+  hygiene.
+- ✅ **Documentation: `Transport` security responsibilities.**
+  `Transport` trait spells out certificate validation, hostname
+  matching, and no-fallback handshake-failure semantics as
+  implementor responsibilities.
+- ✅ **Documentation: body size.** `SmtpClient::send_mail`
+  documents that the crate imposes no `body.len()` limit, and
+  recommends caller-side caps consistent with `SIZE` advertisement.
+
+## Phase 10 — Future work *(not scheduled)*
 
 Items that may be revisited in a future cycle. None of these is a
 commitment.
