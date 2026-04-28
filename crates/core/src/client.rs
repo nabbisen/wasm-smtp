@@ -156,14 +156,21 @@ impl<T: Transport> SmtpClient<T> {
     ///
     /// `credential` is the secret material whose meaning depends on the
     /// mechanism: a static password for `Plain` and `Login`, or an
-    /// OAuth 2.0 access token for `XOAuth2`. The `user` parameter is
-    /// validated against rules appropriate to the mechanism (NUL bytes
-    /// rejected for SASL framing in `Plain`, additional control bytes
+    /// OAuth 2.0 access token for `XOAuth2` (the latter requires the
+    /// `xoauth2` cargo feature). The `user` parameter is validated
+    /// against rules appropriate to the mechanism (NUL bytes rejected
+    /// for SASL framing in `Plain` / `Login`, additional control bytes
     /// rejected for `XOAuth2`).
     ///
     /// Returns [`AuthError::UnsupportedMechanism`] if `mechanism` was not
     /// advertised by the server. Returns [`AuthError::Rejected`] if the
     /// server rejects the credentials.
+    ///
+    /// When the `xoauth2` feature is disabled and the caller passes
+    /// [`AuthMechanism::XOAuth2`], this returns
+    /// [`InvalidInputError`] without performing any I/O — the variant
+    /// remains in the public enum (it is `non_exhaustive`) but the
+    /// code path is removed.
     pub async fn login_with(
         &mut self,
         mechanism: AuthMechanism,
@@ -175,9 +182,17 @@ impl<T: Transport> SmtpClient<T> {
                 protocol::validate_plain_username(user)?;
                 protocol::validate_plain_password(credential)?;
             }
+            #[cfg(feature = "xoauth2")]
             AuthMechanism::XOAuth2 => {
                 protocol::validate_xoauth2_user(user)?;
                 protocol::validate_oauth2_token(credential)?;
+            }
+            #[cfg(not(feature = "xoauth2"))]
+            _ => {
+                return Err(InvalidInputError::new(
+                    "XOAUTH2 support is not compiled in (enable the `xoauth2` feature)",
+                )
+                .into());
             }
         }
         self.assert_state_in(&[SessionState::Authentication])?;
@@ -190,7 +205,10 @@ impl<T: Transport> SmtpClient<T> {
         match mechanism {
             AuthMechanism::Plain => self.run_auth_plain(user, credential).await?,
             AuthMechanism::Login => self.run_auth_login(user, credential).await?,
+            #[cfg(feature = "xoauth2")]
             AuthMechanism::XOAuth2 => self.run_auth_xoauth2(user, credential).await?,
+            #[cfg(not(feature = "xoauth2"))]
+            _ => unreachable!("XOAUTH2 was screened out above when the feature is disabled"),
         }
 
         self.transition(SessionState::MailFrom)?;
@@ -221,6 +239,10 @@ impl<T: Transport> SmtpClient<T> {
     ///   Google and Microsoft typically return a 535 with a base64-
     ///   encoded JSON `{"status":"401","schemes":"Bearer","scope":"..."}`
     ///   in the message; the parsed text is preserved in the error.
+    ///
+    /// Available only with the `xoauth2` cargo feature enabled
+    /// (default-on).
+    #[cfg(feature = "xoauth2")]
     pub async fn login_xoauth2(&mut self, user: &str, access_token: &str) -> Result<(), SmtpError> {
         self.login_with(AuthMechanism::XOAuth2, user, access_token)
             .await
@@ -280,6 +302,7 @@ impl<T: Transport> SmtpClient<T> {
     /// then sends the final 5xx. We follow that protocol so the JSON
     /// error detail (containing `scope`, `error`, etc.) ends up in the
     /// final reply text and is preserved in [`AuthError::Rejected`].
+    #[cfg(feature = "xoauth2")]
     async fn run_auth_xoauth2(&mut self, user: &str, token: &str) -> Result<(), SmtpError> {
         let response = protocol::build_xoauth2_initial_response(user, token);
         let mut cmd = String::with_capacity(13 + response.len() + 2);
@@ -377,6 +400,88 @@ impl<T: Transport> SmtpClient<T> {
         self.expect_class(2, SmtpOp::Data).await?;
 
         // Ready for another transaction.
+        self.transition(SessionState::MailFrom)?;
+        Ok(())
+    }
+
+    /// Send a single message using the SMTPUTF8 extension (RFC 6531),
+    /// allowing UTF-8 characters in envelope addresses.
+    ///
+    /// Identical to [`Self::send_mail`] except:
+    ///
+    /// - Address validation uses [`protocol::validate_address_utf8`]
+    ///   instead of the strict ASCII validator, so codepoints outside
+    ///   the ASCII range are accepted in `from` and `to`.
+    /// - The `MAIL FROM` command is suffixed with the `SMTPUTF8`
+    ///   ESMTP parameter so the server knows to expect UTF-8.
+    /// - The server must have advertised `SMTPUTF8` in its `EHLO`
+    ///   response. If it did not, this method returns
+    ///   [`ProtocolError::ExtensionUnavailable`] without sending any
+    ///   bytes.
+    ///
+    /// The body must still be CRLF-normalized; any UTF-8 in headers
+    /// (e.g. `Subject:` containing non-ASCII characters) is the
+    /// caller's responsibility to format correctly. RFC 6531 §3.2
+    /// permits raw UTF-8 in headers when SMTPUTF8 is in effect, but
+    /// strict deployments may still expect MIME encoded-words; this
+    /// crate makes no claim either way.
+    ///
+    /// Available only with the `smtputf8` cargo feature enabled.
+    ///
+    /// # Errors
+    ///
+    /// In addition to the error categories returned by `send_mail`:
+    ///
+    /// - [`ProtocolError::ExtensionUnavailable`] with `name: "SMTPUTF8"`
+    ///   if the server's `EHLO` reply did not include the keyword.
+    ///   The session is moved to `Closed` to prevent silent fallback
+    ///   to ASCII-only delivery.
+    #[cfg(feature = "smtputf8")]
+    pub async fn send_mail_smtputf8(
+        &mut self,
+        from: &str,
+        to: &[&str],
+        body: &str,
+    ) -> Result<(), SmtpError> {
+        protocol::validate_address_utf8(from)?;
+        if to.is_empty() {
+            return Err(InvalidInputError::new("at least one recipient is required").into());
+        }
+        for &addr in to {
+            protocol::validate_address_utf8(addr)?;
+        }
+        self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
+
+        if !protocol::ehlo_advertises_smtputf8(&self.capabilities) {
+            self.mark_closed_on_logical_failure();
+            return Err(ProtocolError::ExtensionUnavailable { name: "SMTPUTF8" }.into());
+        }
+
+        // Issue MAIL FROM:<from> SMTPUTF8.
+        self.transition(SessionState::MailFrom)?;
+        self.write_all(&protocol::format_mail_from_smtputf8(from))
+            .await?;
+        self.expect_class(2, SmtpOp::MailFrom).await?;
+
+        // RCPT TO is identical to the ASCII path: SMTPUTF8 does not
+        // add a parameter to RCPT, only to MAIL FROM. Recipients can
+        // be UTF-8 because the validator we ran above already
+        // accepted them.
+        self.transition(SessionState::RcptTo)?;
+        for &addr in to {
+            self.write_all(&format_rcpt_to(addr)).await?;
+            self.expect_class(2, SmtpOp::RcptTo).await?;
+        }
+
+        // DATA + body identical to the ASCII path.
+        self.transition(SessionState::Data)?;
+        self.write_all(&format_command("DATA")).await?;
+        self.expect_code(354, SmtpOp::Data).await?;
+
+        let payload = dot_stuff_and_terminate(body.as_bytes());
+        self.write_all(&payload).await?;
+        self.expect_class(2, SmtpOp::Data).await?;
+
         self.transition(SessionState::MailFrom)?;
         Ok(())
     }

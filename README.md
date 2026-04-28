@@ -82,6 +82,38 @@ In both cases the TLS handshake is the responsibility of the
 [`Transport`] implementation; `wasm-smtp-core` sees an opaque byte
 stream and (for STARTTLS) a single `upgrade_to_tls()` signal.
 
+## Cargo features
+
+`wasm-smtp-core` exposes two cargo features that allow size-sensitive
+deployments (Cloudflare Workers' 3 MiB cap, in particular) to opt out
+of functionality they will not use:
+
+| Feature    | Default | What it adds                                                                                              |
+|------------|---------|-----------------------------------------------------------------------------------------------------------|
+| `xoauth2`  | **on**  | `SmtpClient::login_xoauth2`, `AuthMechanism::XOAuth2` code paths, OAuth 2.0 token validation helpers      |
+| `smtputf8` | off     | `SmtpClient::send_mail_smtputf8`, `validate_address_utf8`, `format_mail_from_smtputf8`, capability check |
+
+Defaults are chosen so that v0.3.x users see no behavior change on
+upgrade. To strip OAuth 2.0 support entirely (typical for transactional
+senders against a self-hosted Postfix or commercial relay using static
+passwords):
+
+```toml
+wasm-smtp-core = { version = "0.4", default-features = false }
+```
+
+To opt into international addresses while keeping the OAuth 2.0
+support:
+
+```toml
+wasm-smtp-core = { version = "0.4", features = ["smtputf8"] }
+```
+
+The `wasm-smtp-cloudflare` adapter exposes a matching `smtputf8`
+feature that pass-through-enables it on the core crate, so adapter-
+only callers do not need a direct dependency on `wasm-smtp-core` to
+opt in.
+
 ## Acceptable use
 
 This library must not be used to deliver unsolicited bulk mail, to

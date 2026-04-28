@@ -15,6 +15,39 @@ categories = ["email", "network-programming", "wasm"]
 [lib]
 path = "src/lib.rs"
 
+[features]
+# Default features. `xoauth2` is enabled by default for backwards
+# compatibility with v0.3.x; callers that do not use OAuth 2.0
+# authentication (Gmail / Microsoft 365 submission) can disable it
+# with `default-features = false` to shave roughly 250 LOC of
+# protocol logic and helpers from their build.
+default = ["xoauth2"]
+
+# SMTPUTF8 (RFC 6531) — international (UTF-8) addresses in MAIL FROM /
+# RCPT TO. Off by default: the feature is a niche opt-in, and disabling
+# it shaves a few KB from the WASM bundle in size-constrained
+# deployments (Cloudflare Workers' 3 MiB cap).
+#
+# When enabled, exposes `SmtpClient::send_mail_smtputf8` plus the
+# `validate_address_utf8`, `format_mail_from_smtputf8`, and
+# `ehlo_advertises_smtputf8` helpers in `protocol`. The default
+# `send_mail` continues to enforce the strict ASCII-address rule
+# regardless of this feature.
+smtputf8 = []
+
+# AUTH XOAUTH2 (Google / Microsoft OAuth 2.0 SASL profile). On by
+# default for backwards compatibility. When disabled, removes
+# `SmtpClient::login_xoauth2`, the `XOAuth2` arm of `login_with`,
+# and the `protocol::build_xoauth2_initial_response` /
+# `validate_xoauth2_user` / `validate_oauth2_token` helpers.
+#
+# The `AuthMechanism::XOAuth2` and `SmtpOp::AuthXOAuth2` enum
+# variants remain present in either configuration (both enums are
+# `non_exhaustive`), so disabling this feature is not a SemVer-
+# breaking change for code that pattern-matches with a wildcard
+# arm.
+xoauth2 = []
+
 [dependencies]
 
 [lints]

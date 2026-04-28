@@ -447,10 +447,15 @@ fn push_b64(out: &mut String, n: u32, count: u8) {
 /// The check is intentionally conservative: it rejects the characters that
 /// would either inject SMTP commands or violate the framing of `<addr>`.
 /// It does not attempt full RFC 5321 grammar validation.
+/// Validate an envelope address (the `<…>` content in `MAIL FROM` /
+/// `RCPT TO`). The check is conservative — it does not parse RFC 5321
+/// grammar in detail, but it forbids any byte that would corrupt the
+/// command framing.
 ///
 /// In particular:
 /// - non-empty;
-/// - ASCII only (SMTPUTF8 is not implemented);
+/// - ASCII only — UTF-8 addresses require the `smtputf8` feature
+///   (which exposes a separate UTF-8-permissive validator);
 /// - no `\r`, `\n`, or `\0`;
 /// - no `<`, `>`, or space (which would corrupt the angle-bracket framing).
 pub fn validate_address(addr: &str) -> Result<(), InvalidInputError> {
@@ -724,6 +729,15 @@ pub fn validate_plain_password(pass: &str) -> Result<(), InvalidInputError> {
 
 // -----------------------------------------------------------------------------
 // XOAUTH2 (Google / Microsoft OAuth 2.0 SASL profile)
+//
+// The three helpers in this section are feature-gated behind
+// `xoauth2` (default-on). Disabling the feature removes them
+// entirely along with the corresponding `SmtpClient::login_xoauth2`
+// method and the `XOAuth2` arm of `login_with`. The
+// `AuthMechanism::XOAuth2` and `SmtpOp::AuthXOAuth2` enum variants
+// remain present in either configuration; both enums are
+// `non_exhaustive` and the variants without the feature are simply
+// unreachable through the public API.
 // -----------------------------------------------------------------------------
 
 /// Build the SASL `XOAUTH2` initial response.
@@ -743,6 +757,9 @@ pub fn validate_plain_password(pass: &str) -> Result<(), InvalidInputError> {
 /// The returned string is the base64 encoding of the entire payload,
 /// suitable for placement after `AUTH XOAUTH2 ` on the wire. The
 /// caller is responsible for the surrounding command framing.
+///
+/// Available only with the `xoauth2` cargo feature enabled (default-on).
+#[cfg(feature = "xoauth2")]
 #[must_use]
 pub fn build_xoauth2_initial_response(user: &str, token: &str) -> String {
     // Length: "user=" (5) + user + 1 (SOH) + "auth=Bearer " (12) + token
@@ -764,6 +781,9 @@ pub fn build_xoauth2_initial_response(user: &str, token: &str) -> String {
 /// field, but to prevent injection of the SOH separator, NUL, CR,
 /// or LF into the SASL payload, we forbid those bytes. Empty
 /// usernames are also rejected.
+///
+/// Available only with the `xoauth2` cargo feature enabled (default-on).
+#[cfg(feature = "xoauth2")]
 pub fn validate_xoauth2_user(user: &str) -> Result<(), InvalidInputError> {
     if user.is_empty() {
         return Err(InvalidInputError::new("XOAUTH2 user must not be empty"));
@@ -790,6 +810,9 @@ pub fn validate_xoauth2_user(user: &str) -> Result<(), InvalidInputError> {
 /// shapes that real-world providers nonetheless never emit. In
 /// practice both Google and Microsoft access tokens consist of
 /// `[A-Za-z0-9._~+/=-]` and pass this check trivially.
+///
+/// Available only with the `xoauth2` cargo feature enabled (default-on).
+#[cfg(feature = "xoauth2")]
 pub fn validate_oauth2_token(token: &str) -> Result<(), InvalidInputError> {
     if token.is_empty() {
         return Err(InvalidInputError::new(
@@ -805,4 +828,118 @@ pub fn validate_oauth2_token(token: &str) -> Result<(), InvalidInputError> {
         }
     }
     Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// SMTPUTF8 (RFC 6531) — feature-gated
+// -----------------------------------------------------------------------------
+//
+// SMTPUTF8 lets a session carry mail addresses outside the ASCII
+// repertoire — e.g. `送信者@例え.jp`. The crate gates the related
+// helpers behind the `smtputf8` cargo feature: callers who only ever
+// submit ASCII addresses pay no code-size cost for the UTF-8 validator,
+// the `MAIL FROM ... SMTPUTF8` formatter, or the capability check.
+//
+// When the feature is disabled, none of the items below exist; the
+// default `validate_address` and `format_mail_from` continue to enforce
+// ASCII, as they always have.
+
+/// Return `true` if the EHLO capability lines advertise the `SMTPUTF8`
+/// extension (RFC 6531). The check is case-insensitive on the keyword.
+///
+/// `capability_lines` is the slice of lines that follows the greeting in
+/// an `EHLO` reply.
+#[cfg(feature = "smtputf8")]
+pub fn ehlo_advertises_smtputf8<S: AsRef<str>>(capability_lines: &[S]) -> bool {
+    for line in capability_lines {
+        if let Some(head) = line.as_ref().split_ascii_whitespace().next()
+            && head.eq_ignore_ascii_case("SMTPUTF8")
+        {
+            return true;
+        }
+    }
+    false
+}
+
+/// Validate an envelope address, allowing UTF-8 codepoints in addition
+/// to the ASCII subset accepted by [`validate_address`].
+///
+/// The structural rules are the same as the ASCII validator — the
+/// address must be non-empty, must not contain CR / LF / NUL, must
+/// not contain `<`, `>`, ASCII whitespace, ASCII control characters
+/// (C0 + DEL), or C1 control characters (U+0080-U+009F). Any other
+/// Unicode codepoint is permitted; the dot-atom structure is left
+/// for the server to validate.
+///
+/// Note that ASCII whitespace (`' '` and `'\t'`) is rejected because
+/// it would corrupt the SMTP command framing, but other Unicode
+/// whitespace categories such as U+3000 IDEOGRAPHIC SPACE are
+/// allowed: they are valid characters in mailbox local parts in
+/// some scripts and the SMTP layer never tokenizes on them.
+#[cfg(feature = "smtputf8")]
+pub fn validate_address_utf8(addr: &str) -> Result<(), InvalidInputError> {
+    if addr.is_empty() {
+        return Err(InvalidInputError::new("mail address must not be empty"));
+    }
+    for ch in addr.chars() {
+        match ch {
+            '\r' | '\n' => {
+                return Err(InvalidInputError::new(
+                    "mail address must not contain CR or LF",
+                ));
+            }
+            '\0' => {
+                return Err(InvalidInputError::new(
+                    "mail address must not contain a NUL byte",
+                ));
+            }
+            '<' | '>' => {
+                return Err(InvalidInputError::new(
+                    "mail address must not contain ASCII < or >",
+                ));
+            }
+            ' ' | '\t' => {
+                return Err(InvalidInputError::new(
+                    "mail address must not contain ASCII whitespace",
+                ));
+            }
+            // ASCII control characters (C0 + DEL) other than the
+            // CR/LF/NUL we caught above. (Tab was caught as
+            // whitespace above.)
+            c if (c as u32) < 0x20 || (c as u32) == 0x7F => {
+                return Err(InvalidInputError::new(
+                    "mail address must not contain ASCII control characters",
+                ));
+            }
+            // C1 control characters (U+0080-U+009F).
+            c if (0x80..=0x9F).contains(&(c as u32)) => {
+                return Err(InvalidInputError::new(
+                    "mail address must not contain C1 control characters",
+                ));
+            }
+            _ => {}
+        }
+    }
+    Ok(())
+}
+
+/// Format `MAIL FROM:<addr> SMTPUTF8\r\n` as bytes.
+///
+/// The `SMTPUTF8` ESMTP parameter (RFC 6531 §3.4) signals to the
+/// server that the upcoming envelope and message contain UTF-8.
+/// Servers that did not advertise the extension will reject the
+/// command; callers should confirm advertisement with
+/// [`ehlo_advertises_smtputf8`] before invoking this helper.
+///
+/// Address validation is the caller's responsibility (use
+/// [`validate_address_utf8`]); this helper formats unconditionally.
+#[cfg(feature = "smtputf8")]
+#[must_use]
+pub fn format_mail_from_smtputf8(addr: &str) -> Vec<u8> {
+    // "MAIL FROM:<" (11) + addr + "> SMTPUTF8\r\n" (12) = 23 + addr.len()
+    let mut out = Vec::with_capacity(23 + addr.len());
+    out.extend_from_slice(b"MAIL FROM:<");
+    out.extend_from_slice(addr.as_bytes());
+    out.extend_from_slice(b"> SMTPUTF8\r\n");
+    out
 }

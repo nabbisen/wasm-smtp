@@ -155,6 +155,14 @@ let access_token = obtain_oauth2_token().await?; // your code
 client.login_xoauth2("user@example.com", &access_token).await?;
 ```
 
+XOAUTH2 lives behind the `xoauth2` cargo feature, which is enabled
+by default. Callers that send only via static-password SMTP relays
+can drop OAuth 2.0 support with `default-features = false`, shaving
+roughly 250 LOC of protocol code from the WASM bundle. Doing so
+also removes the `login_xoauth2` method and the `XOAuth2` arm of
+`login_with`; calling either when the feature is disabled returns
+`SmtpError::InvalidInput` without performing any I/O.
+
 `login_xoauth2` opts in explicitly to the XOAUTH2 SASL profile.
 `login()` deliberately does not pick XOAUTH2 even when the server
 advertises it: a static-password caller passing a stale OAuth token
@@ -210,6 +218,42 @@ is useful for distinguishing `5.7.8` (invalid credentials) from
 If the server does not advertise the extension, `enhanced` is `None`
 even when the reply text happens to contain a `class.subject.detail`-
 shaped string — the parse is gated on advertisement, by design.
+
+## International addresses (SMTPUTF8)
+
+For envelope addresses outside the ASCII repertoire — Japanese
+mailbox names, IDN U-label domains, and so on — enable the
+`smtputf8` cargo feature and use `send_mail_smtputf8` instead of
+`send_mail`:
+
+```toml
+[dependencies]
+wasm-smtp-core = { version = "0.4", features = ["smtputf8"] }
+# or, via the cloudflare adapter (which re-exports the feature):
+wasm-smtp-cloudflare = { version = "0.4", features = ["smtputf8"] }
+```
+
+```rust
+client.send_mail_smtputf8(
+    "\u{9001}\u{4FE1}@example.jp",
+    &["\u{53D7}\u{4FE1}@\u{4F8B}\u{3048}.jp"],
+    "Subject: hello\r\n\r\nbody\r\n",
+).await?;
+```
+
+The method validates addresses with a UTF-8-permissive validator
+(rejecting only structural hazards like CR/LF/NUL/`<>`/whitespace
+and ASCII / C1 control characters), and emits the SMTPUTF8 ESMTP
+parameter on `MAIL FROM`. If the server did not advertise
+`SMTPUTF8` in its `EHLO` reply, the call returns
+`ProtocolError::ExtensionUnavailable { name: "SMTPUTF8" }` without
+sending any bytes — there is no silent fallback to ASCII.
+
+The feature is gated because the relevant code is dead weight for
+most callers (typical transactional submission uses ASCII-only
+addresses) and adding ~5 KB to a Cloudflare Workers bundle for an
+unused feature is a real cost there. When the feature is disabled,
+the normal `send_mail` continues to enforce strict ASCII as before.
 
 ## Inspecting capabilities
 

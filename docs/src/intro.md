@@ -33,13 +33,22 @@ single application owner. The project standardizes on:
   submission.** The auto-selecting `login()` picks the best static-
   password mechanism advertised by the server (PLAIN over LOGIN);
   `login_xoauth2()` opts in to OAuth 2.0 bearer-token authentication
-  (Gmail, Microsoft 365). SASL SCRAM and GSSAPI are not supported.
+  (Gmail, Microsoft 365). XOAUTH2 lives behind the `xoauth2` cargo
+  feature (default-on); transactional senders against self-hosted
+  Postfix or commercial relays with static passwords can disable it
+  with `default-features = false` to drop ~250 LOC from the bundle.
+  SASL SCRAM and GSSAPI are not supported.
 - **`ENHANCEDSTATUSCODES` (RFC 2034 / 3463).** When the server
   advertises this extension, every reply is annotated with the
   parsed `class.subject.detail` code, propagated into
   `ProtocolError::UnexpectedCode` and `AuthError::Rejected` so
   callers can distinguish (e.g.) `5.1.1` user-unknown from `5.7.1`
   policy rejection programmatically.
+- **`SMTPUTF8` (RFC 6531) — opt-in feature.** Behind the `smtputf8`
+  cargo feature (off by default), `send_mail_smtputf8` accepts UTF-8
+  in envelope addresses (`送信者@例え.jp`). Off by default to keep
+  the WASM bundle small for the majority of callers who only send
+  ASCII addresses.
 - **Caller-supplied message bodies.** The library does not build MIME,
   attach files, or compose multipart payloads. The body is whatever
   RFC 5322 / 5321 octets the caller passes, optionally CRLF-normalized,

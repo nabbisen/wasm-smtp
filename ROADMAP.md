@@ -121,7 +121,63 @@ production deployments can rely on the crate for:
   `non_exhaustive`; reusable `validate_xoauth2_user` and
   `validate_oauth2_token` for caller-side input checking.
 
-## Phase 7 — Future work *(not scheduled)*
+## Phase 7 — SMTPUTF8 *(complete)*
+
+International-address support introduced as the project's first
+feature-gated capability.
+
+- ✅ `smtputf8` cargo feature (off by default), gating the entire
+  SMTPUTF8 surface so callers who only ever submit ASCII addresses
+  pay no code-size cost.
+- ✅ `SmtpClient::send_mail_smtputf8(from, to, body)` for sending
+  with the `SMTPUTF8` ESMTP parameter on `MAIL FROM`.
+- ✅ `protocol::validate_address_utf8` — Unicode-permissive address
+  validator that still rejects structural hazards (CR/LF/NUL,
+  `<>`, ASCII whitespace, C0/C1 control characters).
+- ✅ `protocol::ehlo_advertises_smtputf8` capability inspection
+  helper.
+- ✅ `protocol::format_mail_from_smtputf8` formatter.
+- ✅ Feature pass-through via `wasm-smtp-cloudflare`'s `smtputf8`
+  feature so adapter-only callers can enable SMTPUTF8 without
+  naming the core crate directly.
+- ✅ No silent fallback: requesting SMTPUTF8 against a server that
+  did not advertise it returns `ProtocolError::ExtensionUnavailable
+  { name: "SMTPUTF8" }` and closes the session.
+
+## Phase 8 — Retrofit feature gates *(in progress)*
+
+Phase 7 introduced the project's first feature flag. The same
+treatment is justified for several pieces of existing functionality
+that some callers will never use; gating them lets size-sensitive
+consumers (Cloudflare Workers' 3 MiB cap, in particular) pick only
+what they need.
+
+Status:
+
+- ✅ **`xoauth2`** (default-on, completed in v0.4.0). Gates
+  `SmtpClient::login_xoauth2`, the `XOAuth2` arm of `login_with`,
+  and the `protocol::build_xoauth2_initial_response` /
+  `validate_xoauth2_user` / `validate_oauth2_token` helpers. The
+  `AuthMechanism::XOAuth2` and `SmtpOp::AuthXOAuth2` enum variants
+  remain present in either configuration. Default-on for backwards
+  compatibility with v0.3.x; Gmail/M365-bound callers see no change,
+  while transactional callers can drop XOAUTH2 entirely with
+  `default-features = false`.
+- ✅ **`smtputf8`** (default-off, completed in v0.4.0). Already
+  gated when introduced in Phase 7.
+
+Future candidates (not scheduled):
+
+| Feature              | Default | Gates                                                    | Rationale                                |
+|----------------------|---------|----------------------------------------------------------|------------------------------------------|
+| `starttls`           | on      | `StartTlsCapable`, `SessionState::StartTls`, `connect_starttls`, `starttls()` | Most port-587 callers need it; default-on |
+| `enhancedstatuscodes`| on      | `EnhancedStatus`, `Reply::enhanced`, `enhanced` field on errors | Small, broadly useful; default-on  |
+| `auth-login`         | on      | `AuthMechanism::Login`, `run_auth_login`                | Legacy server compat; default-on for safety |
+
+Each of these would be SemVer-evaluated individually before being
+introduced. The above table is intentionally tentative.
+
+## Phase 9 — Future work *(not scheduled)*
 
 Items that may be revisited in a future cycle. None of these is a
 commitment.
@@ -131,15 +187,11 @@ commitment.
 - Extra SASL mechanisms (`SCRAM-SHA-256`, `OAUTHBEARER`).
 - Pipelining (RFC 2920) for slightly better latency on high-RTT links.
 - DSN extension parameters (RFC 3461) for delivery-status routing.
-- SMTPUTF8 / international addresses (RFC 6531).
 
 ## Out of scope (for now)
 
 The following are deliberately omitted from the roadmap. They may be
 revisited later, but are not implied commitments.
 
-- SMTPUTF8 / international addresses
 - MIME composition or attachment building
 - Bulk delivery, retry queues, rate limiting
-- DSN, ENHANCEDSTATUSCODES processing
-- Pipelining (we read one reply at a time)

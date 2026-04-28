@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-04-27
+
+### Added
+
+- **Phase 7 — `SMTPUTF8` (RFC 6531) — feature-gated.**
+  - New `smtputf8` cargo feature, **off by default**. The crate's
+    first feature flag, intended primarily to keep WASM bundle size
+    down for the common case of ASCII-only submission.
+  - `SmtpClient::send_mail_smtputf8(from, to, body)` for sending
+    with the `SMTPUTF8` ESMTP parameter on `MAIL FROM`. Available
+    only when the feature is enabled.
+  - `protocol::validate_address_utf8` — Unicode-permissive address
+    validator. Rejects only structural hazards: CR/LF/NUL, ASCII
+    `<`/`>`, ASCII whitespace, ASCII control characters
+    (C0 + DEL), and C1 control characters (U+0080-U+009F).
+    Everything else, including non-Latin scripts and IDEOGRAPHIC
+    SPACE U+3000, is accepted.
+  - `protocol::ehlo_advertises_smtputf8` capability inspection.
+  - `protocol::format_mail_from_smtputf8` for the `MAIL FROM:<addr>
+    SMTPUTF8\r\n` wire form.
+  - `wasm-smtp-cloudflare` exposes a matching `smtputf8` feature
+    that pass-through-enables it in `wasm-smtp-core`, so adapter-
+    only callers do not need to depend on the core crate by name
+    to opt in.
+  - No silent fallback: if the server does not advertise
+    `SMTPUTF8`, `send_mail_smtputf8` returns
+    `ProtocolError::ExtensionUnavailable { name: "SMTPUTF8" }` and
+    closes the session.
+- **Phase 8 — `xoauth2` cargo feature (default-on).**
+  - `SmtpClient::login_xoauth2`, the `XOAuth2` arm of `login_with`,
+    and the `protocol::build_xoauth2_initial_response` /
+    `validate_xoauth2_user` / `validate_oauth2_token` helpers are
+    now gated behind the new `xoauth2` cargo feature (default-on).
+    Callers that do not authenticate via Gmail / Microsoft 365 OAuth
+    can disable this feature with `default-features = false` to
+    drop roughly 250 LOC of protocol code from their WASM bundle.
+  - The `AuthMechanism::XOAuth2` and `SmtpOp::AuthXOAuth2` enum
+    variants remain present in either configuration. Both enums are
+    `non_exhaustive`, so the default-on→opt-in transition is not a
+    SemVer-breaking change.
+  - When the feature is disabled, calling `login_with(XOAuth2, ..)`
+    or `login_xoauth2` fails fast with a clear `InvalidInputError`
+    rather than a confusing "not advertised" mechanism error.
+  - `AuthError::UnsupportedMechanism`'s Display message now
+    reflects the active feature configuration (mentions XOAUTH2
+    when the feature is enabled, omits it otherwise).
+
+### Changed
+
+- `validate_address`'s doc comment now explicitly notes that UTF-8
+  addresses require the `smtputf8` feature. The function's behavior
+  is unchanged from v0.3.0.
+
 ## [0.3.0] — 2026-04-27
 
 ### Added
@@ -153,7 +206,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nabbisen/wasm-smtp/releases/tag/v0.1.0

@@ -352,10 +352,22 @@ impl fmt::Display for AuthError {
                     write!(f, "server rejected authentication ({code}): {message}")
                 }
             }
-            Self::UnsupportedMechanism => f.write_str(
-                "server did not advertise an AUTH mechanism supported by this client \
-                 (this client knows PLAIN, LOGIN, and XOAUTH2)",
-            ),
+            Self::UnsupportedMechanism => {
+                #[cfg(feature = "xoauth2")]
+                {
+                    f.write_str(
+                        "server did not advertise an AUTH mechanism supported by this client \
+                         (this client knows PLAIN, LOGIN, and XOAUTH2)",
+                    )
+                }
+                #[cfg(not(feature = "xoauth2"))]
+                {
+                    f.write_str(
+                        "server did not advertise an AUTH mechanism supported by this client \
+                         (this client knows PLAIN and LOGIN; XOAUTH2 was not compiled in)",
+                    )
+                }
+            }
             Self::MalformedChallenge(s) => {
                 write!(f, "server sent a malformed AUTH challenge: {s}")
             }

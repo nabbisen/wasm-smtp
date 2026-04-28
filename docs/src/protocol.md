@@ -227,6 +227,59 @@ and `enhanced` is `None`.
 [`ProtocolError::UnexpectedCode`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.ProtocolError.html#variant.UnexpectedCode
 [`EnhancedStatus`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.EnhancedStatus.html
 
+## SMTPUTF8 (RFC 6531) — feature-gated
+
+The `smtputf8` cargo feature (off by default) enables UTF-8 in
+envelope addresses. When the server advertises `SMTPUTF8` in its
+`EHLO` reply, the caller can use `send_mail_smtputf8` to send a
+message with non-ASCII addresses. The wire form changes only at
+`MAIL FROM`, where the `SMTPUTF8` ESMTP parameter is appended:
+
+```text
+C: MAIL FROM:<送信者@例え.jp> SMTPUTF8
+S: 250 ok
+C: RCPT TO:<受信者@例え.jp>
+S: 250 ok
+C: DATA
+S: 354 ...
+```
+
+`RCPT TO` does not carry a parameter — RFC 6531 §3.4 only adds
+`SMTPUTF8` to `MAIL FROM`.
+
+The crate's address validator for the SMTPUTF8 path
+([`validate_address_utf8`]) accepts any Unicode codepoint that is
+not structurally hazardous: CR, LF, NUL, `<`, `>`, ASCII whitespace,
+ASCII control characters (C0 + DEL), and C1 control characters
+(U+0080-U+009F) are rejected; everything else, including
+non-Latin scripts and the IDEOGRAPHIC SPACE U+3000, is accepted.
+The dot-atom structure of the address is left for the server to
+validate.
+
+If `send_mail_smtputf8` is called on a server that did not advertise
+the extension, [`ProtocolError::ExtensionUnavailable`] with
+`name: "SMTPUTF8"` is returned and the session is moved to
+`Closed`. There is no fallback to ASCII-only delivery: a caller
+that asked for SMTPUTF8 wants UTF-8 addresses to actually be
+delivered, not silently dropped or converted.
+
+Why feature-gated: the SMTPUTF8 surface adds ~80 LOC of code
+(validator, formatter, capability check, send method) and ~5 KB to
+a release WASM bundle. For the majority of submission workloads
+that only ever send ASCII addresses, that's dead weight, so the
+feature is opt-in. Enable it via:
+
+```toml
+[dependencies]
+wasm-smtp-core = { version = "0.4", features = ["smtputf8"] }
+```
+
+When the feature is disabled, none of the helpers above exist; the
+default `validate_address` and `format_mail_from` continue to
+enforce ASCII as they always have.
+
+[`validate_address_utf8`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/protocol/fn.validate_address_utf8.html
+
 ## TLS models
 
 The crate supports two TLS models at the transport layer:

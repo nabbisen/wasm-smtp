@@ -198,12 +198,17 @@ mod protocol_tests {
     use crate::error::ProtocolError;
     use crate::protocol::{
         AuthMechanism, Reply, base64_encode, build_auth_plain_initial_response,
-        build_xoauth2_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth,
-        ehlo_advertises_enhanced_status_codes, ehlo_advertises_starttls, format_command,
-        format_command_arg, format_mail_from, format_rcpt_to, parse_reply_line,
-        select_auth_mechanism, validate_address, validate_ehlo_domain, validate_login_password,
-        validate_login_username, validate_oauth2_token, validate_plain_password,
-        validate_plain_username, validate_xoauth2_user,
+        dot_stuff_and_terminate, ehlo_advertises_auth, ehlo_advertises_enhanced_status_codes,
+        ehlo_advertises_starttls, format_command, format_command_arg, format_mail_from,
+        format_rcpt_to, parse_reply_line, select_auth_mechanism, validate_address,
+        validate_ehlo_domain, validate_login_password, validate_login_username,
+        validate_plain_password, validate_plain_username,
+    };
+
+    // XOAUTH2 helpers are only present when the feature is enabled.
+    #[cfg(feature = "xoauth2")]
+    use crate::protocol::{
+        build_xoauth2_initial_response, validate_oauth2_token, validate_xoauth2_user,
     };
 
     // -- parse_reply_line ----------------------------------------------------
@@ -811,7 +816,19 @@ mod protocol_tests {
     }
 
     // -- XOAUTH2 ----------------------------------------------------------
+    //
+    // These tests cover helpers that are only present when the
+    // `xoauth2` feature is enabled. The `select_auth_mechanism` test
+    // is included here because it asserts a property about the
+    // _absence_ of XOAUTH2 from auto-selection, which is meaningful
+    // only when XOAUTH2 itself is available.
+    //
+    // The single test that does NOT belong here is
+    // `auth_mechanism_xoauth2_name_is_exact_keyword`, which tests the
+    // always-present `AuthMechanism::XOAuth2` variant's `name()`
+    // accessor. That one is unconditional below.
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_initial_response_canonical_example() {
         // Canonical Google example. Payload (with SOH = \x01):
@@ -833,6 +850,7 @@ mod protocol_tests {
         assert_eq!(response, expected_b64);
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_initial_response_uses_soh_separators() {
         // The wire-format bytes (pre-base64) must contain exactly two
@@ -844,6 +862,7 @@ mod protocol_tests {
         assert_eq!(r1, base64_encode(&payload));
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn validate_xoauth2_user_rejects_empty_and_control_bytes() {
         assert!(validate_xoauth2_user("").is_err());
@@ -854,12 +873,14 @@ mod protocol_tests {
         assert!(validate_xoauth2_user("u\x01v").is_err());
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn validate_xoauth2_user_accepts_typical_email_addresses() {
         assert!(validate_xoauth2_user("user@example.com").is_ok());
         assert!(validate_xoauth2_user("first.last+tag@example.co.uk").is_ok());
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn validate_oauth2_token_rejects_empty_and_whitespace() {
         assert!(validate_oauth2_token("").is_err());
@@ -868,12 +889,14 @@ mod protocol_tests {
         assert!(validate_oauth2_token("token\nwith\nnewline").is_err());
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn validate_oauth2_token_rejects_non_ascii() {
         assert!(validate_oauth2_token("\u{00FF}token").is_err());
         assert!(validate_oauth2_token("token\u{4E2D}").is_err());
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn validate_oauth2_token_accepts_typical_bearer_tokens() {
         // Realistic Google token shape.
@@ -889,6 +912,11 @@ mod protocol_tests {
         assert!(validate_oauth2_token("a-b_c.d+e/f=g~h").is_ok());
     }
 
+    // Note: the next test asserts the absence of XOAUTH2 from
+    // auto-selection, which is meaningful only when XOAUTH2 itself
+    // is compiled in. Without the feature, `AuthMechanism::XOAuth2`
+    // can't be auto-picked because it can't be picked at all.
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn select_auth_mechanism_does_not_pick_xoauth2() {
         // Even when XOAUTH2 is the only advertised mechanism,
@@ -899,6 +927,9 @@ mod protocol_tests {
         assert!(select_auth_mechanism(&lines).is_none());
     }
 
+    // The AuthMechanism::XOAuth2 enum variant is present in either
+    // feature configuration (the enum is non_exhaustive); only its
+    // associated I/O code paths and helpers are gated.
     #[test]
     fn auth_mechanism_xoauth2_name_is_exact_keyword() {
         assert_eq!(AuthMechanism::XOAuth2.name(), "XOAUTH2");
@@ -2208,10 +2239,16 @@ mod client_tests {
         }
     }
 
-    // -- XOAUTH2 (Phase 6) ------------------------------------------------
+    // -- XOAUTH2 (Phase 6 / Phase 7) --------------------------------------
+    //
+    // The XOAUTH2 SASL profile is gated behind the `xoauth2` cargo
+    // feature (default-on). All tests that drive the
+    // `login_xoauth2` / `login_with(AuthMechanism::XOAuth2, ..)`
+    // code paths are conditional on the feature.
 
     /// EHLO reply that advertises AUTH XOAUTH2 (and PLAIN, so we can also
     /// check that `select_auth_mechanism` still picks PLAIN, not XOAUTH2).
+    #[cfg(feature = "xoauth2")]
     fn greeting_then_ehlo_with_xoauth2() -> Vec<u8> {
         flatten(&[
             b"220 mail.example.com ESMTP\r\n",
@@ -2221,6 +2258,7 @@ mod client_tests {
         ])
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_happy_path_succeeds_directly() {
         // 235 directly: server accepted the bearer token.
@@ -2243,6 +2281,7 @@ mod client_tests {
         assert_eq!(client.state(), SessionState::MailFrom);
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_login_with_explicit_mechanism_works() {
         // login_with(XOAuth2, ...) should be equivalent to login_xoauth2.
@@ -2255,6 +2294,7 @@ mod client_tests {
         assert_eq!(client.state(), SessionState::MailFrom);
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_handles_334_error_continuation() {
         // RFC 7628-style flow: server returns 334 with base64 JSON,
@@ -2295,6 +2335,7 @@ mod client_tests {
         assert_eq!(client.state(), SessionState::Closed);
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_returns_unsupported_when_not_advertised() {
         let script = flatten(&[
@@ -2313,6 +2354,7 @@ mod client_tests {
         assert_eq!(client.state(), SessionState::Closed);
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_validates_token_before_io() {
         // A token with a space would be rejected by the server but we
@@ -2332,6 +2374,7 @@ mod client_tests {
         assert_eq!(client.state(), SessionState::Authentication);
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_validates_user_before_io() {
         let script = flatten(&[&greeting_then_ehlo_with_xoauth2()[..]]);
@@ -2345,6 +2388,7 @@ mod client_tests {
         assert_eq!(client.state(), SessionState::Authentication);
     }
 
+    #[cfg(feature = "xoauth2")]
     #[test]
     fn xoauth2_with_enhanced_status_propagates_code() {
         // ENHANCEDSTATUSCODES + XOAUTH2 + 334 error continuation +
@@ -2370,5 +2414,285 @@ mod client_tests {
             }
             other => panic!("unexpected: {other:?}"),
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SMTPUTF8 (Phase 7) — feature-gated
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "smtputf8")]
+mod smtputf8_tests {
+    use super::harness::{MockTransport, block_on, flatten};
+    use crate::client::SmtpClient;
+    use crate::error::{ProtocolError, SmtpError, SmtpOp};
+    use crate::protocol::{
+        ehlo_advertises_smtputf8, format_mail_from_smtputf8, validate_address_utf8,
+    };
+    use crate::session::SessionState;
+
+    // -- ehlo_advertises_smtputf8 -----------------------------------------
+
+    #[test]
+    fn ehlo_advertises_smtputf8_finds_listed_extension() {
+        let lines: Vec<String> = vec!["PIPELINING".into(), "SMTPUTF8".into()];
+        assert!(ehlo_advertises_smtputf8(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_smtputf8_is_case_insensitive() {
+        let lines: Vec<String> = vec!["smtputf8".into()];
+        assert!(ehlo_advertises_smtputf8(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_smtputf8_returns_false_when_absent() {
+        let lines: Vec<String> = vec!["PIPELINING".into(), "AUTH PLAIN".into()];
+        assert!(!ehlo_advertises_smtputf8(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_smtputf8_does_not_match_substrings() {
+        let lines: Vec<String> = vec!["SMTPUTF8X".into()];
+        assert!(!ehlo_advertises_smtputf8(&lines));
+    }
+
+    // -- validate_address_utf8 --------------------------------------------
+
+    #[test]
+    fn validate_address_utf8_accepts_ascii() {
+        // Anything the strict ASCII validator accepts must also pass here.
+        assert!(validate_address_utf8("user@example.com").is_ok());
+        assert!(validate_address_utf8("a.b+c@d.example").is_ok());
+    }
+
+    #[test]
+    fn validate_address_utf8_accepts_japanese_local_part() {
+        assert!(validate_address_utf8("\u{9001}\u{4FE1}@example.jp").is_ok());
+    }
+
+    #[test]
+    fn validate_address_utf8_accepts_idn_domain() {
+        // U-label domain (Japanese ".jp" 例え.jp).
+        assert!(validate_address_utf8("user@\u{4F8B}\u{3048}.jp").is_ok());
+    }
+
+    #[test]
+    fn validate_address_utf8_accepts_combined_local_and_domain() {
+        assert!(validate_address_utf8("\u{9001}\u{4FE1}@\u{4F8B}\u{3048}.jp").is_ok());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_empty() {
+        assert!(validate_address_utf8("").is_err());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_crlf() {
+        assert!(validate_address_utf8("a\r@b.com").is_err());
+        assert!(validate_address_utf8("a\n@b.com").is_err());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_nul() {
+        assert!(validate_address_utf8("a\0b@c.com").is_err());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_angle_brackets() {
+        assert!(validate_address_utf8("<a@b.com>").is_err());
+        assert!(validate_address_utf8("a@b<c.com").is_err());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_ascii_whitespace() {
+        assert!(validate_address_utf8("a b@c.com").is_err());
+        assert!(validate_address_utf8("a\tb@c.com").is_err());
+    }
+
+    #[test]
+    fn validate_address_utf8_accepts_ideographic_space() {
+        // U+3000 is whitespace by Unicode category but valid in some
+        // local parts and not a SMTP framing concern.
+        assert!(validate_address_utf8("a\u{3000}b@c.com").is_ok());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_ascii_control_chars() {
+        // ASCII DEL (0x7F).
+        assert!(validate_address_utf8("a\u{007F}b@c.com").is_err());
+        // Bell (0x07).
+        assert!(validate_address_utf8("a\u{0007}b@c.com").is_err());
+    }
+
+    #[test]
+    fn validate_address_utf8_rejects_c1_control_chars() {
+        // U+0080-U+009F are C1 controls.
+        assert!(validate_address_utf8("a\u{0085}b@c.com").is_err());
+        assert!(validate_address_utf8("a\u{0095}b@c.com").is_err());
+    }
+
+    // -- format_mail_from_smtputf8 ----------------------------------------
+
+    #[test]
+    fn format_mail_from_smtputf8_appends_parameter() {
+        let bytes = format_mail_from_smtputf8("user@example.com");
+        assert_eq!(bytes, b"MAIL FROM:<user@example.com> SMTPUTF8\r\n");
+    }
+
+    #[test]
+    fn format_mail_from_smtputf8_carries_utf8_address() {
+        let bytes = format_mail_from_smtputf8("\u{9001}\u{4FE1}@example.jp");
+        // The bytes must be exact UTF-8 of the input.
+        let mut expected: Vec<u8> = Vec::new();
+        expected.extend_from_slice(b"MAIL FROM:<");
+        expected.extend_from_slice("\u{9001}\u{4FE1}@example.jp".as_bytes());
+        expected.extend_from_slice(b"> SMTPUTF8\r\n");
+        assert_eq!(bytes, expected);
+    }
+
+    // -- send_mail_smtputf8 E2E -------------------------------------------
+
+    /// Greeting + EHLO advertising both AUTH PLAIN and SMTPUTF8.
+    fn greeting_then_ehlo_with_smtputf8() -> Vec<u8> {
+        flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250-PIPELINING\r\n",
+            b"250-SMTPUTF8\r\n",
+            b"250 AUTH PLAIN\r\n",
+        ])
+    }
+
+    #[test]
+    fn send_mail_smtputf8_full_flow_with_japanese_addresses() {
+        let script = flatten(&[
+            &greeting_then_ehlo_with_smtputf8()[..],
+            b"235 OK\r\n",       // AUTH PLAIN
+            b"250 OK\r\n",       // MAIL FROM
+            b"250 OK\r\n",       // RCPT TO
+            b"354 go ahead\r\n", // DATA
+            b"250 Queued\r\n",   // body accepted
+        ]);
+        let (transport, written, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        block_on(client.send_mail_smtputf8(
+            "\u{9001}\u{4FE1}@example.jp",
+            &["\u{53D7}\u{4FE1}@\u{4F8B}\u{3048}.jp"],
+            "Subject: hi\r\n\r\nbody\r\n",
+        ))
+        .expect("send_mail_smtputf8");
+
+        // The wire bytes should include: EHLO, AUTH PLAIN, MAIL FROM with
+        // SMTPUTF8 parameter, RCPT TO without parameter, DATA, body, .
+        let bytes = written.borrow();
+        let s = std::str::from_utf8(&bytes).expect("bytes are valid UTF-8");
+        assert!(s.contains("MAIL FROM:<\u{9001}\u{4FE1}@example.jp> SMTPUTF8\r\n"));
+        assert!(s.contains("RCPT TO:<\u{53D7}\u{4FE1}@\u{4F8B}\u{3048}.jp>\r\n"));
+        assert_eq!(client.state(), SessionState::MailFrom);
+    }
+
+    #[test]
+    fn send_mail_smtputf8_fails_when_extension_not_advertised() {
+        // EHLO does not advertise SMTPUTF8.
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 AUTH PLAIN\r\n",
+            b"235 OK\r\n",
+        ]);
+        let (transport, written, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        let after_login = written.borrow().len();
+
+        let err = block_on(client.send_mail_smtputf8(
+            "\u{9001}\u{4FE1}@example.jp",
+            &["\u{53D7}\u{4FE1}@example.jp"],
+            "Subject: x\r\n\r\nx\r\n",
+        ))
+        .expect_err("must fail");
+
+        match err {
+            SmtpError::Protocol(ProtocolError::ExtensionUnavailable { name }) => {
+                assert_eq!(name, "SMTPUTF8");
+            }
+            other => panic!("expected ExtensionUnavailable, got {other:?}"),
+        }
+        // No bytes were written for MAIL FROM: the failure happened
+        // before any transport I/O.
+        assert_eq!(written.borrow().len(), after_login);
+        assert_eq!(client.state(), SessionState::Closed);
+    }
+
+    #[test]
+    fn send_mail_smtputf8_validates_addresses_before_io() {
+        let script = flatten(&[&greeting_then_ehlo_with_smtputf8()[..], b"235 OK\r\n"]);
+        let (transport, written, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        let after_login = written.borrow().len();
+
+        // CR in the address must be caught locally.
+        let err = block_on(client.send_mail_smtputf8(
+            "u\rser@example.com",
+            &["b@example.org"],
+            "Subject: x\r\n\r\nx\r\n",
+        ))
+        .expect_err("must fail");
+        assert!(matches!(err, SmtpError::InvalidInput(_)));
+        // Nothing was written for the failed send.
+        assert_eq!(written.borrow().len(), after_login);
+        // Session remains usable for retry.
+        assert_eq!(client.state(), SessionState::MailFrom);
+    }
+
+    #[test]
+    fn send_mail_smtputf8_rejects_server_error_during_mail_from() {
+        let script = flatten(&[
+            &greeting_then_ehlo_with_smtputf8()[..],
+            b"235 OK\r\n",                    // AUTH PLAIN
+            b"550 sender domain refused\r\n", // MAIL FROM rejected
+        ]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        let err = block_on(client.send_mail_smtputf8(
+            "\u{9001}\u{4FE1}@example.jp",
+            &["b@example.org"],
+            "Subject: x\r\n\r\nx\r\n",
+        ))
+        .expect_err("must fail");
+        match err {
+            SmtpError::Protocol(ProtocolError::UnexpectedCode { during, actual, .. }) => {
+                assert_eq!(during, SmtpOp::MailFrom);
+                assert_eq!(actual, 550);
+            }
+            other => panic!("expected UnexpectedCode for MailFrom: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ascii_send_mail_unchanged_when_smtputf8_feature_enabled() {
+        // Even with the feature on, the default `send_mail` continues
+        // to use the strict ASCII validator. A UTF-8 address must be
+        // refused by the default API.
+        let script = flatten(&[&greeting_then_ehlo_with_smtputf8()[..], b"235 OK\r\n"]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        let err = block_on(client.send_mail(
+            "\u{9001}\u{4FE1}@example.jp",
+            &["b@example.org"],
+            "Subject: x\r\n\r\nx\r\n",
+        ))
+        .expect_err("must fail");
+        assert!(matches!(err, SmtpError::InvalidInput(_)));
     }
 }
