@@ -2,11 +2,11 @@
 
 [![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](https://github.com/nabbisen/wasm-smtp/blob/main/LICENSE)
 
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp-core?label=core)](https://crates.io/crates/wasm-smtp-core)
+[![crates.io](https://img.shields.io/crates/v/wasm-smtp?label=core)](https://crates.io/crates/wasm-smtp)
 [![crates.io](https://img.shields.io/crates/v/wasm-smtp-cloudflare?label=cloudflare)](https://crates.io/crates/wasm-smtp-cloudflare)
-[![Rust Documentation](https://docs.rs/wasm-smtp-core/badge.svg?version=latest)](https://docs.rs/wasm-smtp-core)
+[![Rust Documentation](https://docs.rs/wasm-smtp/badge.svg?version=latest)](https://docs.rs/wasm-smtp)
 [![Rust Documentation](https://docs.rs/wasm-smtp-cloudflare/badge.svg?version=latest)](https://docs.rs/wasm-smtp-cloudflare)
-[![Dependency Status](https://deps.rs/crate/wasm-smtp-core/latest/status.svg)](https://deps.rs/crate/wasm-smtp-core)
+[![Dependency Status](https://deps.rs/crate/wasm-smtp/latest/status.svg)](https://deps.rs/crate/wasm-smtp)
 [![Dependency Status](https://deps.rs/crate/wasm-smtp-cloudflare/latest/status.svg)](https://deps.rs/crate/wasm-smtp-cloudflare)
 
 Rust crates for sending mail by SMTP from WebAssembly runtimes. The
@@ -17,10 +17,10 @@ socket code so that the same SMTP engine can be reused on every host.
 
 | Crate                   | Role                                                       | Status         |
 | ----------------------- | ---------------------------------------------------------- | -------------- |
-| `wasm-smtp-core`        | Environment-independent SMTP state machine and parser.     | Implemented    |
-| `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp-core`.    | Implemented    |
+| `wasm-smtp`        | Environment-independent SMTP state machine and parser.     | Implemented    |
+| `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp`.    | Implemented    |
 
-`wasm-smtp-core` is the foundation: it implements the SMTP state
+`wasm-smtp` is the foundation: it implements the SMTP state
 machine, response parsing, command formatting, dot-stuffing, and error
 classification, but does no I/O of its own. Each runtime gets its own
 adapter crate that provides a [`Transport`] implementation; today, only
@@ -51,12 +51,12 @@ client.quit().await?;
 # }
 ```
 
-Or directly against `wasm-smtp-core` with any `Transport` you supply:
+Or directly against `wasm-smtp` with any `Transport` you supply:
 
 ```rust
-use wasm_smtp_core::{SmtpClient, Transport};
+use wasm_smtp::{SmtpClient, Transport};
 
-async fn send<T: Transport>(transport: T) -> Result<(), wasm_smtp_core::SmtpError> {
+async fn send<T: Transport>(transport: T) -> Result<(), wasm_smtp::SmtpError> {
     let mut client = SmtpClient::connect(transport, "client.example.com").await?;
     client.login("user@example.com", "secret").await?;
     client.send_mail(
@@ -88,12 +88,12 @@ Two TLS models are supported:
   `connect_smtp_starttls`.
 
 In both cases the TLS handshake is the responsibility of the
-[`Transport`] implementation; `wasm-smtp-core` sees an opaque byte
+[`Transport`] implementation; `wasm-smtp` sees an opaque byte
 stream and (for STARTTLS) a single `upgrade_to_tls()` signal.
 
 ## Cargo features
 
-`wasm-smtp-core` exposes two cargo features that allow size-sensitive
+`wasm-smtp` exposes two cargo features that allow size-sensitive
 deployments (Cloudflare Workers' 3 MiB cap, in particular) to opt out
 of functionality they will not use:
 
@@ -108,19 +108,19 @@ senders against a self-hosted Postfix or commercial relay using static
 passwords):
 
 ```toml
-wasm-smtp-core = { version = "0.4", default-features = false }
+wasm-smtp = { version = "0.4", default-features = false }
 ```
 
 To opt into international addresses while keeping the OAuth 2.0
 support:
 
 ```toml
-wasm-smtp-core = { version = "0.4", features = ["smtputf8"] }
+wasm-smtp = { version = "0.4", features = ["smtputf8"] }
 ```
 
 The `wasm-smtp-cloudflare` adapter exposes a matching `smtputf8`
 feature that pass-through-enables it on the core crate, so adapter-
-only callers do not need a direct dependency on `wasm-smtp-core` to
+only callers do not need a direct dependency on `wasm-smtp` to
 opt in.
 
 ## Acceptable use
@@ -135,7 +135,7 @@ Long-form documentation lives in [`docs/src`]. The mdBook structure
 covers project architecture, the SMTP protocol surface, the error
 taxonomy, and end-to-end usage.
 
-[`Transport`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/trait.Transport.html
+[`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/trait.Transport.html
 [`docs/src`]: ./docs/src
 [`LICENSE`]: ./LICENSE
 [`NOTICE`]: ./NOTICE

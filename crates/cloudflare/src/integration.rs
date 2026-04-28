@@ -1,5 +1,5 @@
 //! High-level integration helpers that compose the Cloudflare
-//! transport with `wasm-smtp-core`.
+//! transport with `wasm-smtp`.
 //!
 //! Two entry points are provided, one per TLS model:
 //!
@@ -7,10 +7,10 @@
 //! - [`connect_smtp_starttls`] uses STARTTLS on (typically) port 587.
 //!
 //! Both return an [`SmtpClient`] in
-//! [`wasm_smtp_core::SessionState::Authentication`], ready for
+//! [`wasm_smtp::SessionState::Authentication`], ready for
 //! `login` or `send_mail`.
 
-use wasm_smtp_core::{SmtpClient, SmtpError};
+use wasm_smtp::{SmtpClient, SmtpError};
 
 use crate::adapter::CloudflareTransport;
 use crate::socket::{connect_implicit_tls, connect_starttls};
@@ -48,7 +48,7 @@ pub async fn connect_smtps(
 ///
 /// This is the convenience entry point for the STARTTLS submission
 /// flow (typically port 587). On success the returned client is in
-/// [`wasm_smtp_core::SessionState::Authentication`] just like the
+/// [`wasm_smtp::SessionState::Authentication`] just like the
 /// Implicit-TLS path — the caller proceeds with
 /// [`SmtpClient::login`] or [`SmtpClient::send_mail`] without needing
 /// to observe the upgrade.

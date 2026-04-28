@@ -1,6 +1,6 @@
 # Usage
 
-This page is a tour of the `wasm-smtp-core` API as a user would
+This page is a tour of the `wasm-smtp` API as a user would
 encounter it. The Cloudflare adapter is referenced by name only; until
 Phase 3 lands, the examples here use a `Transport` you supply yourself
 (typically via the in-tree mock or a hand-written stub on top of
@@ -10,7 +10,7 @@ locally).
 ## A complete send
 
 ```rust
-use wasm_smtp_core::{SmtpClient, Transport, SmtpError};
+use wasm_smtp::{SmtpClient, Transport, SmtpError};
 
 async fn send_one<T: Transport>(transport: T) -> Result<(), SmtpError> {
     let mut client = SmtpClient::connect(transport, "client.example.com").await?;
@@ -65,7 +65,7 @@ does, when constructed via `connect_starttls`).
 The convenience entry point performs the entire upgrade in one call:
 
 ```rust
-use wasm_smtp_core::{SmtpClient, SmtpError, StartTlsCapable, Transport};
+use wasm_smtp::{SmtpClient, SmtpError, StartTlsCapable, Transport};
 
 async fn send_via_starttls<T: StartTlsCapable>(transport: T) -> Result<(), SmtpError> {
     // Plaintext connect, EHLO, STARTTLS, transport upgrade, re-EHLO.
@@ -94,7 +94,7 @@ client.login("user@example.com", "secret").await?;
 The state machine enforces ordering: `starttls()` may be called only
 immediately after `connect()`, and is rejected with `InvalidInput`
 once `login` or `send_mail` has been called. Per RFC 3207 §4.2 the
-client re-issues `EHLO` after the upgrade, which `wasm-smtp-core`
+client re-issues `EHLO` after the upgrade, which `wasm-smtp`
 does for you — the post-TLS capability list is visible via
 `client.capabilities()` after `starttls()` returns.
 
@@ -133,7 +133,7 @@ server whose advertisement is known to be inaccurate — call
 `login_with`:
 
 ```rust
-use wasm_smtp_core::AuthMechanism;
+use wasm_smtp::AuthMechanism;
 
 client.login_with(AuthMechanism::Plain, "user", "secret").await?;
 // or:
@@ -191,7 +191,7 @@ to the basic three-digit code. The crate parses these into
 the structured code instead of grepping the message text:
 
 ```rust
-use wasm_smtp_core::{EnhancedStatus, ProtocolError, SmtpError};
+use wasm_smtp::{EnhancedStatus, ProtocolError, SmtpError};
 
 match client.send_mail(from, &[to], body).await {
     Ok(()) => {}
@@ -228,7 +228,7 @@ mailbox names, IDN U-label domains, and so on — enable the
 
 ```toml
 [dependencies]
-wasm-smtp-core = { version = "0.4", features = ["smtputf8"] }
+wasm-smtp = { version = "0.4", features = ["smtputf8"] }
 # or, via the cloudflare adapter (which re-exports the feature):
 wasm-smtp-cloudflare = { version = "0.4", features = ["smtputf8"] }
 ```
@@ -289,19 +289,19 @@ give it; nothing else.
 ```rust
 match client.send_mail(from, recipients, body).await {
     Ok(()) => log::info!("delivered"),
-    Err(wasm_smtp_core::SmtpError::Io(e)) => {
+    Err(wasm_smtp::SmtpError::Io(e)) => {
         log::warn!("transport failure, will retry: {e}");
         // Re-establish the connection on the next attempt.
     }
-    Err(wasm_smtp_core::SmtpError::Protocol(p)) => {
+    Err(wasm_smtp::SmtpError::Protocol(p)) => {
         log::error!("server protocol violation: {p}");
         // Usually permanent. Log the full error for diagnostics.
     }
-    Err(wasm_smtp_core::SmtpError::Auth(a)) => {
+    Err(wasm_smtp::SmtpError::Auth(a)) => {
         log::error!("auth failed: {a}");
         // Almost always a credentials problem.
     }
-    Err(wasm_smtp_core::SmtpError::InvalidInput(i)) => {
+    Err(wasm_smtp::SmtpError::InvalidInput(i)) => {
         // The library refused to send what we asked it to send. This
         // is a programmer error in the calling code: a malformed
         // address or an out-of-order call.

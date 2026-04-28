@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/cloudflare"]
+members = ["crates/wasm-smtp", "crates/cloudflare"]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.6.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -22,3 +22,31 @@ pedantic = { level = "warn", priority = -1 }
 module_name_repetitions = "allow"
 missing_errors_doc = "allow"
 must_use_candidate = "allow"
+
+# Workspace-wide dependency floors.
+#
+# Rationale: bare `version = "1"` lets cargo pick any 1.x release,
+# including pre-RUSTSEC-2023-0001 1.x.y < 1.23.1 in adversarial
+# resolution scenarios. This crate does not use the affected named-pipe
+# API (we live on Cloudflare Workers, not Windows) and the lockfile
+# already pins a current 1.x release, but a defensive floor in the
+# manifest documents the intent, makes downstream lockfile bumps trivial,
+# and protects against a clean checkout that for some reason resolves
+# against an old index snapshot.
+#
+# The floors below are LTS / known-good releases comfortably newer than
+# any patched advisory range. They are not pinned to exact versions —
+# patch updates inside a minor still flow through `cargo update`.
+[workspace.dependencies]
+# tokio: floor = 1.38, the first 1.x LTS release with the named-pipe
+# patches (RUSTSEC-2023-0001 fixed in >= 1.23.1) and the current set of
+# `io-util` ergonomics this crate relies on. We do not enable
+# `tokio/net` so the named-pipe issue is also out of reach by feature
+# selection alone.
+tokio = { version = "1.38", default-features = false }
+# tokio-test: dev-only. floor = 0.4.3 (current MSRV-clean release).
+tokio-test = "0.4.3"
+# worker: Cloudflare Workers Rust SDK. The 0.8.x line is the current
+# stable series; minor 0.x bumps are explicit decisions, not silent
+# floor relaxations.
+worker = "0.8"

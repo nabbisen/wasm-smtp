@@ -1,7 +1,7 @@
 # Cloudflare adapter
 
 `wasm-smtp-cloudflare` is the adapter crate that bridges Cloudflare
-Workers' socket API and `wasm-smtp-core`. The implementation is small
+Workers' socket API and `wasm-smtp`. The implementation is small
 on purpose: `worker::Socket` already implements
 `tokio::io::AsyncRead + AsyncWrite`, so the adapter is essentially a
 two-method translation layer plus a connect helper.
@@ -18,8 +18,8 @@ two-method translation layer plus a connect helper.
     `STARTTLS` command. This is port 587 (and, for legacy relays,
     port 25).
 - Wrap the resulting `Socket` so that it implements
-  `wasm-smtp-core::Transport` for both flows, and additionally
-  `wasm-smtp-core::StartTlsCapable` so the core state machine can
+  `wasm-smtp::Transport` for both flows, and additionally
+  `wasm-smtp::StartTlsCapable` so the core state machine can
   drive the upgrade.
 - Translate Workers-side I/O errors into `IoError` with stable,
   human-readable messages.
@@ -29,7 +29,7 @@ two-method translation layer plus a connect helper.
 ## Non-responsibilities
 
 - The adapter does not parse SMTP, manage state, or know about
-  authentication. Everything SMTP-shaped is in `wasm-smtp-core`.
+  authentication. Everything SMTP-shaped is in `wasm-smtp`.
 - The adapter does not own MIME, attachments, or message composition.
 - The adapter does not negotiate which TLS model to use. The caller
   picks the entry point that matches the server's listener.
@@ -44,22 +44,22 @@ impl CloudflareTransport {
     pub fn into_inner(self) -> Option<worker::Socket>;
 }
 
-impl wasm_smtp_core::Transport for CloudflareTransport { /* ... */ }
-impl wasm_smtp_core::StartTlsCapable for CloudflareTransport { /* ... */ }
+impl wasm_smtp::Transport for CloudflareTransport { /* ... */ }
+impl wasm_smtp::StartTlsCapable for CloudflareTransport { /* ... */ }
 
 // Implicit TLS (port 465).
 pub async fn connect_implicit_tls(host: &str, port: u16)
-    -> Result<CloudflareTransport, wasm_smtp_core::IoError>;
+    -> Result<CloudflareTransport, wasm_smtp::IoError>;
 pub async fn connect_smtps(host: &str, port: u16, ehlo_domain: &str)
-    -> Result<wasm_smtp_core::SmtpClient<CloudflareTransport>,
-              wasm_smtp_core::SmtpError>;
+    -> Result<wasm_smtp::SmtpClient<CloudflareTransport>,
+              wasm_smtp::SmtpError>;
 
 // STARTTLS (port 587).
 pub async fn connect_starttls(host: &str, port: u16)
-    -> Result<CloudflareTransport, wasm_smtp_core::IoError>;
+    -> Result<CloudflareTransport, wasm_smtp::IoError>;
 pub async fn connect_smtp_starttls(host: &str, port: u16, ehlo_domain: &str)
-    -> Result<wasm_smtp_core::SmtpClient<CloudflareTransport>,
-              wasm_smtp_core::SmtpError>;
+    -> Result<wasm_smtp::SmtpClient<CloudflareTransport>,
+              wasm_smtp::SmtpError>;
 ```
 
 `from_socket` exists for callers that need non-default

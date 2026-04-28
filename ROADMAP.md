@@ -31,7 +31,7 @@ The full single-message exchange end-to-end against a mock transport.
 ## Phase 3 — Cloudflare adapter *(complete)*
 
 A `wasm-smtp-cloudflare` crate that connects a Cloudflare Workers
-`Socket` to `wasm-smtp-core`.
+`Socket` to `wasm-smtp`.
 
 - Map the Workers `Socket` (which already implements
   `tokio::io::AsyncRead + AsyncWrite`) onto the `Transport` trait

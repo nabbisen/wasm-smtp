@@ -13,7 +13,7 @@ mailbox.
 
 ```rust,no_run
 use wasm_smtp_cloudflare::connect_smtps;
-use wasm_smtp_core::SmtpError;
+use wasm_smtp::SmtpError;
 
 # struct ContactForm { name: String, email: String, message: String }
 async fn deliver_contact_form(form: ContactForm) -> Result<(), SmtpError> {
@@ -81,7 +81,7 @@ in the body, and the message must succeed or fail visibly.
 
 ```rust,no_run
 use wasm_smtp_cloudflare::connect_smtps;
-use wasm_smtp_core::SmtpError;
+use wasm_smtp::SmtpError;
 
 async fn emit_alert(metric: &str, value: f64, threshold: f64) -> Result<(), SmtpError> {
     let mut client =
@@ -119,7 +119,7 @@ round-trips beyond one extra `RCPT TO` per address. `send_mail`'s
 `to:` argument is a slice of recipients:
 
 ```rust,no_run
-# use wasm_smtp_core::{SmtpClient, Transport, SmtpError};
+# use wasm_smtp::{SmtpClient, Transport, SmtpError};
 # async fn run<T: Transport>(transport: T) -> Result<(), SmtpError> {
 let mut client = SmtpClient::connect(transport, "client.example.com").await?;
 client.send_mail(
@@ -150,7 +150,7 @@ invocation — share a single connection and a single login:
 
 ```rust,no_run
 # use wasm_smtp_cloudflare::connect_smtps;
-# use wasm_smtp_core::SmtpError;
+# use wasm_smtp::SmtpError;
 # struct Alert { recipient: String, body: String }
 # fn smtp_password() -> String { String::new() }
 async fn drain_alert_queue(alerts: &[Alert]) -> Result<(), SmtpError> {
@@ -186,7 +186,7 @@ rather than Implicit TLS on 465, swap `connect_smtps` for
 
 ```rust
 use wasm_smtp_cloudflare::connect_smtp_starttls;
-use wasm_smtp_core::SmtpError;
+use wasm_smtp::SmtpError;
 
 # async fn send_via_starttls() -> Result<(), SmtpError> {
 let mut client = connect_smtp_starttls(
@@ -230,7 +230,7 @@ acquisition and refresh are out of scope for this crate).
 
 ```rust
 use wasm_smtp_cloudflare::connect_smtp_starttls;
-use wasm_smtp_core::{AuthError, SmtpError};
+use wasm_smtp::{AuthError, SmtpError};
 
 # async fn obtain_oauth2_token() -> Result<String, Box<dyn std::error::Error>> {
 #     unimplemented!("call out to your OAuth provider")

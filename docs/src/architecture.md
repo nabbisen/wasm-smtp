@@ -11,7 +11,7 @@
                 │  uses SmtpClient API                │  builds a Transport
                 ▼                                     ▼
    ┌─────────────────────────────────────────────────────────────┐
-   │                       wasm-smtp-core                        │
+   │                       wasm-smtp                        │
    │   client.rs · session.rs · protocol.rs · error.rs · ...     │
    │                  (no I/O, no host APIs)                     │
    └─────────────────────────────────────────────────────────────┘
@@ -24,7 +24,7 @@
    └─────────────────────────────────────────────────────────────┘
 ```
 
-`wasm-smtp-core` is a library of pure protocol logic. The only contract
+`wasm-smtp` is a library of pure protocol logic. The only contract
 it has with the outside world is the `Transport` trait, which exposes
 three async methods: `read`, `write_all`, and `close`. The trait is
 intentionally minimal so that any runtime, real or mocked, can satisfy
@@ -45,7 +45,7 @@ between Cloudflare Workers' `Socket` (and its `ReadableStream` /
 `WritableStream` halves) and the `Transport` trait. It does no SMTP
 bookkeeping of its own.
 
-## Module layout in `wasm-smtp-core`
+## Module layout in `wasm-smtp`
 
 | File           | Responsibility                                                      |
 | -------------- | ------------------------------------------------------------------- |

@@ -1,6 +1,6 @@
 # Protocol
 
-This page describes the slice of SMTP that `wasm-smtp-core` actually
+This page describes the slice of SMTP that `wasm-smtp` actually
 implements. The goal is not to restate the RFCs; it is to document the
 specific choices the crate makes.
 
@@ -183,7 +183,7 @@ user={user}\x01auth=Bearer {token}\x01\x01
 
 The `\x01` byte (SOH) separates fields. The token is a short-lived
 OAuth 2.0 bearer token; obtaining and refreshing it is the caller's
-responsibility — `wasm-smtp-core` does not perform the OAuth dance.
+responsibility — `wasm-smtp` does not perform the OAuth dance.
 
 When credentials are wrong, providers commonly use a two-step error
 flow defined by RFC 7628 §3.2.3:
@@ -238,14 +238,14 @@ When the server does not advertise the extension, the crate does
 in a reply: the wire format is preserved verbatim in the reply text,
 and `enhanced` is `None`.
 
-[`SmtpClient::login`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.SmtpClient.html#method.login
-[`SmtpClient::login_with`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.SmtpClient.html#method.login_with
-[`SmtpClient::login_xoauth2`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.SmtpClient.html#method.login_xoauth2
-[`AuthError::Rejected`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.Rejected
-[`AuthError::Rejected { code, enhanced, message }`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.Rejected
-[`AuthError::UnsupportedMechanism`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.UnsupportedMechanism
-[`ProtocolError::UnexpectedCode`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.ProtocolError.html#variant.UnexpectedCode
-[`EnhancedStatus`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.EnhancedStatus.html
+[`SmtpClient::login`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.login
+[`SmtpClient::login_with`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.login_with
+[`SmtpClient::login_xoauth2`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.login_xoauth2
+[`AuthError::Rejected`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.AuthError.html#variant.Rejected
+[`AuthError::Rejected { code, enhanced, message }`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.AuthError.html#variant.Rejected
+[`AuthError::UnsupportedMechanism`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.AuthError.html#variant.UnsupportedMechanism
+[`ProtocolError::UnexpectedCode`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.ProtocolError.html#variant.UnexpectedCode
+[`EnhancedStatus`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.EnhancedStatus.html
 
 ## SMTPUTF8 (RFC 6531) — feature-gated
 
@@ -291,14 +291,14 @@ feature is opt-in. Enable it via:
 
 ```toml
 [dependencies]
-wasm-smtp-core = { version = "0.4", features = ["smtputf8"] }
+wasm-smtp = { version = "0.4", features = ["smtputf8"] }
 ```
 
 When the feature is disabled, none of the helpers above exist; the
 default `validate_address` and `format_mail_from` continue to
 enforce ASCII as they always have.
 
-[`validate_address_utf8`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/protocol/fn.validate_address_utf8.html
+[`validate_address_utf8`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/protocol/fn.validate_address_utf8.html
 
 ## TLS models
 
@@ -348,7 +348,7 @@ Two protocol-level details deserve attention:
    pre-handshake capability list. Servers may legitimately advertise
    different extensions before and after the upgrade — most commonly,
    submission servers refuse to advertise `AUTH` until the channel is
-   secure. `wasm-smtp-core` clears `client.capabilities()` on the
+   secure. `wasm-smtp` clears `client.capabilities()` on the
    transport upgrade and re-populates it from the second EHLO reply,
    so callers always observe the post-TLS capability set.
 
@@ -378,4 +378,4 @@ upgrade signal. The transport implementation must enforce
 certificate-chain validation and SNI/hostname matching; see the
 [`Transport`][transport-doc] trait for the security contract.
 
-[transport-doc]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/transport/trait.Transport.html
+[transport-doc]: https://docs.rs/wasm-smtp/latest/wasm_smtp/transport/trait.Transport.html

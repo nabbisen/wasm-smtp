@@ -7,7 +7,7 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 homepage.workspace = true
-description = "Cloudflare Workers socket adapter for wasm-smtp-core."
+description = "Cloudflare Workers socket adapter for wasm-smtp."
 readme = "../../README.md"
 keywords = ["smtp", "email", "cloudflare", "workers", "wasm"]
 categories = ["email", "network-programming", "wasm"]
@@ -16,31 +16,30 @@ categories = ["email", "network-programming", "wasm"]
 path = "src/lib.rs"
 
 [features]
-# Pass-through `xoauth2` to wasm-smtp-core. Default-on to match
-# wasm-smtp-core's default and preserve v0.3.x behaviour for callers
-# that depend only on this adapter crate. Disable with
-# `default-features = false` if you do not need OAuth 2.0 support.
+# Pass-through `xoauth2` to wasm-smtp. Default-on to match wasm-smtp's
+# default and preserve v0.3.x behaviour for callers that depend only on
+# this adapter crate. Disable with `default-features = false` if you do
+# not need OAuth 2.0 support.
 default = ["xoauth2"]
 
-# Pass-through to wasm-smtp-core's `xoauth2` feature so callers who
-# depend only on this adapter crate can disable OAuth 2.0 support
-# (Gmail / Microsoft 365 SMTP submission) without referring to the
-# core crate by name.
-xoauth2 = ["wasm-smtp-core/xoauth2"]
+# Pass-through to wasm-smtp's `xoauth2` feature so callers who depend
+# only on this adapter crate can enable XOAUTH2 without referring to
+# the main crate by name.
+xoauth2 = ["wasm-smtp/xoauth2"]
 
-# Pass-through to wasm-smtp-core's `smtputf8` feature so callers who
+# Pass-through to wasm-smtp's `smtputf8` feature so callers who
 # depend only on this adapter crate can enable SMTPUTF8 without
-# referring to the core crate by name.
-smtputf8 = ["wasm-smtp-core/smtputf8"]
+# referring to the main crate by name.
+smtputf8 = ["wasm-smtp/smtputf8"]
 
 [dependencies]
-wasm-smtp-core = { path = "../core", version = "0.5.0", default-features = false }
-worker = "0.8"
-tokio = { version = "1", default-features = false, features = ["io-util"] }
+wasm-smtp = { path = "../wasm-smtp", version = "0.6.0", default-features = false }
+worker = { workspace = true }
+tokio = { workspace = true, features = ["io-util"] }
 
 [dev-dependencies]
-tokio = { version = "1", default-features = false, features = ["io-util", "macros", "rt"] }
-tokio-test = "0.4"
+tokio = { workspace = true, features = ["io-util", "macros", "rt"] }
+tokio-test = { workspace = true }
 
 [lints]
 workspace = true

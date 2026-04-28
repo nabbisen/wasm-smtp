@@ -135,7 +135,7 @@ impl<T: Transport> SmtpClient<T> {
     ///
     /// # Credential lifetime and zeroization
     ///
-    /// `wasm-smtp-core` does not retain copies of `user` or `pass` after
+    /// `wasm-smtp` does not retain copies of `user` or `pass` after
     /// this call returns: the credentials are passed by reference, used
     /// once to build a base64-encoded SASL payload, and dropped together
     /// with that payload at the end of the call. The crate also never
@@ -382,7 +382,7 @@ impl<T: Transport> SmtpClient<T> {
     ///
     /// # Body size
     ///
-    /// `wasm-smtp-core` does not impose an upper bound on `body.len()`;
+    /// `wasm-smtp` does not impose an upper bound on `body.len()`;
     /// the body is dot-stuffed into a single `Vec<u8>` and written in
     /// one [`crate::Transport::write_all`] call.
     /// In practice the caller (or a layer above this crate) should

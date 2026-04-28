@@ -1,4 +1,4 @@
-//! # wasm-smtp-core
+//! # wasm-smtp
 //!
 //! Environment-independent SMTP client core for WASM and other constrained
 //! runtimes.
@@ -24,9 +24,9 @@
 //! ## Example
 //!
 //! ```ignore
-//! use wasm_smtp_core::{SmtpClient, Transport};
+//! use wasm_smtp::{SmtpClient, Transport};
 //!
-//! async fn send<T: Transport>(transport: T) -> Result<(), wasm_smtp_core::SmtpError> {
+//! async fn send<T: Transport>(transport: T) -> Result<(), wasm_smtp::SmtpError> {
 //!     let mut client = SmtpClient::connect(transport, "client.example.com").await?;
 //!     // login() picks the best mechanism the server advertised:
 //!     // PLAIN if available, falling back to LOGIN. For explicit

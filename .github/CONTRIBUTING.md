@@ -21,7 +21,7 @@ for both contributors and reviewers.
 ```text
 wasm-smtp/
 ├─ crates/
-│  ├─ core/          wasm-smtp-core: pure protocol engine, no I/O
+│  ├─ core/          wasm-smtp: pure protocol engine, no I/O
 │  └─ cloudflare/    wasm-smtp-cloudflare: Workers socket adapter (planned)
 ├─ docs/src/         long-form, mdBook-ready documentation
 └─ .github/          policy and issue-template files

@@ -639,18 +639,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-smtp"
+version = "0.6.0"
+
+[[package]]
 name = "wasm-smtp-cloudflare"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "tokio",
  "tokio-test",
- "wasm-smtp-core",
+ "wasm-smtp",
  "worker",
 ]
-
-[[package]]
-name = "wasm-smtp-core"
-version = "0.5.1"
 
 [[package]]
 name = "wasm-streams"

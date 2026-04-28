@@ -10,10 +10,10 @@
 //!   [`crate::SmtpClient::starttls`].
 //!
 //! In both cases the runtime performs the TLS handshake; the
-//! [`CloudflareTransport`] presented to `wasm-smtp-core` operates on
+//! [`CloudflareTransport`] presented to `wasm-smtp` operates on
 //! the resulting (already- or eventually-) secure stream.
 
-use wasm_smtp_core::IoError;
+use wasm_smtp::IoError;
 use worker::{SecureTransport, Socket};
 
 use crate::adapter::CloudflareTransport;
@@ -54,7 +54,7 @@ pub async fn connect_implicit_tls(host: &str, port: u16) -> Result<CloudflareTra
 ///
 /// The returned [`CloudflareTransport`] starts in plaintext and can be
 /// promoted to TLS by calling
-/// [`wasm_smtp_core::StartTlsCapable::upgrade_to_tls`] (or, more
+/// [`wasm_smtp::StartTlsCapable::upgrade_to_tls`] (or, more
 /// commonly, by letting [`crate::SmtpClient::connect_starttls`] /
 /// [`crate::SmtpClient::starttls`] do it for you).
 ///

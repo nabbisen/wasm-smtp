@@ -1,6 +1,6 @@
 # Errors
 
-`wasm-smtp-core` exposes a single top-level error type, `SmtpError`,
+`wasm-smtp` exposes a single top-level error type, `SmtpError`,
 with four variants. The taxonomy is intentionally coarse so that the
 match arms in caller code are stable.
 

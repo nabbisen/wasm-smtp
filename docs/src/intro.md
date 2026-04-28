@@ -4,12 +4,12 @@
 WebAssembly runtimes — initially Cloudflare Workers, with room to add
 others. The project is split into two crates:
 
-- **`wasm-smtp-core`** holds the SMTP state machine, response parser,
+- **`wasm-smtp`** holds the SMTP state machine, response parser,
   command formatter, dot-stuffing, and error taxonomy. It does no I/O
   of its own. Anywhere that has a working `Future` machinery and an
   async byte stream can use it.
 - **`wasm-smtp-cloudflare`** *(planned)* will adapt the Cloudflare
-  Workers `Socket` API to the `Transport` trait that `wasm-smtp-core`
+  Workers `Socket` API to the `Transport` trait that `wasm-smtp`
   consumes.
 
 This split is the project's central design choice. By drawing the

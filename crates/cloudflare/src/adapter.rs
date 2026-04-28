@@ -4,7 +4,7 @@
 //! The adapter is intentionally thin. The bulk of the byte-pushing is
 //! done by the `tokio::io` traits already implemented on
 //! `worker::Socket`; this module only translates between those traits
-//! and the [`Transport`] contract from `wasm-smtp-core`, and converts
+//! and the [`Transport`] contract from `wasm-smtp`, and converts
 //! Workers-side errors into [`IoError`]'s string-based representation.
 //!
 //! The two free helpers `read_async_io` and `write_all_async_io`
@@ -20,7 +20,7 @@
 //! when building a transport intended for the STARTTLS flow.
 
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use wasm_smtp_core::{IoError, StartTlsCapable, Transport};
+use wasm_smtp::{IoError, StartTlsCapable, Transport};
 use worker::Socket;
 
 /// SMTP transport backed by a Cloudflare Workers TCP socket.
@@ -144,10 +144,10 @@ impl StartTlsCapable for CloudflareTransport {
 /// into [`IoError`]-flavored result.
 ///
 /// `Ok(0)` propagates the `AsyncRead` convention for "peer closed
-/// cleanly", which `wasm-smtp-core` interprets as
+/// cleanly", which `wasm-smtp` interprets as
 /// [`ProtocolError::UnexpectedClose`] when a reply is mid-assembly.
 ///
-/// [`ProtocolError::UnexpectedClose`]: wasm_smtp_core::ProtocolError::UnexpectedClose
+/// [`ProtocolError::UnexpectedClose`]: wasm_smtp::ProtocolError::UnexpectedClose
 pub(crate) async fn read_async_io<S>(stream: &mut S, buf: &mut [u8]) -> Result<usize, IoError>
 where
     S: AsyncRead + Unpin,

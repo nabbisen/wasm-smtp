@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-04-28
+
+### Changed (breaking)
+
+- **Crate renamed: `wasm-smtp-core` → `wasm-smtp`.** This crate is the
+  main, externally-facing library — the public API
+  (`SmtpClient`, `Transport`, `Reply`, the error types, etc.) lives
+  here, and direct dependents (non-Cloudflare adapters, custom
+  `Transport` implementations, host-tooling tests) all consume it
+  directly. Calling it `-core` was an artifact of the early workspace
+  layout and gave the misleading impression that `wasm-smtp-core` and
+  `wasm-smtp-cloudflare` were peer-tier crates. They are not:
+  `wasm-smtp` is the main library, `wasm-smtp-cloudflare` is one
+  adapter for it. The rename makes that hierarchy obvious in the
+  Rust-ecosystem-conventional way (`serde` / `serde_json`,
+  `tokio` / `tokio-util`, `tracing` / `tracing-subscriber`, …).
+
+  **Migration for callers depending on the main crate:**
+
+  ```toml
+  # before
+  [dependencies]
+  wasm-smtp-core = "0.5"
+
+  # after
+  [dependencies]
+  wasm-smtp = "0.6"
+  ```
+
+  ```rust
+  // before
+  use wasm_smtp_core::{SmtpClient, Transport, SmtpError};
+
+  // after
+  use wasm_smtp::{SmtpClient, Transport, SmtpError};
+  ```
+
+  Callers depending only on `wasm-smtp-cloudflare` need no source
+  changes — the adapter re-exports the public API of `wasm-smtp`
+  exactly as before.
+
+- **Workspace member directory renamed: `crates/core/` → `crates/wasm-smtp/`.**
+  This is internal — it does not affect any package on crates.io —
+  but it keeps the directory name consistent with the package name.
+
+- **Workspace version bumped 0.5.1 → 0.6.0.** Pure Rust SemVer would
+  not require a major (0.x) bump for a crate-name change because it
+  is technically a different package. This release uses the bump
+  anyway to make the discontinuity unmissable in dependency
+  resolution: a caller upgrading mechanically will fail to find
+  `wasm-smtp-core 0.6` and will see the failure immediately rather
+  than silently picking up an unrelated 0.5.x.
+
+### Notes
+
+- All historical changelog entries below this section reference
+  `wasm-smtp-core` as the crate's name at the time those releases
+  shipped; that text is preserved as historical record.
+- ROADMAP, README, and the `docs/` book have all been updated to use
+  the new name.
+
+## [0.5.1] — 2026-04-28
+
+### Changed (Phase 10 — test-suite layout & dependency hygiene)
+
+This is a non-functional refactor: no public API changes, no behaviour
+changes.
+
+- **In-tree test files split.** The 2,950-line `crates/core/src/tests.rs`
+  has been split into a `crates/core/src/tests/` directory with one
+  file per sub-module (`harness.rs`, `protocol_tests.rs`,
+  `session_tests.rs`, `error_tests.rs`, `client_tests.rs`,
+  `smtputf8_tests.rs`). The previous in-file sub-module structure is
+  preserved exactly; only the physical file boundaries have changed.
+  `crates/cloudflare/src/tests.rs` (305 lines) gets the same treatment
+  for consistency: `tests/io_tests.rs` and
+  `tests/e2e_via_tokio_mock.rs`. Tests remain in-tree (rather than
+  being moved to a top-level `tests/` integration-test directory) so
+  they can continue to reach `pub(crate)` items and module-private
+  helpers without inflating the public API surface.
+- **Centralised dependency floors via `[workspace.dependencies]`.**
+  `tokio`, `tokio-test`, and `worker` are now declared at the
+  workspace root with explicit minimum versions (`tokio >= 1.38`,
+  `tokio-test >= 0.4.3`, `worker = 0.8`). Member crates inherit them
+  with `{ workspace = true, features = [..] }`. The previous bare
+  `tokio = "1"` would, in adversarial resolution scenarios, allow
+  selecting tokio < 1.23.1, which is the patched floor for
+  RUSTSEC-2023-0001 (`reject_remote_clients` configuration corruption
+  on Windows named pipes). This crate does not use the affected
+  `tokio::net::windows::named_pipe` API at all (we run on WASM /
+  Cloudflare Workers, with `tokio` enabled only for `io-util`), so
+  the floor is precautionary defence-in-depth — but it documents the
+  intent and protects callers depending on lockfile-less builds.
+
 ## [0.5.0] — 2026-04-28
 
 ### Added (security hardening — Phase 9)
@@ -277,7 +371,9 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.1...v0.6.0
+[0.5.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.2.0...v0.3.0

@@ -12,7 +12,7 @@ A short description of the problem.
 
 ## Affected crate and version
 
-- Crate: `wasm-smtp-core` / `wasm-smtp-cloudflare`
+- Crate: `wasm-smtp` / `wasm-smtp-cloudflare`
 - Version or commit hash:
 - Rust version (`rustc --version`):
 

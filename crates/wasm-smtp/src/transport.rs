@@ -43,7 +43,7 @@ use crate::error::IoError;
 ///
 /// # Security responsibilities of implementors
 ///
-/// `wasm-smtp-core` deliberately knows nothing about TLS, certificates,
+/// `wasm-smtp` deliberately knows nothing about TLS, certificates,
 /// or peer identity. The transport implementation is the entire trust
 /// boundary for the encrypted byte stream:
 ///

@@ -1,6 +1,6 @@
 # Core crate
 
-`wasm-smtp-core` is the part of the project that does the actual SMTP.
+`wasm-smtp` is the part of the project that does the actual SMTP.
 This document describes its public surface and the design constraints
 that shaped it.
 
