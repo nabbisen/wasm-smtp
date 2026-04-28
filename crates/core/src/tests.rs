@@ -198,10 +198,12 @@ mod protocol_tests {
     use crate::error::ProtocolError;
     use crate::protocol::{
         AuthMechanism, Reply, base64_encode, build_auth_plain_initial_response,
-        dot_stuff_and_terminate, ehlo_advertises_auth, ehlo_advertises_starttls, format_command,
+        build_xoauth2_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth,
+        ehlo_advertises_enhanced_status_codes, ehlo_advertises_starttls, format_command,
         format_command_arg, format_mail_from, format_rcpt_to, parse_reply_line,
         select_auth_mechanism, validate_address, validate_ehlo_domain, validate_login_password,
-        validate_login_username, validate_plain_password, validate_plain_username,
+        validate_login_username, validate_oauth2_token, validate_plain_password,
+        validate_plain_username, validate_xoauth2_user,
     };
 
     // -- parse_reply_line ----------------------------------------------------
@@ -278,10 +280,7 @@ mod protocol_tests {
 
     #[test]
     fn reply_class_and_joined_text() {
-        let r = Reply {
-            code: 451,
-            lines: vec!["temporary".into(), "failure".into()],
-        };
+        let r = Reply::new(451, vec!["temporary".into(), "failure".into()]);
         assert_eq!(r.class(), 4);
         assert_eq!(r.joined_text(), "temporary\nfailure");
         let collected: Vec<&str> = r.iter_lines().collect();
@@ -553,6 +552,117 @@ mod protocol_tests {
         assert!(!ehlo_advertises_starttls(&lines));
     }
 
+    // -- ehlo_advertises_enhanced_status_codes ----------------------------
+
+    #[test]
+    fn ehlo_advertises_enhancedstatuscodes_finds_listed_extension() {
+        let lines: Vec<String> = vec![
+            "PIPELINING".into(),
+            "ENHANCEDSTATUSCODES".into(),
+            "8BITMIME".into(),
+        ];
+        assert!(ehlo_advertises_enhanced_status_codes(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_enhancedstatuscodes_is_case_insensitive() {
+        let lines: Vec<String> = vec!["enhancedstatuscodes".into()];
+        assert!(ehlo_advertises_enhanced_status_codes(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_enhancedstatuscodes_returns_false_when_absent() {
+        let lines: Vec<String> = vec!["PIPELINING".into(), "AUTH PLAIN".into()];
+        assert!(!ehlo_advertises_enhanced_status_codes(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_enhancedstatuscodes_does_not_match_substrings() {
+        // The keyword check splits on whitespace and compares exactly.
+        let lines: Vec<String> = vec!["ENHANCEDSTATUSCODESPLUS".into()];
+        assert!(!ehlo_advertises_enhanced_status_codes(&lines));
+    }
+
+    // -- EnhancedStatus parsing -------------------------------------------
+    //
+    // We cannot test `parse_enhanced_status_prefix` directly because it is
+    // private to protocol.rs. Instead we test it through `Reply::try_parse_enhanced`,
+    // which is the only caller and the API a downstream consumer would use.
+
+    #[test]
+    fn reply_parses_enhanced_status_basic() {
+        let reply = Reply::new(550, vec!["5.7.1 relay denied".into()]);
+        let es = reply.try_parse_enhanced().expect("should parse");
+        assert_eq!(es.class, 5);
+        assert_eq!(es.subject, 7);
+        assert_eq!(es.detail, 1);
+        assert_eq!(es.to_dotted(), "5.7.1");
+        assert_eq!(format!("{es}"), "5.7.1");
+    }
+
+    #[test]
+    fn reply_parses_enhanced_status_class_2_and_4() {
+        // RFC 3463 specifies class 2 (success), 4 (transient), 5 (permanent).
+        for (class_byte, want) in [(b'2', 2), (b'4', 4), (b'5', 5)] {
+            let line = format!("{}.0.0 ok", class_byte as char);
+            let reply = Reply::new(250, vec![line]);
+            let es = reply.try_parse_enhanced().expect("should parse");
+            assert_eq!(es.class, want);
+        }
+    }
+
+    #[test]
+    fn reply_rejects_invalid_enhanced_class_digits() {
+        // Class 1, 3, 6, etc. must not be parsed: RFC 3463 only defines 2/4/5.
+        for bad in [b'0', b'1', b'3', b'6', b'9'] {
+            let line = format!("{}.0.0 something", bad as char);
+            let reply = Reply::new(250, vec![line]);
+            assert!(
+                reply.try_parse_enhanced().is_none(),
+                "class {} must not parse",
+                bad as char
+            );
+        }
+    }
+
+    #[test]
+    fn reply_rejects_malformed_enhanced_status() {
+        for bad in [
+            "5..1 missing subject",
+            "5.7. missing detail",
+            "5-7-1 wrong separator",
+            "5.7 too short",
+            "noenhanced text only",
+            "",
+        ] {
+            let reply = Reply::new(550, vec![bad.into()]);
+            assert!(
+                reply.try_parse_enhanced().is_none(),
+                "{bad:?} must not parse"
+            );
+        }
+    }
+
+    #[test]
+    fn reply_message_text_strips_enhanced_prefix_when_present() {
+        // The full text is preserved by joined_text(), but message_text()
+        // strips the enhanced prefix for human-friendly display.
+        let mut reply = Reply::new(550, vec!["5.7.1 relay access denied".into()]);
+        // message_text() relies on the enhanced field being set, mimicking
+        // what the client does when ENHANCEDSTATUSCODES is enabled.
+        let es = reply.try_parse_enhanced().unwrap();
+        reply.attach_enhanced_status(es);
+        assert_eq!(reply.joined_text(), "5.7.1 relay access denied");
+        assert_eq!(reply.message_text(), "relay access denied");
+    }
+
+    #[test]
+    fn reply_message_text_unchanged_without_enhanced() {
+        // Without an enhanced code attached, message_text() == joined_text().
+        let reply = Reply::new(550, vec!["something or other".into()]);
+        assert_eq!(reply.message_text(), reply.joined_text());
+    }
+
     // -- AUTH PLAIN ---------------------------------------------------------
 
     #[test]
@@ -698,6 +808,101 @@ mod protocol_tests {
         assert!(validate_plain_password("\u{00E1}\u{00F1}\u{4E2D}").is_ok());
         assert!(validate_plain_password("a b\tc").is_ok());
         assert!(validate_plain_password("p@ss w0rd!").is_ok());
+    }
+
+    // -- XOAUTH2 ----------------------------------------------------------
+
+    #[test]
+    fn xoauth2_initial_response_canonical_example() {
+        // Canonical Google example. Payload (with SOH = \x01):
+        //   user=someuser@example.com\x01auth=Bearer ya29.vF9...\x01\x01
+        // We just verify the wire bytes round-trip through base64.
+        let response = build_xoauth2_initial_response("someuser@example.com", "ya29.test_token");
+
+        // Decode to inspect the structure. We don't have a public base64
+        // decoder, so we reconstruct the expected bytes and check that a
+        // fresh encode yields the same string.
+        let mut expected_payload = Vec::new();
+        expected_payload.extend_from_slice(b"user=someuser@example.com");
+        expected_payload.push(0x01);
+        expected_payload.extend_from_slice(b"auth=Bearer ya29.test_token");
+        expected_payload.push(0x01);
+        expected_payload.push(0x01);
+        let expected_b64 = base64_encode(&expected_payload);
+
+        assert_eq!(response, expected_b64);
+    }
+
+    #[test]
+    fn xoauth2_initial_response_uses_soh_separators() {
+        // The wire-format bytes (pre-base64) must contain exactly two
+        // SOH bytes between fields and one trailing SOH-SOH. We reconstruct
+        // and compare.
+        let r1 = build_xoauth2_initial_response("u", "t");
+        let mut payload = Vec::new();
+        payload.extend_from_slice(b"user=u\x01auth=Bearer t\x01\x01");
+        assert_eq!(r1, base64_encode(&payload));
+    }
+
+    #[test]
+    fn validate_xoauth2_user_rejects_empty_and_control_bytes() {
+        assert!(validate_xoauth2_user("").is_err());
+        assert!(validate_xoauth2_user("u\0v").is_err());
+        assert!(validate_xoauth2_user("u\rv").is_err());
+        assert!(validate_xoauth2_user("u\nv").is_err());
+        // SOH would corrupt the SASL frame.
+        assert!(validate_xoauth2_user("u\x01v").is_err());
+    }
+
+    #[test]
+    fn validate_xoauth2_user_accepts_typical_email_addresses() {
+        assert!(validate_xoauth2_user("user@example.com").is_ok());
+        assert!(validate_xoauth2_user("first.last+tag@example.co.uk").is_ok());
+    }
+
+    #[test]
+    fn validate_oauth2_token_rejects_empty_and_whitespace() {
+        assert!(validate_oauth2_token("").is_err());
+        assert!(validate_oauth2_token("token with space").is_err());
+        assert!(validate_oauth2_token("token\twith\ttab").is_err());
+        assert!(validate_oauth2_token("token\nwith\nnewline").is_err());
+    }
+
+    #[test]
+    fn validate_oauth2_token_rejects_non_ascii() {
+        assert!(validate_oauth2_token("\u{00FF}token").is_err());
+        assert!(validate_oauth2_token("token\u{4E2D}").is_err());
+    }
+
+    #[test]
+    fn validate_oauth2_token_accepts_typical_bearer_tokens() {
+        // Realistic Google token shape.
+        assert!(
+            validate_oauth2_token("ya29.A0AfH6SMBx-LAUH4xRcZbqK_pE7Hk0_lOxe2eGdt9CD8s8I").is_ok()
+        );
+        // Realistic Microsoft token shape (JWT).
+        assert!(
+            validate_oauth2_token("eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJzdWIifQ.signature_part")
+                .is_ok()
+        );
+        // Punctuation characters allowed by RFC 6750.
+        assert!(validate_oauth2_token("a-b_c.d+e/f=g~h").is_ok());
+    }
+
+    #[test]
+    fn select_auth_mechanism_does_not_pick_xoauth2() {
+        // Even when XOAUTH2 is the only advertised mechanism,
+        // `select_auth_mechanism` returns None — XOAUTH2 requires a
+        // bearer token rather than a static password and must be
+        // opted-in explicitly via `login_with` or `login_xoauth2`.
+        let lines: Vec<String> = vec!["AUTH XOAUTH2".into()];
+        assert!(select_auth_mechanism(&lines).is_none());
+    }
+
+    #[test]
+    fn auth_mechanism_xoauth2_name_is_exact_keyword() {
+        assert_eq!(AuthMechanism::XOAuth2.name(), "XOAUTH2");
+        assert_eq!(format!("{}", AuthMechanism::XOAuth2), "XOAUTH2");
     }
 }
 
@@ -846,6 +1051,7 @@ mod error_tests {
             during: SmtpOp::MailFrom,
             expected_class: 2,
             actual: 451,
+            enhanced: None,
             message: "temporary local problem".into(),
         });
         let s = format!("{e}");
@@ -870,8 +1076,10 @@ mod error_tests {
         for (op, expected) in [
             (SmtpOp::Greeting, "greeting"),
             (SmtpOp::Ehlo, "EHLO"),
+            (SmtpOp::StartTls, "STARTTLS"),
             (SmtpOp::AuthPlain, "AUTH PLAIN"),
             (SmtpOp::AuthLogin, "AUTH LOGIN"),
+            (SmtpOp::AuthXOAuth2, "AUTH XOAUTH2"),
             (SmtpOp::MailFrom, "MAIL FROM"),
             (SmtpOp::RcptTo, "RCPT TO"),
             (SmtpOp::Data, "DATA"),
@@ -886,6 +1094,7 @@ mod error_tests {
     fn auth_rejected_carries_server_code_and_text() {
         let e = SmtpError::Auth(AuthError::Rejected {
             code: 535,
+            enhanced: None,
             message: "5.7.8 invalid".into(),
         });
         let s = format!("{e}");
@@ -1368,9 +1577,20 @@ mod client_tests {
             block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
         let err = block_on(client.login("user", "pass")).expect_err("must fail");
         match err {
-            SmtpError::Auth(AuthError::Rejected { code, message }) => {
+            SmtpError::Auth(AuthError::Rejected {
+                code,
+                enhanced,
+                message,
+            }) => {
                 assert_eq!(code, 535);
                 assert!(message.contains("5.7.8"));
+                // ENHANCEDSTATUSCODES is not advertised in the script
+                // above, so the prefix should remain in the message
+                // (and not be parsed out into the structured field).
+                assert!(
+                    enhanced.is_none(),
+                    "without EHLO advertisement, no enhanced parse"
+                );
             }
             other => panic!("expected AuthError::Rejected, got {other:?}"),
         }
@@ -1812,5 +2032,343 @@ mod client_tests {
         assert!(matches!(err, SmtpError::InvalidInput(_)));
         // No additional upgrade was attempted.
         assert_eq!(*upgrades.borrow(), 1);
+    }
+
+    // -- ENHANCEDSTATUSCODES (Phase 6) ------------------------------------
+
+    /// EHLO reply that advertises ENHANCEDSTATUSCODES alongside AUTH.
+    fn greeting_then_ehlo_with_esmtp() -> Vec<u8> {
+        flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250-PIPELINING\r\n",
+            b"250-ENHANCEDSTATUSCODES\r\n",
+            b"250 AUTH PLAIN\r\n",
+        ])
+    }
+
+    #[test]
+    fn unexpected_code_carries_enhanced_when_advertised() {
+        let script = flatten(&[
+            &greeting_then_ehlo_with_esmtp()[..],
+            b"235 2.7.0 ok\r\n",                  // AUTH PLAIN ok
+            b"550 5.7.1 relay access denied\r\n", // MAIL FROM rejected
+        ]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        let err = block_on(client.send_mail(
+            "a@example.com",
+            &["b@example.org"],
+            "Subject: x\r\n\r\nx\r\n",
+        ))
+        .expect_err("must fail");
+
+        match err {
+            SmtpError::Protocol(ProtocolError::UnexpectedCode {
+                during,
+                actual,
+                enhanced,
+                message,
+                ..
+            }) => {
+                assert_eq!(during, SmtpOp::MailFrom);
+                assert_eq!(actual, 550);
+                let es = enhanced.expect("enhanced should be Some when advertised");
+                assert_eq!(es.class, 5);
+                assert_eq!(es.subject, 7);
+                assert_eq!(es.detail, 1);
+                // The wire form is preserved in `message`. The Display
+                // impl renders `[5.7.1]` separately from the message.
+                assert!(message.contains("5.7.1"));
+            }
+            other => panic!("expected UnexpectedCode with enhanced, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unexpected_code_no_enhanced_when_not_advertised() {
+        // EHLO does NOT include ENHANCEDSTATUSCODES; even if the server
+        // sends "5.7.1" in the reply text, we must not parse it.
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 AUTH PLAIN\r\n",
+            b"235 OK\r\n",
+            b"550 5.7.1 relay access denied\r\n",
+        ]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        let err = block_on(client.send_mail(
+            "a@example.com",
+            &["b@example.org"],
+            "Subject: x\r\n\r\nx\r\n",
+        ))
+        .expect_err("must fail");
+
+        match err {
+            SmtpError::Protocol(ProtocolError::UnexpectedCode { enhanced, .. }) => {
+                assert!(
+                    enhanced.is_none(),
+                    "without EHLO advertisement, enhanced must be None"
+                );
+            }
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn unexpected_code_display_includes_enhanced_bracket() {
+        // When enhanced is set, Display renders `[x.y.z]` after the code.
+        let script = flatten(&[
+            &greeting_then_ehlo_with_esmtp()[..],
+            b"235 OK\r\n",
+            b"550 5.7.1 relay access denied\r\n",
+        ]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login("user", "pass")).expect("login");
+        let err = block_on(client.send_mail(
+            "a@example.com",
+            &["b@example.org"],
+            "Subject: x\r\n\r\nx\r\n",
+        ))
+        .expect_err("must fail");
+        let s = format!("{err}");
+        assert!(
+            s.contains("[5.7.1]"),
+            "Display should include enhanced bracket: {s}"
+        );
+        assert!(s.contains("550"), "Display should include basic code: {s}");
+    }
+
+    #[test]
+    fn auth_rejected_carries_enhanced_when_advertised() {
+        // ENHANCEDSTATUSCODES is advertised; AUTH PLAIN is rejected with
+        // 535 5.7.8. The enhanced field must be propagated into
+        // AuthError::Rejected.
+        let script = flatten(&[
+            &greeting_then_ehlo_with_esmtp()[..],
+            b"535 5.7.8 invalid credentials\r\n",
+        ]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        let err = block_on(client.login("user", "pass")).expect_err("must fail");
+
+        match err {
+            SmtpError::Auth(AuthError::Rejected {
+                code,
+                enhanced,
+                message,
+            }) => {
+                assert_eq!(code, 535);
+                let es = enhanced.expect("enhanced should be Some");
+                assert_eq!((es.class, es.subject, es.detail), (5, 7, 8));
+                assert!(message.contains("5.7.8"));
+            }
+            other => panic!("expected Auth::Rejected with enhanced, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn enhancedstatuscodes_disabled_after_starttls_re_ehlo_without_it() {
+        // The post-TLS EHLO reply governs the post-TLS enhanced state.
+        // If the server stops advertising ENHANCEDSTATUSCODES after the
+        // upgrade, parses are no longer attempted.
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            // Pre-TLS EHLO advertises ENHANCEDSTATUSCODES.
+            b"250-mail.example.com\r\n",
+            b"250-STARTTLS\r\n",
+            b"250 ENHANCEDSTATUSCODES\r\n",
+            b"220 ready\r\n",
+            // Post-TLS EHLO drops it.
+            b"250-mail.example.com\r\n",
+            b"250 AUTH PLAIN\r\n",
+            b"535 5.7.8 invalid\r\n", // 5.7.8 should NOT be parsed now
+        ]);
+        let (transport, _w, _c, _u) =
+            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+        let mut client = block_on(SmtpClient::connect_starttls(transport, "client.example"))
+            .expect("connect_starttls");
+        let err = block_on(client.login("user", "pass")).expect_err("must fail");
+        match err {
+            SmtpError::Auth(AuthError::Rejected { enhanced, .. }) => {
+                assert!(
+                    enhanced.is_none(),
+                    "post-TLS EHLO dropped ENHANCEDSTATUSCODES: enhanced must be None"
+                );
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
+    }
+
+    // -- XOAUTH2 (Phase 6) ------------------------------------------------
+
+    /// EHLO reply that advertises AUTH XOAUTH2 (and PLAIN, so we can also
+    /// check that `select_auth_mechanism` still picks PLAIN, not XOAUTH2).
+    fn greeting_then_ehlo_with_xoauth2() -> Vec<u8> {
+        flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250-PIPELINING\r\n",
+            b"250 AUTH PLAIN LOGIN XOAUTH2\r\n",
+        ])
+    }
+
+    #[test]
+    fn xoauth2_happy_path_succeeds_directly() {
+        // 235 directly: server accepted the bearer token.
+        let script = flatten(&[
+            &greeting_then_ehlo_with_xoauth2()[..],
+            b"235 2.7.0 Accepted\r\n",
+        ]);
+        let (transport, written, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login_xoauth2("user@example.com", "ya29.token")).expect("login");
+
+        // Wire bytes: EHLO, then AUTH XOAUTH2 <b64>. Reconstruct the
+        // expected base64 to compare.
+        let mut payload = Vec::new();
+        payload.extend_from_slice(b"user=user@example.com\x01auth=Bearer ya29.token\x01\x01");
+        let b64 = crate::protocol::base64_encode(&payload);
+        let expected = format!("EHLO client.example\r\nAUTH XOAUTH2 {b64}\r\n");
+        assert_eq!(&*written.borrow(), expected.as_bytes());
+        assert_eq!(client.state(), SessionState::MailFrom);
+    }
+
+    #[test]
+    fn xoauth2_login_with_explicit_mechanism_works() {
+        // login_with(XOAuth2, ...) should be equivalent to login_xoauth2.
+        let script = flatten(&[&greeting_then_ehlo_with_xoauth2()[..], b"235 OK\r\n"]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        block_on(client.login_with(AuthMechanism::XOAuth2, "user@example.com", "ya29.token"))
+            .expect("login_with XOAuth2");
+        assert_eq!(client.state(), SessionState::MailFrom);
+    }
+
+    #[test]
+    fn xoauth2_handles_334_error_continuation() {
+        // RFC 7628-style flow: server returns 334 with base64 JSON,
+        // client sends an empty line, server sends final 5xx.
+        // The 5xx text and any enhanced code must end up in the
+        // AuthError::Rejected.
+        let script = flatten(&[
+            &greeting_then_ehlo_with_xoauth2()[..],
+            b"334 eyJzdGF0dXMiOiI0MDEifQ==\r\n", // {"status":"401"} in b64
+            b"535 5.7.8 Username and Password not accepted\r\n",
+        ]);
+        let (transport, written, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        // ENHANCEDSTATUSCODES is NOT advertised in this script, so
+        // enhanced will be None — but we still verify the rejection
+        // path itself.
+        let err = block_on(client.login_xoauth2("user@example.com", "ya29.token"))
+            .expect_err("must fail");
+        match err {
+            SmtpError::Auth(AuthError::Rejected { code, message, .. }) => {
+                assert_eq!(code, 535);
+                assert!(message.contains("Username and Password"));
+            }
+            other => panic!("expected Auth::Rejected, got {other:?}"),
+        }
+
+        // The client must have written the empty continuation line
+        // between AUTH XOAUTH2 and the final read.
+        let bytes = written.borrow();
+        // The pattern "...<b64>\r\n\r\n" indicates the empty
+        // continuation. Search for the trailing `\r\n\r\n`.
+        let s = std::str::from_utf8(&bytes).unwrap();
+        assert!(
+            s.ends_with("\r\n\r\n"),
+            "must end with empty continuation line: {s:?}"
+        );
+        assert_eq!(client.state(), SessionState::Closed);
+    }
+
+    #[test]
+    fn xoauth2_returns_unsupported_when_not_advertised() {
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 AUTH PLAIN LOGIN\r\n", // no XOAUTH2
+        ]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        let err = block_on(client.login_xoauth2("user", "ya29.token")).expect_err("must fail");
+        assert!(matches!(
+            err,
+            SmtpError::Auth(AuthError::UnsupportedMechanism)
+        ));
+        assert_eq!(client.state(), SessionState::Closed);
+    }
+
+    #[test]
+    fn xoauth2_validates_token_before_io() {
+        // A token with a space would be rejected by the server but we
+        // catch it locally. No bytes should be sent for AUTH.
+        let script = flatten(&[&greeting_then_ehlo_with_xoauth2()[..]]);
+        let (transport, written, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        // Capture the written bytes after EHLO so we can compare.
+        let after_ehlo = written.borrow().len();
+        let err = block_on(client.login_xoauth2("user", "bad token")).expect_err("must fail");
+        assert!(matches!(err, SmtpError::InvalidInput(_)));
+        // Nothing was written for AUTH.
+        assert_eq!(written.borrow().len(), after_ehlo);
+        // The session is still usable: input validation does not
+        // poison the connection.
+        assert_eq!(client.state(), SessionState::Authentication);
+    }
+
+    #[test]
+    fn xoauth2_validates_user_before_io() {
+        let script = flatten(&[&greeting_then_ehlo_with_xoauth2()[..]]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        // SOH in the user would corrupt the SASL framing.
+        let err = block_on(client.login_xoauth2("u\x01v", "ya29.token")).expect_err("must fail");
+        assert!(matches!(err, SmtpError::InvalidInput(_)));
+        // Session should remain usable for legitimate retry.
+        assert_eq!(client.state(), SessionState::Authentication);
+    }
+
+    #[test]
+    fn xoauth2_with_enhanced_status_propagates_code() {
+        // ENHANCEDSTATUSCODES + XOAUTH2 + 334 error continuation +
+        // final 5xx with enhanced. The enhanced should be parsed off
+        // the final reply.
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250-ENHANCEDSTATUSCODES\r\n",
+            b"250 AUTH XOAUTH2\r\n",
+            b"334 eyJzdGF0dXMiOiI0MDEifQ==\r\n",
+            b"535 5.7.8 Bad credentials\r\n",
+        ]);
+        let (transport, _w, _c) = MockTransport::new(&[&script[..]]);
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        let err = block_on(client.login_xoauth2("user@example.com", "ya29.token"))
+            .expect_err("must fail");
+        match err {
+            SmtpError::Auth(AuthError::Rejected { enhanced, .. }) => {
+                let es = enhanced.expect("enhanced should be Some");
+                assert_eq!((es.class, es.subject, es.detail), (5, 7, 8));
+            }
+            other => panic!("unexpected: {other:?}"),
+        }
     }
 }

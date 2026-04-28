@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-04-27
+
+### Added
+
+- **Phase 6 — `ENHANCEDSTATUSCODES` (RFC 2034 / 3463).**
+  - New public type `EnhancedStatus { class, subject, detail }` with
+    `Display`, `to_dotted()`, and structured field access.
+  - `ProtocolError::UnexpectedCode` gains an `enhanced:
+    Option<EnhancedStatus>` field. The Display impl renders the code
+    in square brackets between the basic code and the message:
+    `during MAIL FROM, expected 2xx response but received 550
+    [5.7.1]: relay access denied`.
+  - `AuthError::Rejected` gains an `enhanced: Option<EnhancedStatus>`
+    field, so callers can distinguish (e.g.) `5.7.8` from `5.7.9`
+    without parsing reply text.
+  - `Reply::enhanced()` and `Reply::message_text()` (the latter
+    returns the reply text with the enhanced prefix stripped, for
+    human-friendly display).
+  - `protocol::ehlo_advertises_enhanced_status_codes` capability
+    inspection helper.
+  - Parsing is gated on EHLO advertisement: a stray
+    `class.subject.detail`-shaped substring in a reply from a server
+    that did not advertise the extension is not parsed.
+- **Phase 6 — `AUTH XOAUTH2` (Google / Microsoft OAuth 2.0).**
+  - `SmtpClient::login_xoauth2(user, access_token)` for opt-in
+    OAuth 2.0 bearer-token authentication.
+  - `AuthMechanism::XOAuth2` variant, `SmtpOp::AuthXOAuth2` for
+    error tagging.
+  - Full handling of the RFC 7628 §3.2.3 two-step error flow: on a
+    `334` reply during XOAUTH2, the client sends an empty
+    continuation line, reads the final 5xx, and surfaces it as
+    `AuthError::Rejected` with the provider's diagnostic preserved.
+  - `protocol::build_xoauth2_initial_response`,
+    `protocol::validate_xoauth2_user`,
+    `protocol::validate_oauth2_token` public helpers.
+  - `select_auth_mechanism` deliberately does NOT pick XOAUTH2 even
+    when advertised: bearer tokens have different semantics from
+    static passwords and must be passed in explicitly.
+
+### Changed
+
+- `AuthError` is now `non_exhaustive`. This is a SemVer-incompatible
+  change for callers that pattern-match on the enum without a
+  wildcard arm, hence the minor bump from 0.2.0 to 0.3.0 under the
+  pre-1.0 versioning convention.
+- `AuthError::UnsupportedMechanism`'s Display message now lists all
+  three supported mechanisms (PLAIN, LOGIN, XOAUTH2) rather than
+  just the two it covered before.
+- `Reply` now has a private `enhanced` field; constructed via
+  `Reply::new(code, lines)` rather than struct literal. External
+  callers that built `Reply` directly (an unusual pattern, but
+  technically possible) will need to switch to the constructor.
+
 ## [0.2.0] — 2026-04-27
 
 ### Added
@@ -100,6 +153,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/nabbisen/wasm-smtp/releases/tag/v0.1.0

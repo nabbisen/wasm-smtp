@@ -11,7 +11,7 @@ pub use client::SmtpClient;
 pub use error::{
     AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp,
 };
-pub use protocol::AuthMechanism;
+pub use protocol::{AuthMechanism, EnhancedStatus};
 pub use session::SessionState;
 pub use transport::{StartTlsCapable, Transport};
 ```
@@ -20,6 +20,11 @@ These types together constitute the entire public API of the crate.
 There is no separate "builder", no separate "config", no separate
 "low-level" interface. The intent is that anyone reading `lib.rs` can
 hold the entire surface in their head.
+
+`EnhancedStatus` (RFC 3463) is the parsed `class.subject.detail`
+code that the crate populates on replies and errors when the server
+has advertised `ENHANCEDSTATUSCODES`. `AuthMechanism` enumerates the
+SASL mechanisms this client knows: `Plain`, `Login`, `XOAuth2`.
 
 ## `Transport` and `StartTlsCapable`
 

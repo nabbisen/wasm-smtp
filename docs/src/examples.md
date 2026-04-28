@@ -221,6 +221,60 @@ returns `SmtpError::Protocol(ProtocolError::ExtensionUnavailable {
 name: "STARTTLS" })` and closes the session — there is no silent
 fallback to plaintext authentication.
 
+## OAuth 2.0 submission via Gmail
+
+Gmail's submission service authenticates with short-lived OAuth 2.0
+access tokens via the XOAUTH2 SASL profile. This example assumes
+the caller has already obtained a fresh access token (token
+acquisition and refresh are out of scope for this crate).
+
+```rust
+use wasm_smtp_cloudflare::connect_smtp_starttls;
+use wasm_smtp_core::{AuthError, SmtpError};
+
+# async fn obtain_oauth2_token() -> Result<String, Box<dyn std::error::Error>> {
+#     unimplemented!("call out to your OAuth provider")
+# }
+# async fn send_via_gmail() -> Result<(), Box<dyn std::error::Error>> {
+let access_token = obtain_oauth2_token().await?;
+
+// Gmail's submission endpoint listens on 587 with STARTTLS.
+let mut client = connect_smtp_starttls(
+    "smtp.gmail.com",
+    587,
+    "client.example.com",
+).await?;
+
+match client.login_xoauth2("user@example.com", &access_token).await {
+    Ok(()) => {}
+    Err(SmtpError::Auth(AuthError::Rejected { code, message, .. })) => {
+        // Token expired, scope wrong, or account doesn't allow SMTP.
+        // The provider's diagnostic JSON is in `message`.
+        eprintln!("XOAUTH2 rejected ({code}): {message}");
+        return Err("auth failed".into());
+    }
+    Err(other) => return Err(other.into()),
+}
+
+client.send_mail(
+    "user@example.com",
+    &["recipient@example.org"],
+    "From: user@example.com\r\n\
+     To: recipient@example.org\r\n\
+     Subject: Sent via Gmail OAuth\r\n\
+     \r\n\
+     Token-authenticated submission.\r\n",
+).await?;
+client.quit().await?;
+# Ok(())
+# }
+```
+
+The same pattern applies to Microsoft 365 (host
+`smtp.office365.com`, port 587), with appropriate scope and tenant
+configuration on the OAuth side. The crate does not differentiate
+between providers — XOAUTH2 is XOAUTH2.
+
 ## Acceptable use, again
 
 Every example here is a small-volume, transactional pattern: a message

@@ -60,7 +60,7 @@ pub mod transport;
 
 pub use client::SmtpClient;
 pub use error::{AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp};
-pub use protocol::AuthMechanism;
+pub use protocol::{AuthMechanism, EnhancedStatus};
 pub use session::SessionState;
 pub use transport::{StartTlsCapable, Transport};
 

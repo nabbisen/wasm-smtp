@@ -16,7 +16,7 @@ categories = ["email", "network-programming", "wasm"]
 path = "src/lib.rs"
 
 [dependencies]
-wasm-smtp-core = { path = "../core", version = "0.2.0" }
+wasm-smtp-core = { path = "../core", version = "0.3.0" }
 worker = "0.8"
 tokio = { version = "1", default-features = false, features = ["io-util"] }
 

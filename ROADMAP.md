@@ -95,16 +95,43 @@ addition to the existing Implicit-TLS path on port 465.
   `StartTlsCapable` impl on `CloudflareTransport` that calls
   `worker::Socket::start_tls()` on the underlying socket.
 
-## Phase 6 — Future work *(not scheduled)*
+## Phase 6 — Diagnostics & OAuth 2.0 *(complete)*
+
+Two parallel improvements that together raise the bar on what
+production deployments can rely on the crate for:
+
+- ✅ **`ENHANCEDSTATUSCODES` (RFC 2034 / 3463).** When the server
+  advertises this extension, every reply is annotated with the
+  parsed `class.subject.detail` code and that code is propagated
+  into both `ProtocolError::UnexpectedCode { enhanced, .. }` and
+  `AuthError::Rejected { enhanced, .. }`. Callers can route on
+  structured codes (e.g. `5.1.1` user-unknown vs `5.7.1` policy
+  rejection) instead of grepping reply text.
+- ✅ **`AUTH XOAUTH2`.** The Google / Microsoft OAuth 2.0 SASL
+  profile is now supported via `SmtpClient::login_xoauth2()`, with
+  full handling of RFC 7628 §3.2.3's two-step error flow (334 with
+  base64 JSON detail, empty client continuation, final 5xx). Auto-
+  selection in `login()` deliberately does not pick XOAUTH2 — it is
+  opt-in only, since the credential semantics differ from a static
+  password.
+- ✅ `EnhancedStatus { class, subject, detail }` public type with
+  Display, `to_dotted()`, structured field access for programmatic
+  routing.
+- ✅ `AuthMechanism::XOAuth2` variant; `AuthError` made
+  `non_exhaustive`; reusable `validate_xoauth2_user` and
+  `validate_oauth2_token` for caller-side input checking.
+
+## Phase 7 — Future work *(not scheduled)*
 
 Items that may be revisited in a future cycle. None of these is a
 commitment.
 
-- Additional adapters for non-Cloudflare runtimes.
-- Extra SASL mechanisms (`XOAUTH2`, `SCRAM-SHA-256`).
+- Additional adapters for non-Cloudflare runtimes (tokio, Deno,
+  WASI sockets).
+- Extra SASL mechanisms (`SCRAM-SHA-256`, `OAUTHBEARER`).
 - Pipelining (RFC 2920) for slightly better latency on high-RTT links.
-- DSN / ENHANCEDSTATUSCODES extension parsing.
-- SMTPUTF8 / international addresses.
+- DSN extension parameters (RFC 3461) for delivery-status routing.
+- SMTPUTF8 / international addresses (RFC 6531).
 
 ## Out of scope (for now)
 

@@ -121,10 +121,11 @@ directly.
 ## Choosing an authentication mechanism
 
 `SmtpClient::login(user, pass)` consults the server's `EHLO`
-capabilities and picks the best supported mechanism: `AUTH PLAIN`
-when advertised (preferred — one round-trip and the IETF-standard
-SASL mechanism), falling back to `AUTH LOGIN` otherwise. This is the
-right behavior for almost every caller.
+capabilities and picks the best supported **static-password**
+mechanism: `AUTH PLAIN` when advertised (preferred — one round-trip
+and the IETF-standard SASL mechanism), falling back to `AUTH LOGIN`
+otherwise. This is the right behavior for almost every static-
+password caller.
 
 If you need to lock in a specific mechanism — to reproduce a
 production failure that is tied to one of them, or to test against a
@@ -142,6 +143,73 @@ client.login_with(AuthMechanism::Login, "user", "secret").await?;
 `login_with` returns `AuthError::UnsupportedMechanism` if the chosen
 mechanism is not in the server's advertisement, just like `login`
 does when neither mechanism is advertised.
+
+## OAuth 2.0 (XOAUTH2) for Gmail and Microsoft 365
+
+For providers that authenticate with OAuth 2.0 access tokens rather
+than static passwords — Gmail's SMTP relay and Microsoft 365's
+submission endpoint are the most common — call `login_xoauth2`:
+
+```rust
+let access_token = obtain_oauth2_token().await?; // your code
+client.login_xoauth2("user@example.com", &access_token).await?;
+```
+
+`login_xoauth2` opts in explicitly to the XOAUTH2 SASL profile.
+`login()` deliberately does not pick XOAUTH2 even when the server
+advertises it: a static-password caller passing a stale OAuth token
+under the assumption that the same auto-select logic applies would
+silently fail in confusing ways.
+
+This crate does not perform the OAuth 2.0 dance itself. Token
+acquisition, refresh, scope, and storage are the caller's
+responsibility. For Gmail, the relevant scope is
+`https://mail.google.com/`; for Microsoft 365 it is
+`https://outlook.office.com/SMTP.Send`.
+
+When the server rejects the token, providers typically use the
+RFC 7628 §3.2.3 two-step flow: a `334` with base64-encoded JSON
+error detail, an empty client continuation, then a final `5.x.x`.
+The crate handles this transparently and surfaces the result as
+`AuthError::Rejected`. The final reply text is preserved so callers
+can log the provider's diagnostic.
+
+## Reading enhanced status codes
+
+When the server advertises `ENHANCEDSTATUSCODES` (RFC 2034), every
+reply carries a structured `class.subject.detail` code in addition
+to the basic three-digit code. The crate parses these into
+`EnhancedStatus` and exposes them on errors so callers can route on
+the structured code instead of grepping the message text:
+
+```rust
+use wasm_smtp_core::{EnhancedStatus, ProtocolError, SmtpError};
+
+match client.send_mail(from, &[to], body).await {
+    Ok(()) => {}
+    Err(SmtpError::Protocol(ProtocolError::UnexpectedCode {
+        enhanced: Some(EnhancedStatus { class: 5, subject: 1, .. }),
+        ..
+    })) => {
+        // 5.1.x — bad address. No retry.
+    }
+    Err(SmtpError::Protocol(ProtocolError::UnexpectedCode {
+        enhanced: Some(EnhancedStatus { class: 4, .. }),
+        ..
+    })) => {
+        // 4.x.x — transient. Retry later.
+    }
+    Err(other) => return Err(other),
+}
+```
+
+The same structured field is present on `AuthError::Rejected`, which
+is useful for distinguishing `5.7.8` (invalid credentials) from
+`5.7.9` (mechanism too weak) without parsing message text.
+
+If the server does not advertise the extension, `enhanced` is `None`
+even when the reply text happens to contain a `class.subject.detail`-
+shaped string — the parse is gated on advertisement, by design.
 
 ## Inspecting capabilities
 

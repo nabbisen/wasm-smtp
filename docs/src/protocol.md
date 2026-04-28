@@ -82,20 +82,27 @@ to its own policy.
 
 ## Authentication
 
-The crate implements two SASL mechanisms: `PLAIN` (RFC 4616) and the
-historical `LOGIN` mechanism. `PLAIN` is preferred because it is the
-IETF-standard SASL mechanism and completes in a single round-trip.
-`LOGIN` is retained because many older submission servers still
-advertise only it.
+The crate implements three SASL mechanisms: `PLAIN` (RFC 4616), the
+historical `LOGIN` mechanism, and `XOAUTH2` (the Google / Microsoft
+OAuth 2.0 SASL profile). `PLAIN` is the default for static-password
+flows because it is the IETF-standard SASL mechanism and completes
+in a single round-trip; `LOGIN` is retained for older submission
+servers; `XOAUTH2` is opt-in for OAuth 2.0 bearer-token flows.
 
 ### Mechanism selection
 
 The high-level [`SmtpClient::login`] method consults the server's
-`EHLO` capabilities and picks the best supported mechanism: `PLAIN`
-if advertised, otherwise `LOGIN`, otherwise
-[`AuthError::UnsupportedMechanism`]. Callers that need a specific
-mechanism — for example, to reproduce a failure tied to one mechanism
-— should use [`SmtpClient::login_with`] instead.
+`EHLO` capabilities and picks the best **static-password** mechanism:
+`PLAIN` if advertised, otherwise `LOGIN`, otherwise
+[`AuthError::UnsupportedMechanism`]. It deliberately does not pick
+`XOAUTH2` even when advertised, because the credential semantics are
+different (a short-lived bearer token rather than a static password).
+Callers that want OAuth 2.0 use [`SmtpClient::login_xoauth2`]
+explicitly.
+
+Callers that need a specific mechanism — for example, to reproduce a
+failure tied to one mechanism — should use [`SmtpClient::login_with`]
+instead.
 
 ### AUTH PLAIN (RFC 4616)
 
@@ -113,8 +120,8 @@ of a third party); the on-wire payload is therefore
 authcid and password fields, which matches Rust's `String` invariant.
 
 A 5xx response at this step is mapped to
-[`AuthError::Rejected { code, message }`]. Any other unexpected code
-is mapped to [`ProtocolError::UnexpectedCode`].
+[`AuthError::Rejected { code, enhanced, message }`]. Any other
+unexpected code is mapped to [`ProtocolError::UnexpectedCode`].
 
 ### AUTH LOGIN
 
@@ -137,12 +144,88 @@ A 5xx response at any AUTH step is mapped to
 [`AuthError::Rejected`]. Any other unexpected code is mapped to
 [`ProtocolError::UnexpectedCode`].
 
+### AUTH XOAUTH2
+
+`XOAUTH2` is the SASL profile defined by Google and adopted by
+Microsoft for OAuth 2.0 access-token authentication. The wire format
+is one round trip with an initial response, like `PLAIN`:
+
+```text
+C: AUTH XOAUTH2 <base64(payload)>
+S: 235 <message>                # success path
+```
+
+where `payload`, before base64, is:
+
+```text
+user={user}\x01auth=Bearer {token}\x01\x01
+```
+
+The `\x01` byte (SOH) separates fields. The token is a short-lived
+OAuth 2.0 bearer token; obtaining and refreshing it is the caller's
+responsibility — `wasm-smtp-core` does not perform the OAuth dance.
+
+When credentials are wrong, providers commonly use a two-step error
+flow defined by RFC 7628 §3.2.3:
+
+```text
+C: AUTH XOAUTH2 <base64(payload)>
+S: 334 <base64(json error detail)>
+C: <empty line>
+S: 535 <final error text>
+```
+
+The crate handles this transparently: on a 334 reply, it sends an
+empty continuation line, reads the final 5xx, and surfaces the
+result as [`AuthError::Rejected`] with the final reply text in the
+message field.
+
+The user field is validated to reject NUL, CR, LF, and SOH bytes
+(any of which would corrupt the SASL framing). The token field is
+validated to be ASCII printable without whitespace (RFC 6750 §2.1).
+
+## ENHANCEDSTATUSCODES (RFC 2034 / 3463)
+
+When the server's `EHLO` reply advertises `ENHANCEDSTATUSCODES`,
+every reply line carries a structured status code in the form
+`class.subject.detail` immediately after the basic three-digit code:
+
+```text
+S: 550 5.7.1 relay access denied
+        ^^^^^
+       enhanced
+```
+
+The crate parses the prefix into [`EnhancedStatus`] and exposes it on
+both successful replies (`Reply::enhanced()`) and on errors
+(`ProtocolError::UnexpectedCode { enhanced, .. }`,
+`AuthError::Rejected { enhanced, .. }`). RFC 3463 specifies:
+
+- `class` is one of 2 (success), 4 (persistent transient), or 5
+  (permanent). Codes outside this set are not parsed.
+- `subject` is the broad category (e.g. `1` = address, `7` =
+  security/policy).
+- `detail` is the specific failure within the subject.
+
+Knowing the enhanced code lets callers distinguish failure modes that
+share a basic code: `5.1.1` (user unknown) and `5.7.1` (relay
+denied) both arrive with `550`, but they require very different
+handling — one is a permanent address failure, the other is a policy
+issue that may be retryable from a different relay.
+
+When the server does not advertise the extension, the crate does
+**not** parse the prefix even if a stray `5.7.1`-shaped string appears
+in a reply: the wire format is preserved verbatim in the reply text,
+and `enhanced` is `None`.
+
 [`SmtpClient::login`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.SmtpClient.html#method.login
 [`SmtpClient::login_with`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.SmtpClient.html#method.login_with
+[`SmtpClient::login_xoauth2`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.SmtpClient.html#method.login_xoauth2
 [`AuthError::Rejected`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.Rejected
-[`AuthError::Rejected { code, message }`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.Rejected
+[`AuthError::Rejected { code, enhanced, message }`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.Rejected
 [`AuthError::UnsupportedMechanism`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.UnsupportedMechanism
 [`ProtocolError::UnexpectedCode`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.ProtocolError.html#variant.UnexpectedCode
+[`EnhancedStatus`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/struct.EnhancedStatus.html
 
 ## TLS models
 

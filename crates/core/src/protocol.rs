@@ -93,6 +93,118 @@ fn malformed(line: &[u8]) -> ProtocolError {
     ProtocolError::Malformed(String::from_utf8_lossy(line).into_owned())
 }
 
+/// An enhanced status code from RFC 3463, parsed out of an SMTP reply
+/// when the server has advertised the `ENHANCEDSTATUSCODES` extension
+/// (RFC 2034).
+///
+/// Enhanced codes are formatted `class.subject.detail`, for example
+/// `5.7.1` (relay access denied) or `4.7.0` (security feature
+/// temporarily unavailable). The basic three-digit reply code (e.g.
+/// `550`) and the enhanced code share the leading digit (the
+/// "class"); the remaining two fields refine the diagnosis far
+/// beyond what the basic code carries.
+///
+/// This type is preserved across the [`Reply`] on which it is parsed,
+/// and reproduced in [`crate::ProtocolError::UnexpectedCode`] when an
+/// unexpected reply triggers an error. Callers can use the structured
+/// fields to make routing decisions ("if subject is 5.1.* the address
+/// is permanently bad; if 4.x.x retry later").
+///
+/// Per RFC 3463 §2:
+/// - `class` is one of 2, 4, or 5 (success / persistent transient /
+///   permanent).
+/// - `subject` and `detail` are 0–999.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct EnhancedStatus {
+    /// Leading class digit (2, 4, or 5).
+    pub class: u8,
+    /// Second field: the broad subject category (e.g. `1` = address,
+    /// `7` = security/policy).
+    pub subject: u16,
+    /// Third field: the specific detail within the subject.
+    pub detail: u16,
+}
+
+impl EnhancedStatus {
+    /// Format as `class.subject.detail`. This is the wire form RFC 3463
+    /// uses, with the leading dot-decimal and no padding.
+    #[must_use]
+    pub fn to_dotted(&self) -> String {
+        format!("{}.{}.{}", self.class, self.subject, self.detail)
+    }
+}
+
+impl core::fmt::Display for EnhancedStatus {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}.{}.{}", self.class, self.subject, self.detail)
+    }
+}
+
+/// Try to parse an [`EnhancedStatus`] from the start of a reply line's
+/// text portion.
+///
+/// The expected format is `"x.y.z"` followed by either end-of-string,
+/// whitespace, or any other non-digit-non-dot byte. Invalid prefixes
+/// — including missing dots, non-digit characters, or class digits
+/// other than `2`, `4`, `5` — return `None`. The caller advances
+/// past the parsed prefix only when this returns `Some`.
+///
+/// Returns `(status, prefix_len)` where `prefix_len` is the number of
+/// bytes consumed from `text`, including any single trailing
+/// whitespace octet. This lets [`Reply::joined_text`] strip the code
+/// before showing the user-facing message.
+fn parse_enhanced_status_prefix(text: &str) -> Option<(EnhancedStatus, usize)> {
+    // We require at least 5 chars (`x.y.z`) and a class digit in {2,4,5}.
+    let bytes = text.as_bytes();
+    if bytes.len() < 5 {
+        return None;
+    }
+    let class_byte = bytes[0];
+    if !matches!(class_byte, b'2' | b'4' | b'5') || bytes[1] != b'.' {
+        return None;
+    }
+
+    // subject: digits, terminated by '.'.
+    let mut i = 2;
+    let subj_start = i;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == subj_start || i >= bytes.len() || bytes[i] != b'.' {
+        return None;
+    }
+    let subject: u16 = text[subj_start..i].parse().ok()?;
+    i += 1;
+
+    // detail: digits, terminated by whitespace or end of string.
+    let det_start = i;
+    while i < bytes.len() && bytes[i].is_ascii_digit() {
+        i += 1;
+    }
+    if i == det_start {
+        return None;
+    }
+    let detail: u16 = text[det_start..i].parse().ok()?;
+
+    // The terminator: end-of-string, single space, or single tab.
+    // We consume one whitespace byte so the user-facing message starts
+    // cleanly. Any other non-digit byte is allowed but not consumed.
+    let prefix_len = if i < bytes.len() && (bytes[i] == b' ' || bytes[i] == b'\t') {
+        i + 1
+    } else {
+        i
+    };
+
+    Some((
+        EnhancedStatus {
+            class: class_byte - b'0',
+            subject,
+            detail,
+        },
+        prefix_len,
+    ))
+}
+
 /// A complete SMTP reply, possibly assembled from multiple continuation
 /// lines.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,19 +213,77 @@ pub struct Reply {
     pub code: u16,
     /// One entry per line, in the order received. Each entry is the line's
     /// text portion (after the code and separator) decoded as UTF-8 with
-    /// invalid sequences replaced by `U+FFFD`.
+    /// invalid sequences replaced by `U+FFFD`. The text retains any
+    /// enhanced status code prefix; use [`Self::message_text`] to obtain
+    /// the same text with the prefix stripped, or [`Self::enhanced`] to
+    /// obtain the parsed code itself.
     pub lines: Vec<String>,
+    /// Parsed enhanced status code (RFC 3463), set only when the server
+    /// has advertised `ENHANCEDSTATUSCODES` for this session. The code
+    /// is taken from the first reply line; multi-line replies that
+    /// disagree on the code are flagged at parse time, so this is well
+    /// defined when present.
+    enhanced: Option<EnhancedStatus>,
 }
 
 impl Reply {
+    /// Construct a reply with the given code and lines, with no enhanced
+    /// status code attached. The client adds an enhanced code via the
+    /// internal `attach_enhanced_status` setter when the session has
+    /// `ENHANCEDSTATUSCODES` enabled.
+    #[must_use]
+    pub fn new(code: u16, lines: Vec<String>) -> Self {
+        Self {
+            code,
+            lines,
+            enhanced: None,
+        }
+    }
+
     /// The leading digit of the reply code, useful for class-based checks.
     pub fn class(&self) -> u8 {
         u8::try_from(self.code / 100).unwrap_or(0)
     }
 
     /// Reply text concatenated with `\n`. Suitable for diagnostics.
+    /// If an enhanced status code prefix is present, it is preserved in
+    /// the output; use [`Self::message_text`] for a presentation that
+    /// hides it.
     pub fn joined_text(&self) -> String {
         self.lines.join("\n")
+    }
+
+    /// Reply text with any enhanced status code prefix stripped from
+    /// each line. Suitable for human-facing error messages where the
+    /// code is shown separately. Lines that have no enhanced prefix
+    /// are returned unchanged.
+    pub fn message_text(&self) -> String {
+        if self.enhanced.is_none() {
+            return self.joined_text();
+        }
+        let stripped: Vec<&str> = self
+            .lines
+            .iter()
+            .map(|line| match parse_enhanced_status_prefix(line) {
+                Some((_, prefix_len)) => &line[prefix_len..],
+                None => line.as_str(),
+            })
+            .collect();
+        stripped.join("\n")
+    }
+
+    /// Parsed enhanced status code, if the server has provided one and
+    /// the session has it enabled.
+    #[must_use]
+    pub fn enhanced(&self) -> Option<EnhancedStatus> {
+        self.enhanced
+    }
+
+    /// Set the enhanced status code on this reply. Used by the client
+    /// after the EHLO capability set has been confirmed to include
+    /// `ENHANCEDSTATUSCODES`.
+    pub(crate) fn attach_enhanced_status(&mut self, status: EnhancedStatus) {
+        self.enhanced = Some(status);
     }
 
     /// Iterate over the trimmed text of each line. Useful for parsing EHLO
@@ -122,6 +292,16 @@ impl Reply {
     /// `PIPELINING`, `8BITMIME`).
     pub fn iter_lines(&self) -> impl Iterator<Item = &str> {
         self.lines.iter().map(String::as_str)
+    }
+
+    /// Parse an enhanced status code from the first line's text, if
+    /// present. Used by the client to populate `self.enhanced` only when
+    /// the session has `ENHANCEDSTATUSCODES` enabled.
+    #[must_use]
+    pub fn try_parse_enhanced(&self) -> Option<EnhancedStatus> {
+        self.lines
+            .first()
+            .and_then(|line| parse_enhanced_status_prefix(line).map(|(s, _)| s))
     }
 }
 
@@ -391,6 +571,27 @@ pub fn ehlo_advertises_starttls<S: AsRef<str>>(capability_lines: &[S]) -> bool {
     false
 }
 
+/// Return `true` if the EHLO capability lines advertise the
+/// `ENHANCEDSTATUSCODES` extension (RFC 2034). The check is
+/// case-insensitive on the keyword.
+///
+/// When this is `true` for a session, the SMTP client parses the
+/// `class.subject.detail` prefix off each reply and exposes it as
+/// [`EnhancedStatus`] both on the [`Reply`] itself and on
+/// [`crate::ProtocolError::UnexpectedCode`]. When the keyword is not
+/// advertised, the same byte sequence in a reply (a stray "5.1.1"
+/// for instance) is left as-is in the message text and not parsed.
+pub fn ehlo_advertises_enhanced_status_codes<S: AsRef<str>>(capability_lines: &[S]) -> bool {
+    for line in capability_lines {
+        if let Some(head) = line.as_ref().split_ascii_whitespace().next()
+            && head.eq_ignore_ascii_case("ENHANCEDSTATUSCODES")
+        {
+            return true;
+        }
+    }
+    false
+}
+
 // -----------------------------------------------------------------------------
 // Authentication mechanisms
 // -----------------------------------------------------------------------------
@@ -415,16 +616,25 @@ pub enum AuthMechanism {
     /// `LOGIN`. Sends username and password as separate base64 lines
     /// in response to two `334` server prompts.
     Login,
+    /// SASL `XOAUTH2` (Google / Microsoft OAuth 2.0 SMTP extension).
+    /// Sends `user={user}\x01auth=Bearer {token}\x01\x01`
+    /// base64-encoded as the initial response. The "credential" passed
+    /// to `login_with` for this mechanism is an OAuth 2.0 access
+    /// token, not a static password — auto-selection by `login()`
+    /// deliberately does NOT pick this mechanism for that reason.
+    XOAuth2,
 }
 
 impl AuthMechanism {
     /// SMTP-on-the-wire keyword for this mechanism, as it appears after
-    /// `AUTH` in an `EHLO` advertisement (`"PLAIN"`, `"LOGIN"`).
+    /// `AUTH` in an `EHLO` advertisement (`"PLAIN"`, `"LOGIN"`,
+    /// `"XOAUTH2"`).
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Plain => "PLAIN",
             Self::Login => "LOGIN",
+            Self::XOAuth2 => "XOAUTH2",
         }
     }
 }
@@ -508,6 +718,91 @@ pub fn validate_plain_password(pass: &str) -> Result<(), InvalidInputError> {
         return Err(InvalidInputError::new(
             "AUTH password must not contain a NUL byte",
         ));
+    }
+    Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// XOAUTH2 (Google / Microsoft OAuth 2.0 SASL profile)
+// -----------------------------------------------------------------------------
+
+/// Build the SASL `XOAUTH2` initial response.
+///
+/// The wire format, before base64, is:
+///
+/// ```text
+/// user={user}\x01auth=Bearer {token}\x01\x01
+/// ```
+///
+/// where `\x01` is the SOH (Ctrl-A) byte that separates fields. The
+/// `Bearer ` prefix is fixed and case-sensitive. Both the user and the
+/// token are passed through verbatim; the caller must have validated
+/// them with [`validate_xoauth2_user`] and [`validate_oauth2_token`]
+/// first.
+///
+/// The returned string is the base64 encoding of the entire payload,
+/// suitable for placement after `AUTH XOAUTH2 ` on the wire. The
+/// caller is responsible for the surrounding command framing.
+#[must_use]
+pub fn build_xoauth2_initial_response(user: &str, token: &str) -> String {
+    // Length: "user=" (5) + user + 1 (SOH) + "auth=Bearer " (12) + token
+    //         + 1 (SOH) + 1 (final SOH) = 19 + user.len() + token.len()
+    let mut payload = Vec::with_capacity(19 + user.len() + token.len());
+    payload.extend_from_slice(b"user=");
+    payload.extend_from_slice(user.as_bytes());
+    payload.push(0x01);
+    payload.extend_from_slice(b"auth=Bearer ");
+    payload.extend_from_slice(token.as_bytes());
+    payload.push(0x01);
+    payload.push(0x01);
+    base64_encode(&payload)
+}
+
+/// Validate the username supplied to a SASL `XOAUTH2` exchange.
+///
+/// XOAUTH2 (Google / Microsoft) does not formally constrain the user
+/// field, but to prevent injection of the SOH separator, NUL, CR,
+/// or LF into the SASL payload, we forbid those bytes. Empty
+/// usernames are also rejected.
+pub fn validate_xoauth2_user(user: &str) -> Result<(), InvalidInputError> {
+    if user.is_empty() {
+        return Err(InvalidInputError::new("XOAUTH2 user must not be empty"));
+    }
+    if user.bytes().any(|b| matches!(b, 0 | b'\r' | b'\n' | 0x01)) {
+        return Err(InvalidInputError::new(
+            "XOAUTH2 user must not contain NUL, CR, LF, or SOH",
+        ));
+    }
+    Ok(())
+}
+
+/// Validate an OAuth 2.0 access token before sending it on the wire.
+///
+/// RFC 6750 §2.1 limits a Bearer token to ASCII printable characters
+/// (and a small set of punctuation), with no whitespace or control
+/// characters. We enforce that subset: every byte must be in the
+/// printable ASCII range `0x20..=0x7E` *except* whitespace
+/// (`0x20` space and `0x09` tab are also disallowed because RFC 6750
+/// requires `b64token` characters only). The SOH separator used by
+/// XOAUTH2 is implicitly excluded by the printable-only rule.
+///
+/// This is conservative: it will reject some technically-valid token
+/// shapes that real-world providers nonetheless never emit. In
+/// practice both Google and Microsoft access tokens consist of
+/// `[A-Za-z0-9._~+/=-]` and pass this check trivially.
+pub fn validate_oauth2_token(token: &str) -> Result<(), InvalidInputError> {
+    if token.is_empty() {
+        return Err(InvalidInputError::new(
+            "OAuth2 access token must not be empty",
+        ));
+    }
+    for b in token.bytes() {
+        // 0x21..=0x7E covers printable ASCII excluding space.
+        if !(0x21..=0x7E).contains(&b) {
+            return Err(InvalidInputError::new(
+                "OAuth2 access token must contain only printable ASCII (no whitespace or control bytes)",
+            ));
+        }
     }
     Ok(())
 }

@@ -21,6 +21,8 @@
 use core::fmt;
 use std::error::Error as StdError;
 
+use crate::protocol::EnhancedStatus;
+
 /// Top-level error type for all SMTP operations.
 #[derive(Debug)]
 pub enum SmtpError {
@@ -148,6 +150,9 @@ pub enum SmtpOp {
     AuthPlain,
     /// `AUTH LOGIN` exchange (any of its three round-trips).
     AuthLogin,
+    /// `AUTH XOAUTH2` exchange (Google / Microsoft OAuth 2.0 SASL
+    /// profile).
+    AuthXOAuth2,
     /// `MAIL FROM:<...>` envelope-sender announcement.
     MailFrom,
     /// `RCPT TO:<...>` recipient announcement (any of several when the
@@ -172,6 +177,7 @@ impl SmtpOp {
             Self::StartTls => "STARTTLS",
             Self::AuthPlain => "AUTH PLAIN",
             Self::AuthLogin => "AUTH LOGIN",
+            Self::AuthXOAuth2 => "AUTH XOAUTH2",
             Self::MailFrom => "MAIL FROM",
             Self::RcptTo => "RCPT TO",
             Self::Data => "DATA",
@@ -202,6 +208,14 @@ pub enum ProtocolError {
     ///
     /// `expected_class` is one of `2`, `3`, etc., representing the leading
     /// digit. `actual` is the full three-digit code as observed.
+    ///
+    /// `enhanced` carries the parsed RFC 3463 status code if and only
+    /// if the server advertised `ENHANCEDSTATUSCODES` and the reply
+    /// began with a `class.subject.detail` token. It refines `actual`
+    /// significantly — for instance, the basic code `550` covers
+    /// many distinct failure modes (`5.1.1` user unknown, `5.7.1`
+    /// policy rejection, …) that a caller may want to distinguish
+    /// programmatically.
     UnexpectedCode {
         /// The SMTP operation that was in progress.
         during: SmtpOp,
@@ -209,8 +223,14 @@ pub enum ProtocolError {
         expected_class: u8,
         /// The full three-digit reply code actually returned.
         actual: u16,
+        /// Optional enhanced status code (RFC 3463), present only when
+        /// the session has `ENHANCEDSTATUSCODES` enabled and the
+        /// server attached a parseable code to its reply.
+        enhanced: Option<EnhancedStatus>,
         /// The server-supplied reply text (joined across multi-line replies
-        /// with `\n`).
+        /// with `\n`). When `enhanced` is `Some`, the prefix is left in
+        /// the message so the wire form is preserved; presentation code
+        /// can re-render the code separately if desired.
         message: String,
     },
     /// A reply line did not parse: wrong length, non-digit code, illegal
@@ -251,11 +271,21 @@ impl fmt::Display for ProtocolError {
                 during,
                 expected_class,
                 actual,
+                enhanced,
                 message,
-            } => write!(
-                f,
-                "during {during}, expected {expected_class}xx response but received {actual}: {message}",
-            ),
+            } => {
+                if let Some(es) = enhanced {
+                    write!(
+                        f,
+                        "during {during}, expected {expected_class}xx response but received {actual} [{es}]: {message}",
+                    )
+                } else {
+                    write!(
+                        f,
+                        "during {during}, expected {expected_class}xx response but received {actual}: {message}",
+                    )
+                }
+            }
             Self::Malformed(s) => write!(f, "malformed server reply: {s}"),
             Self::UnexpectedClose => f.write_str("server closed connection unexpectedly"),
             Self::LineTooLong => f.write_str("server reply line exceeded SMTP line-length limit"),
@@ -276,19 +306,29 @@ impl StdError for ProtocolError {}
 // -----------------------------------------------------------------------------
 
 /// An authentication-specific failure.
+///
+/// This enum is `non_exhaustive` so that future SASL mechanisms can
+/// add new failure modes without forcing a major version bump.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum AuthError {
     /// The server rejected the credentials. The reply code (typically 535) and
     /// server message are preserved; client credentials are not.
     Rejected {
         /// SMTP reply code returned by the server.
         code: u16,
+        /// Optional enhanced status code (RFC 3463), present only when
+        /// the session has `ENHANCEDSTATUSCODES` enabled. For AUTH
+        /// failures, common enhanced codes include `5.7.8`
+        /// (authentication credentials invalid) and `5.7.9`
+        /// (authentication mechanism too weak).
+        enhanced: Option<EnhancedStatus>,
         /// Server-supplied reply text.
         message: String,
     },
     /// The server's EHLO response did not advertise an `AUTH` mechanism that
-    /// this client supports. The current implementation supports
-    /// `AUTH PLAIN` (RFC 4616) and `AUTH LOGIN`.
+    /// this client supports, or did not advertise the specific mechanism
+    /// the caller asked for.
     UnsupportedMechanism,
     /// The server returned a 334 prompt that did not look like a valid
     /// base64 challenge.
@@ -298,12 +338,23 @@ pub enum AuthError {
 impl fmt::Display for AuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Rejected { code, message } => {
-                write!(f, "server rejected authentication ({code}): {message}")
+            Self::Rejected {
+                code,
+                enhanced,
+                message,
+            } => {
+                if let Some(es) = enhanced {
+                    write!(
+                        f,
+                        "server rejected authentication ({code} [{es}]): {message}"
+                    )
+                } else {
+                    write!(f, "server rejected authentication ({code}): {message}")
+                }
             }
             Self::UnsupportedMechanism => f.write_str(
                 "server did not advertise an AUTH mechanism supported by this client \
-                 (expected PLAIN or LOGIN)",
+                 (this client knows PLAIN, LOGIN, and XOAUTH2)",
             ),
             Self::MalformedChallenge(s) => {
                 write!(f, "server sent a malformed AUTH challenge: {s}")

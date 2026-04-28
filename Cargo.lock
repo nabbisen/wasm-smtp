@@ -640,7 +640,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-cloudflare"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "tokio",
  "tokio-test",
@@ -650,7 +650,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-core"
-version = "0.2.0"
+version = "0.3.0"
 
 [[package]]
 name = "wasm-streams"

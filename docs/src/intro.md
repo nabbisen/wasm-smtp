@@ -29,9 +29,17 @@ single application owner. The project standardizes on:
   submission models are supported. The TLS handshake itself is the
   transport's responsibility; the core sees an opaque byte stream
   and (for STARTTLS) a single upgrade signal.
-- **`AUTH PLAIN` and `AUTH LOGIN` for authenticated submission.** The
-  client auto-selects the best mechanism advertised by the server.
-  SASL SCRAM, GSSAPI, XOAUTH2 are not supported.
+- **`AUTH PLAIN`, `AUTH LOGIN`, and `AUTH XOAUTH2` for authenticated
+  submission.** The auto-selecting `login()` picks the best static-
+  password mechanism advertised by the server (PLAIN over LOGIN);
+  `login_xoauth2()` opts in to OAuth 2.0 bearer-token authentication
+  (Gmail, Microsoft 365). SASL SCRAM and GSSAPI are not supported.
+- **`ENHANCEDSTATUSCODES` (RFC 2034 / 3463).** When the server
+  advertises this extension, every reply is annotated with the
+  parsed `class.subject.detail` code, propagated into
+  `ProtocolError::UnexpectedCode` and `AuthError::Rejected` so
+  callers can distinguish (e.g.) `5.1.1` user-unknown from `5.7.1`
+  policy rejection programmatically.
 - **Caller-supplied message bodies.** The library does not build MIME,
   attach files, or compose multipart payloads. The body is whatever
   RFC 5322 / 5321 octets the caller passes, optionally CRLF-normalized,

@@ -57,9 +57,48 @@ match err {
 ```
 
 The enum is `non_exhaustive`, so future SMTP extensions can add
-variants without breaking source compatibility. As of v0.2.0, the
-crate uses this to add `ProtocolError::ExtensionUnavailable` and
-`SessionState::StartTls` without forcing a major bump.
+variants without breaking source compatibility. As of v0.3.0, the
+enum carries the new `ExtensionUnavailable` variant (added in
+v0.2.0 alongside STARTTLS) and the `enhanced` field on
+`UnexpectedCode` (added in v0.3.0 alongside ENHANCEDSTATUSCODES).
+
+## Enhanced status codes (RFC 3463)
+
+When the server advertises `ENHANCEDSTATUSCODES`, the crate parses
+the `class.subject.detail` prefix off every reply line and exposes
+it as the `enhanced` field on:
+
+- `ProtocolError::UnexpectedCode { enhanced: Option<EnhancedStatus>, .. }`
+- `AuthError::Rejected { enhanced: Option<EnhancedStatus>, .. }`
+
+`EnhancedStatus` has three numeric fields: `class` (always 2, 4, or
+5 per RFC 3463), `subject`, and `detail`. The Display
+representation is `class.subject.detail`; the `to_dotted()` method
+returns the same. The Display impl of `ProtocolError::UnexpectedCode`
+includes the enhanced code in square brackets between the basic code
+and the message:
+
+```text
+during MAIL FROM, expected 2xx response but received 550 [5.7.1]:
+relay access denied
+```
+
+When the extension is not advertised, `enhanced` is always `None`
+— a stray `5.7.1`-shaped substring in a reply is left unparsed,
+preventing accidental misclassification.
+
+Common enhanced codes worth handling:
+
+| Code  | Meaning |
+|-------|---------|
+| 2.0.0 | Generic success |
+| 4.4.x | Network / DNS issue (retryable) |
+| 4.7.x | Transient policy / security (sometimes retryable elsewhere) |
+| 5.1.1 | User unknown (permanent address failure) |
+| 5.1.2 | Bad sender system address |
+| 5.7.1 | Relay access denied |
+| 5.7.8 | Authentication credentials invalid |
+| 5.7.9 | Authentication mechanism too weak |
 
 ## STARTTLS-specific errors
 
@@ -77,6 +116,15 @@ flow:
 Transport-level upgrade failures (e.g. the TLS handshake itself
 fails, or `worker::Socket::start_tls` returns an error) surface as
 `SmtpError::Io`, just like any other transport failure.
+
+## XOAUTH2-specific errors
+
+`AuthError` is `non_exhaustive`. The `Rejected` variant carries the
+final 5xx reply from the server, even when the provider used the
+RFC 7628 §3.2.3 two-step error flow (334 with base64 JSON, then
+final 5xx). The base64 JSON error detail is **not** decoded by the
+crate; it is the caller's responsibility to extract the JSON payload
+from the message field and parse it if structured detail is needed.
 
 ## Handling
 

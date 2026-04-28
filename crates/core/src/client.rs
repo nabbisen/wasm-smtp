@@ -28,8 +28,8 @@ use crate::error::{AuthError, InvalidInputError, ProtocolError, SmtpError, SmtpO
 use crate::protocol::{
     self, AuthMechanism, MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply,
     build_auth_plain_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth,
-    ehlo_advertises_starttls, format_command, format_command_arg, format_mail_from, format_rcpt_to,
-    parse_reply_line, select_auth_mechanism,
+    ehlo_advertises_enhanced_status_codes, ehlo_advertises_starttls, format_command,
+    format_command_arg, format_mail_from, format_rcpt_to, parse_reply_line, select_auth_mechanism,
 };
 use crate::session::SessionState;
 use crate::transport::{StartTlsCapable, Transport};
@@ -51,6 +51,12 @@ pub struct SmtpClient<T: Transport> {
     /// [`Self::starttls`] can re-issue `EHLO` after the TLS upgrade per
     /// RFC 3207 §4.2 without forcing the caller to pass the domain again.
     ehlo_domain: String,
+    /// Whether the most recent EHLO advertised `ENHANCEDSTATUSCODES`
+    /// (RFC 2034). When set, every reply parsed by [`Self::read_reply`]
+    /// is annotated with an [`crate::protocol::EnhancedStatus`] (when
+    /// the leading reply line carries one), and that code is propagated
+    /// into [`crate::ProtocolError::UnexpectedCode`] on failure.
+    enhanced_status_enabled: bool,
 }
 
 // Manual `Debug` implementation. We do not require `T: Debug` because typical
@@ -63,6 +69,7 @@ impl<T: Transport> core::fmt::Debug for SmtpClient<T> {
             .field("state", &self.state)
             .field("capabilities", &self.capabilities)
             .field("ehlo_domain", &self.ehlo_domain)
+            .field("enhanced_status_enabled", &self.enhanced_status_enabled)
             .field("rx_buf_len", &self.rx_buf.len())
             .field("rx_pos", &self.rx_pos)
             .finish_non_exhaustive()
@@ -88,6 +95,7 @@ impl<T: Transport> SmtpClient<T> {
             rx_pos: 0,
             capabilities: Vec::new(),
             ehlo_domain: ehlo_domain.to_owned(),
+            enhanced_status_enabled: false,
         };
         client.read_greeting().await?;
         client.send_ehlo(ehlo_domain).await?;
@@ -146,6 +154,13 @@ impl<T: Transport> SmtpClient<T> {
     /// is specific to one mechanism, or when testing against a server
     /// whose advertisement is known to be inaccurate.
     ///
+    /// `credential` is the secret material whose meaning depends on the
+    /// mechanism: a static password for `Plain` and `Login`, or an
+    /// OAuth 2.0 access token for `XOAuth2`. The `user` parameter is
+    /// validated against rules appropriate to the mechanism (NUL bytes
+    /// rejected for SASL framing in `Plain`, additional control bytes
+    /// rejected for `XOAuth2`).
+    ///
     /// Returns [`AuthError::UnsupportedMechanism`] if `mechanism` was not
     /// advertised by the server. Returns [`AuthError::Rejected`] if the
     /// server rejects the credentials.
@@ -153,10 +168,18 @@ impl<T: Transport> SmtpClient<T> {
         &mut self,
         mechanism: AuthMechanism,
         user: &str,
-        pass: &str,
+        credential: &str,
     ) -> Result<(), SmtpError> {
-        protocol::validate_plain_username(user)?;
-        protocol::validate_plain_password(pass)?;
+        match mechanism {
+            AuthMechanism::Plain | AuthMechanism::Login => {
+                protocol::validate_plain_username(user)?;
+                protocol::validate_plain_password(credential)?;
+            }
+            AuthMechanism::XOAuth2 => {
+                protocol::validate_xoauth2_user(user)?;
+                protocol::validate_oauth2_token(credential)?;
+            }
+        }
         self.assert_state_in(&[SessionState::Authentication])?;
 
         if !ehlo_advertises_auth(&self.capabilities, mechanism.name()) {
@@ -165,12 +188,42 @@ impl<T: Transport> SmtpClient<T> {
         }
 
         match mechanism {
-            AuthMechanism::Plain => self.run_auth_plain(user, pass).await?,
-            AuthMechanism::Login => self.run_auth_login(user, pass).await?,
+            AuthMechanism::Plain => self.run_auth_plain(user, credential).await?,
+            AuthMechanism::Login => self.run_auth_login(user, credential).await?,
+            AuthMechanism::XOAuth2 => self.run_auth_xoauth2(user, credential).await?,
         }
 
         self.transition(SessionState::MailFrom)?;
         Ok(())
+    }
+
+    /// Authenticate with `XOAUTH2`, the Google / Microsoft OAuth 2.0
+    /// SASL profile.
+    ///
+    /// `user` is the email address of the account, `access_token` is a
+    /// short-lived OAuth 2.0 bearer token obtained via the OAuth flow
+    /// for that account. This crate does not perform the OAuth dance
+    /// itself — token acquisition, refresh, and storage are the
+    /// caller's responsibility.
+    ///
+    /// Convenience wrapper for
+    /// `login_with(AuthMechanism::XOAuth2, user, access_token)`. Note
+    /// that [`Self::login`] (the auto-selecting variant) deliberately
+    /// does not pick `XOAUTH2` even when the server advertises it,
+    /// because the credential semantics are different from a static
+    /// password.
+    ///
+    /// # Errors
+    ///
+    /// - [`AuthError::UnsupportedMechanism`] if the server did not
+    ///   advertise `AUTH XOAUTH2`.
+    /// - [`AuthError::Rejected`] if the server rejected the token.
+    ///   Google and Microsoft typically return a 535 with a base64-
+    ///   encoded JSON `{"status":"401","schemes":"Bearer","scope":"..."}`
+    ///   in the message; the parsed text is preserved in the error.
+    pub async fn login_xoauth2(&mut self, user: &str, access_token: &str) -> Result<(), SmtpError> {
+        self.login_with(AuthMechanism::XOAuth2, user, access_token)
+            .await
     }
 
     /// SASL `PLAIN` exchange (RFC 4616) using the initial-response form.
@@ -214,6 +267,64 @@ impl<T: Transport> SmtpClient<T> {
             .await
             .map_err(convert_auth)?;
         Ok(())
+    }
+
+    /// `AUTH XOAUTH2` exchange (Google / Microsoft).
+    ///
+    /// Wire form:
+    /// `C: AUTH XOAUTH2 <b64("user="user SOH "auth=Bearer "token SOH SOH)>`
+    /// → `S: 235` on success.
+    ///
+    /// On failure, RFC 7628-style providers send `334 <b64(json)>` first
+    /// and expect the client to reply with an empty line; the server
+    /// then sends the final 5xx. We follow that protocol so the JSON
+    /// error detail (containing `scope`, `error`, etc.) ends up in the
+    /// final reply text and is preserved in [`AuthError::Rejected`].
+    async fn run_auth_xoauth2(&mut self, user: &str, token: &str) -> Result<(), SmtpError> {
+        let response = protocol::build_xoauth2_initial_response(user, token);
+        let mut cmd = String::with_capacity(13 + response.len() + 2);
+        cmd.push_str("AUTH XOAUTH2 ");
+        cmd.push_str(&response);
+        cmd.push_str("\r\n");
+        self.write_all(cmd.as_bytes()).await?;
+
+        // Read the first reply. 235 is direct success; 334 indicates the
+        // provider is sending JSON error details and expects an empty
+        // continuation line, after which a final 5xx arrives.
+        let reply = self.read_reply().await?;
+        match reply.code {
+            235 => Ok(()),
+            334 => {
+                // Provider-supplied error detail. Send an empty continuation
+                // line so the provider can finalize with a proper 5xx.
+                self.write_all(b"\r\n").await?;
+                let final_reply = self.read_reply().await?;
+                self.mark_closed_on_logical_failure();
+                Err(SmtpError::Auth(AuthError::Rejected {
+                    code: final_reply.code,
+                    enhanced: final_reply.enhanced(),
+                    message: final_reply.joined_text(),
+                }))
+            }
+            other => {
+                self.mark_closed_on_logical_failure();
+                Err(if (500..600).contains(&other) {
+                    SmtpError::Auth(AuthError::Rejected {
+                        code: other,
+                        enhanced: reply.enhanced(),
+                        message: reply.joined_text(),
+                    })
+                } else {
+                    SmtpError::Protocol(ProtocolError::UnexpectedCode {
+                        during: SmtpOp::AuthXOAuth2,
+                        expected_class: 2,
+                        actual: other,
+                        enhanced: reply.enhanced(),
+                        message: reply.joined_text(),
+                    })
+                })
+            }
+        }
     }
 
     /// Send a single message.
@@ -310,6 +421,7 @@ impl<T: Transport> SmtpClient<T> {
                 during: SmtpOp::Greeting,
                 expected_class: 2,
                 actual: reply.code,
+                enhanced: reply.enhanced(),
                 message: reply.joined_text(),
             }
             .into());
@@ -327,6 +439,7 @@ impl<T: Transport> SmtpClient<T> {
                 during: SmtpOp::Ehlo,
                 expected_class: 2,
                 actual: reply.code,
+                enhanced: reply.enhanced(),
                 message: reply.joined_text(),
             }
             .into());
@@ -337,6 +450,11 @@ impl<T: Transport> SmtpClient<T> {
         if !lines.is_empty() {
             lines.remove(0);
         }
+        // Refresh ENHANCEDSTATUSCODES enablement from the post-EHLO
+        // capability set. Doing this BEFORE assigning self.capabilities
+        // is the cleanest order; it also keeps enabledness false if the
+        // capability is dropped on a re-EHLO (e.g. after STARTTLS).
+        self.enhanced_status_enabled = ehlo_advertises_enhanced_status_codes(&lines);
         self.capabilities = lines;
         self.transition(SessionState::Authentication)?;
         Ok(())
@@ -367,6 +485,7 @@ impl<T: Transport> SmtpClient<T> {
                 during,
                 expected_class: class,
                 actual: reply.code,
+                enhanced: reply.enhanced(),
                 message: reply.joined_text(),
             }
             .into())
@@ -390,6 +509,7 @@ impl<T: Transport> SmtpClient<T> {
                 during,
                 expected_class,
                 actual: reply.code,
+                enhanced: reply.enhanced(),
                 message: reply.joined_text(),
             }
             .into())
@@ -430,7 +550,13 @@ impl<T: Transport> SmtpClient<T> {
             lines.push(String::from_utf8_lossy(parsed.text).into_owned());
             if parsed.is_last {
                 let code = code.expect("at least one line was read so code has been initialised");
-                return Ok(Reply { code, lines });
+                let mut reply = Reply::new(code, lines);
+                if self.enhanced_status_enabled
+                    && let Some(status) = reply.try_parse_enhanced()
+                {
+                    reply.attach_enhanced_status(status);
+                }
+                return Ok(reply);
             }
         }
     }
@@ -619,9 +745,13 @@ fn find_crlf(buf: &[u8]) -> Option<usize> {
 fn convert_auth(err: SmtpError) -> SmtpError {
     match err {
         SmtpError::Protocol(ProtocolError::UnexpectedCode {
-            actual, message, ..
+            actual,
+            enhanced,
+            message,
+            ..
         }) if (500..600).contains(&actual) => SmtpError::Auth(AuthError::Rejected {
             code: actual,
+            enhanced,
             message,
         }),
         other => other,
