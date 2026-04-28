@@ -57,7 +57,26 @@ match err {
 ```
 
 The enum is `non_exhaustive`, so future SMTP extensions can add
-variants (e.g. `STARTTLS`) without breaking source compatibility.
+variants without breaking source compatibility. As of v0.2.0, the
+crate uses this to add `ProtocolError::ExtensionUnavailable` and
+`SessionState::StartTls` without forcing a major bump.
+
+## STARTTLS-specific errors
+
+Two `ProtocolError` variants are observable only on the STARTTLS
+flow:
+
+- `ProtocolError::ExtensionUnavailable { name: "STARTTLS" }` — the
+  caller asked to upgrade with `starttls()` (or via
+  `connect_starttls`), but the server's `EHLO` reply did not list
+  `STARTTLS` among its capabilities. The session is moved to
+  `Closed` to prevent accidental fallback to plaintext.
+- `ProtocolError::UnexpectedCode { during: SmtpOp::StartTls, .. }`
+  — the server rejected the `STARTTLS` command with a non-220 reply.
+
+Transport-level upgrade failures (e.g. the TLS handshake itself
+fails, or `worker::Socket::start_tls` returns an error) surface as
+`SmtpError::Io`, just like any other transport failure.
 
 ## Handling
 

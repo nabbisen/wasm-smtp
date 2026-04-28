@@ -131,8 +131,8 @@ impl StdError for IoError {}
 /// state machine.
 ///
 /// The enum is `non_exhaustive` so that future SMTP extensions (e.g.
-/// `STARTTLS`, `AUTH XOAUTH2`) can add a variant without forcing a
-/// major version bump.
+/// `AUTH XOAUTH2`) can add a variant without forcing a major version
+/// bump.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SmtpOp {
@@ -141,6 +141,9 @@ pub enum SmtpOp {
     Greeting,
     /// `EHLO` and the capability negotiation that follows.
     Ehlo,
+    /// `STARTTLS` command and the `220` reply that precedes the TLS
+    /// handshake (RFC 3207).
+    StartTls,
     /// `AUTH PLAIN` (RFC 4616) initial-response exchange.
     AuthPlain,
     /// `AUTH LOGIN` exchange (any of its three round-trips).
@@ -166,6 +169,7 @@ impl SmtpOp {
         match self {
             Self::Greeting => "greeting",
             Self::Ehlo => "EHLO",
+            Self::StartTls => "STARTTLS",
             Self::AuthPlain => "AUTH PLAIN",
             Self::AuthLogin => "AUTH LOGIN",
             Self::MailFrom => "MAIL FROM",
@@ -183,7 +187,11 @@ impl fmt::Display for SmtpOp {
 }
 
 /// A wire-format failure or an unexpected response from the server.
+///
+/// This enum is `non_exhaustive` so that future SMTP extensions can add
+/// new failure modes without forcing a major version bump.
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum ProtocolError {
     /// The server returned a reply whose code class did not match what the
     /// state machine required at this point.
@@ -224,6 +232,16 @@ pub enum ProtocolError {
         /// The differing code observed on a later line.
         later: u16,
     },
+    /// The client requested an SMTP extension that the server did not
+    /// advertise in its `EHLO` response.
+    ///
+    /// Today this is raised only when the caller asks for `STARTTLS` but
+    /// the server's `EHLO` capability list does not include it.
+    ExtensionUnavailable {
+        /// The extension keyword as it would appear in `EHLO`
+        /// (e.g. `"STARTTLS"`).
+        name: &'static str,
+    },
 }
 
 impl fmt::Display for ProtocolError {
@@ -243,6 +261,9 @@ impl fmt::Display for ProtocolError {
             Self::LineTooLong => f.write_str("server reply line exceeded SMTP line-length limit"),
             Self::InconsistentMultiline { first, later } => {
                 write!(f, "multi-line reply mixed codes {first} and {later}",)
+            }
+            Self::ExtensionUnavailable { name } => {
+                write!(f, "server did not advertise the {name} extension")
             }
         }
     }

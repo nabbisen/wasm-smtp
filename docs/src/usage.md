@@ -55,6 +55,55 @@ is ready for another transaction. RFC 5321 §3.3 explicitly allows this,
 and many submission servers will be more efficient if you batch
 messages on a single connection.
 
+## STARTTLS (port 587)
+
+For submission servers that require an in-place TLS upgrade rather
+than Implicit TLS on port 465, use the STARTTLS flow. The transport
+must be one that implements `StartTlsCapable` (the Cloudflare adapter
+does, when constructed via `connect_starttls`).
+
+The convenience entry point performs the entire upgrade in one call:
+
+```rust
+use wasm_smtp_core::{SmtpClient, SmtpError, StartTlsCapable, Transport};
+
+async fn send_via_starttls<T: StartTlsCapable>(transport: T) -> Result<(), SmtpError> {
+    // Plaintext connect, EHLO, STARTTLS, transport upgrade, re-EHLO.
+    let mut client = SmtpClient::connect_starttls(transport, "client.example.com").await?;
+    // The client is now in Authentication state on the upgraded stream.
+    client.login("user@example.com", "secret").await?;
+    // ... usual send_mail / quit
+    # Ok(())
+}
+```
+
+If you want to inspect the pre-TLS capabilities first (or take some
+runtime decision based on them) the explicit two-call form is also
+available:
+
+```rust
+let mut client = SmtpClient::connect(transport, "client.example.com").await?;
+// Pre-TLS capabilities are visible here.
+if client.capabilities().iter().any(|c| c.eq_ignore_ascii_case("STARTTLS")) {
+    client.starttls().await?;
+}
+// After starttls() the post-TLS capabilities have replaced the pre-TLS ones.
+client.login("user@example.com", "secret").await?;
+```
+
+The state machine enforces ordering: `starttls()` may be called only
+immediately after `connect()`, and is rejected with `InvalidInput`
+once `login` or `send_mail` has been called. Per RFC 3207 §4.2 the
+client re-issues `EHLO` after the upgrade, which `wasm-smtp-core`
+does for you — the post-TLS capability list is visible via
+`client.capabilities()` after `starttls()` returns.
+
+If the server does not advertise `STARTTLS`, `starttls()` returns
+`ProtocolError::ExtensionUnavailable { name: "STARTTLS" }` and moves
+the client to `Closed` rather than silently falling through to
+plaintext. This is deliberate: a caller that asked for STARTTLS
+should never end up authenticating in cleartext.
+
 ## Skipping authentication
 
 For a relay that does not require authentication:

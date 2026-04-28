@@ -25,10 +25,13 @@ constrained runtime: contact-form delivery, password resets, alert
 notifications, and similar single-message submissions on behalf of a
 single application owner. The project standardizes on:
 
-- **Implicit TLS on port 465.** STARTTLS is intentionally out of scope
-  for the initial release.
-- **`AUTH LOGIN` for authenticated submission.** `AUTH PLAIN` is on the
-  roadmap; SASL SCRAM, GSSAPI, etc. are not.
+- **Implicit TLS on port 465 and STARTTLS on port 587.** Both
+  submission models are supported. The TLS handshake itself is the
+  transport's responsibility; the core sees an opaque byte stream
+  and (for STARTTLS) a single upgrade signal.
+- **`AUTH PLAIN` and `AUTH LOGIN` for authenticated submission.** The
+  client auto-selects the best mechanism advertised by the server.
+  SASL SCRAM, GSSAPI, XOAUTH2 are not supported.
 - **Caller-supplied message bodies.** The library does not build MIME,
   attach files, or compose multipart payloads. The body is whatever
   RFC 5322 / 5321 octets the caller passes, optionally CRLF-normalized,

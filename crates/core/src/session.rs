@@ -11,21 +11,31 @@
 //!
 //! ```text
 //!   Greeting --> Ehlo --> Authentication --> MailFrom --> RcptTo --> Data
-//!                  \                            ^             |        |
-//!                   \---------------------------|             |        v
-//!                     (skip auth)               |             |       Quit
-//!                                               |             v        |
-//!                                               |          MailFrom    v
-//!                                               |          (next msg) Closed
-//!                                               |
-//!                                            (loop for more recipients)
+//!                  ^         |   \                ^             |        |
+//!                  |         |    \               |             |        v
+//!         (re-EHLO |         |     \--------------|             |       Quit
+//!          after   |         |        (skip auth) |             |        |
+//!          TLS)    v         v                    |             v        v
+//!               StartTls<----+                    |         MailFrom   Closed
+//!                                                 |         (next msg)
+//!                                              (loop for more recipients)
 //! ```
+//!
+//! `StartTls` is only entered when the caller invokes
+//! [`crate::SmtpClient::starttls`] on a transport that implements
+//! [`crate::transport::StartTlsCapable`]. After the TLS handshake completes
+//! the state machine transitions back to `Ehlo` to re-issue the greeting
+//! per RFC 3207 §4.2, and from there to `Authentication`.
 //!
 //! Any state may also transition directly to `Quit` and then `Closed` on a
 //! caller-initiated shutdown or to `Closed` on a fatal error.
 
 /// The phases of an SMTP exchange tracked by the client.
+///
+/// This enum is `non_exhaustive` so that future SMTP extensions can add
+/// new phases without forcing a major version bump.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
 pub enum SessionState {
     /// Connection has been established but the server greeting has not yet
     /// been read.
@@ -35,6 +45,10 @@ pub enum SessionState {
     Ehlo,
     /// `EHLO` has succeeded. Authentication may be performed, or skipped.
     Authentication,
+    /// `STARTTLS` has been issued and accepted (`220` from server). The
+    /// transport is being upgraded; on success the state moves to `Ehlo`
+    /// to re-issue the greeting per RFC 3207 §4.2.
+    StartTls,
     /// Ready to issue `MAIL FROM` for a new transaction.
     MailFrom,
     /// `MAIL FROM` has been accepted; ready to issue `RCPT TO`.
@@ -67,7 +81,9 @@ impl SessionState {
     // suppress `match_same_arms` for this function only.
     #[allow(clippy::match_same_arms)]
     pub const fn can_transition_to(self, next: Self) -> bool {
-        use SessionState::{Authentication, Closed, Data, Ehlo, Greeting, MailFrom, Quit, RcptTo};
+        use SessionState::{
+            Authentication, Closed, Data, Ehlo, Greeting, MailFrom, Quit, RcptTo, StartTls,
+        };
         match (self, next) {
             // The transport may close at any time, in which case the client
             // marks itself Closed.
@@ -77,6 +93,12 @@ impl SessionState {
             // Normal forward progression.
             (Greeting, Ehlo) => true,
             (Ehlo, Authentication) => true,
+            // STARTTLS path: after EHLO succeeds the caller may upgrade.
+            (Authentication, StartTls) => true,
+            // After the TLS upgrade we go back to Ehlo so RFC 3207's
+            // re-EHLO requirement is captured by the same code path that
+            // handles the initial EHLO.
+            (StartTls, Ehlo) => true,
             // Authentication is optional: we can skip from Ehlo straight to
             // MailFrom for unauthenticated submission, jump from
             // Authentication to MailFrom after a successful login, or

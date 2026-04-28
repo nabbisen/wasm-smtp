@@ -30,6 +30,16 @@ three async methods: `read`, `write_all`, and `close`. The trait is
 intentionally minimal so that any runtime, real or mocked, can satisfy
 it.
 
+Transports that need to support STARTTLS (RFC 3207) additionally
+implement the `StartTlsCapable` sub-trait, whose single method
+`upgrade_to_tls` is invoked by `SmtpClient::starttls()` after the
+server has accepted the `STARTTLS` command. Keeping this on a
+separate trait means: (a) Implicit-TLS-only transports compile
+without any STARTTLS scaffolding, (b) calling `starttls()` on an
+incompatible transport is a compile-time error, and (c) the core
+state machine is the same regardless of which TLS model the caller
+chose — the transport handles all of the bytes-on-the-wire details.
+
 `wasm-smtp-cloudflare` is the first concrete adapter. It will translate
 between Cloudflare Workers' `Socket` (and its `ReadableStream` /
 `WritableStream` halves) and the `Transport` trait. It does no SMTP

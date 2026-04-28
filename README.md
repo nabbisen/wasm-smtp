@@ -70,10 +70,17 @@ MIME, attach files, or compose multipart bodies.
 
 ## Connection model
 
-This release standardizes on **Implicit TLS on port 465**. STARTTLS is
-intentionally out of scope. The TLS handshake is the responsibility of
-the [`Transport`] implementation; the core sees an already-secure byte
-stream.
+Two TLS models are supported:
+
+- **Implicit TLS** on port 465 — the runtime negotiates TLS before any
+  SMTP byte is exchanged. Use `connect_smtps`.
+- **STARTTLS** on port 587 — the connection starts plaintext and is
+  upgraded to TLS in-place after the SMTP greeting. Use
+  `connect_smtp_starttls`.
+
+In both cases the TLS handshake is the responsibility of the
+[`Transport`] implementation; `wasm-smtp-core` sees an opaque byte
+stream and (for STARTTLS) a single `upgrade_to_tls()` signal.
 
 ## Acceptable use
 

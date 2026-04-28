@@ -30,13 +30,23 @@
 
 mod harness {
     use crate::error::IoError;
-    use crate::transport::Transport;
+    use crate::transport::{StartTlsCapable, Transport};
     use core::future::Future;
     use core::pin::pin;
     use core::task::{Context, Poll, Waker};
     use std::cell::RefCell;
     use std::collections::VecDeque;
     use std::rc::Rc;
+
+    /// Behavior of [`MockTransport`]'s STARTTLS upgrade. Tests configure
+    /// this when building the transport.
+    #[derive(Debug, Clone)]
+    pub enum UpgradeBehavior {
+        /// `upgrade_to_tls()` returns `Ok(())`.
+        Succeed,
+        /// `upgrade_to_tls()` returns `Err` with this message.
+        Fail(&'static str),
+    }
 
     /// Drive a future to completion using a no-op waker.
     ///
@@ -58,6 +68,17 @@ mod harness {
     /// returned by [`MockTransport::new`].
     pub type MockHandles = (MockTransport, Rc<RefCell<Vec<u8>>>, Rc<RefCell<bool>>);
 
+    /// Quadruple returned by [`MockTransport::with_starttls`]: the
+    /// transport, the captured-bytes handle, the close flag, and a
+    /// counter that is incremented each time `upgrade_to_tls()` is
+    /// invoked.
+    pub type MockStartTlsHandles = (
+        MockTransport,
+        Rc<RefCell<Vec<u8>>>,
+        Rc<RefCell<bool>>,
+        Rc<RefCell<u32>>,
+    );
+
     /// Synchronous mock transport.
     ///
     /// `incoming` is a queue of byte chunks; each chunk is one "wire
@@ -72,6 +93,11 @@ mod harness {
         incoming: VecDeque<Vec<u8>>,
         written: Rc<RefCell<Vec<u8>>>,
         closed: Rc<RefCell<bool>>,
+        /// Number of times `upgrade_to_tls()` has been called. Incremented
+        /// whether the call succeeds or fails.
+        upgrades: Rc<RefCell<u32>>,
+        /// Configured behavior for `upgrade_to_tls()`.
+        upgrade_behavior: UpgradeBehavior,
     }
 
     impl MockTransport {
@@ -79,9 +105,26 @@ mod harness {
         /// chunk corresponds to one "wire packet". Returns the transport
         /// together with shared handles to the captured outgoing bytes
         /// and the close flag.
+        ///
+        /// The transport's `upgrade_to_tls()` succeeds by default but is
+        /// not exposed; tests that exercise STARTTLS should use
+        /// [`Self::with_starttls`] instead.
         pub fn new(chunks: &[&[u8]]) -> MockHandles {
+            let (t, w, c, _u) = Self::build(chunks, UpgradeBehavior::Succeed);
+            (t, w, c)
+        }
+
+        /// Construct a mock transport that exposes its STARTTLS upgrade
+        /// counter, allowing tests to assert that `upgrade_to_tls()` was
+        /// called the expected number of times.
+        pub fn with_starttls(chunks: &[&[u8]], behavior: UpgradeBehavior) -> MockStartTlsHandles {
+            Self::build(chunks, behavior)
+        }
+
+        fn build(chunks: &[&[u8]], behavior: UpgradeBehavior) -> MockStartTlsHandles {
             let written = Rc::new(RefCell::new(Vec::new()));
             let closed = Rc::new(RefCell::new(false));
+            let upgrades = Rc::new(RefCell::new(0u32));
             let mut q: VecDeque<Vec<u8>> = VecDeque::new();
             for c in chunks {
                 q.push_back((*c).to_vec());
@@ -91,9 +134,12 @@ mod harness {
                     incoming: q,
                     written: Rc::clone(&written),
                     closed: Rc::clone(&closed),
+                    upgrades: Rc::clone(&upgrades),
+                    upgrade_behavior: behavior,
                 },
                 written,
                 closed,
+                upgrades,
             )
         }
     }
@@ -123,6 +169,16 @@ mod harness {
         }
     }
 
+    impl StartTlsCapable for MockTransport {
+        async fn upgrade_to_tls(&mut self) -> Result<(), IoError> {
+            *self.upgrades.borrow_mut() += 1;
+            match &self.upgrade_behavior {
+                UpgradeBehavior::Succeed => Ok(()),
+                UpgradeBehavior::Fail(msg) => Err(IoError::new(*msg)),
+            }
+        }
+    }
+
     /// Concatenate several byte slices into one. Useful for assembling a
     /// scripted server reply that must be delivered in a single chunk.
     pub fn flatten(parts: &[&[u8]]) -> Vec<u8> {
@@ -142,10 +198,10 @@ mod protocol_tests {
     use crate::error::ProtocolError;
     use crate::protocol::{
         AuthMechanism, Reply, base64_encode, build_auth_plain_initial_response,
-        dot_stuff_and_terminate, ehlo_advertises_auth, format_command, format_command_arg,
-        format_mail_from, format_rcpt_to, parse_reply_line, select_auth_mechanism,
-        validate_address, validate_ehlo_domain, validate_login_password, validate_login_username,
-        validate_plain_password, validate_plain_username,
+        dot_stuff_and_terminate, ehlo_advertises_auth, ehlo_advertises_starttls, format_command,
+        format_command_arg, format_mail_from, format_rcpt_to, parse_reply_line,
+        select_auth_mechanism, validate_address, validate_ehlo_domain, validate_login_password,
+        validate_login_username, validate_plain_password, validate_plain_username,
     };
 
     // -- parse_reply_line ----------------------------------------------------
@@ -464,6 +520,39 @@ mod protocol_tests {
         assert!(!ehlo_advertises_auth(&lines, "LOGIN"));
     }
 
+    // -- ehlo_advertises_starttls -----------------------------------------
+
+    #[test]
+    fn ehlo_advertises_starttls_finds_listed_extension() {
+        let lines: Vec<String> = vec!["PIPELINING".into(), "STARTTLS".into(), "8BITMIME".into()];
+        assert!(ehlo_advertises_starttls(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_starttls_is_case_insensitive() {
+        let lines: Vec<String> = vec!["starttls".into()];
+        assert!(ehlo_advertises_starttls(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_starttls_returns_false_when_absent() {
+        let lines: Vec<String> = vec!["PIPELINING".into(), "AUTH PLAIN".into()];
+        assert!(!ehlo_advertises_starttls(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_starttls_handles_empty_caps() {
+        let lines: Vec<String> = Vec::new();
+        assert!(!ehlo_advertises_starttls(&lines));
+    }
+
+    #[test]
+    fn ehlo_advertises_starttls_does_not_match_substrings() {
+        // `STARTTLS-FOO` (hypothetical) shouldn't match `STARTTLS` exactly.
+        let lines: Vec<String> = vec!["STARTTLSPLUS".into()];
+        assert!(!ehlo_advertises_starttls(&lines));
+    }
+
     // -- AUTH PLAIN ---------------------------------------------------------
 
     #[test]
@@ -618,7 +707,7 @@ mod protocol_tests {
 
 mod session_tests {
     use crate::session::SessionState::{
-        Authentication, Closed, Data, Ehlo, Greeting, MailFrom, Quit, RcptTo,
+        Authentication, Closed, Data, Ehlo, Greeting, MailFrom, Quit, RcptTo, StartTls,
     };
 
     #[test]
@@ -662,6 +751,7 @@ mod session_tests {
             Greeting,
             Ehlo,
             Authentication,
+            StartTls,
             MailFrom,
             RcptTo,
             Data,
@@ -689,8 +779,55 @@ mod session_tests {
     #[test]
     fn closed_is_the_only_terminal_state() {
         assert!(Closed.is_terminal());
-        for s in [Greeting, Ehlo, Authentication, MailFrom, RcptTo, Data, Quit] {
+        for s in [
+            Greeting,
+            Ehlo,
+            Authentication,
+            StartTls,
+            MailFrom,
+            RcptTo,
+            Data,
+            Quit,
+        ] {
             assert!(!s.is_terminal(), "{s:?} should not be terminal");
+        }
+    }
+
+    // -- STARTTLS transitions (Phase 5) -----------------------------------
+
+    #[test]
+    fn starttls_is_reachable_from_authentication_only() {
+        // The caller may upgrade only after EHLO completed.
+        assert!(Authentication.can_transition_to(StartTls));
+        // Other states must not jump straight into StartTls.
+        for from in [Greeting, Ehlo, MailFrom, RcptTo, Data, Quit, Closed] {
+            assert!(
+                !from.can_transition_to(StartTls),
+                "{from:?} should not be able to enter StartTls"
+            );
+        }
+    }
+
+    #[test]
+    fn starttls_returns_to_ehlo_after_upgrade() {
+        // RFC 3207 §4.2: the client must re-issue EHLO on the secure
+        // channel. The state machine models this by passing through
+        // Ehlo on the way back.
+        assert!(StartTls.can_transition_to(Ehlo));
+        // From Ehlo we can resume the normal flow.
+        assert!(Ehlo.can_transition_to(Authentication));
+    }
+
+    #[test]
+    fn starttls_cannot_skip_to_later_states() {
+        // After upgrading we must still re-EHLO before talking auth or
+        // MAIL FROM. Skipping Ehlo would mean the new (post-TLS)
+        // capabilities are unknown.
+        for to in [Authentication, MailFrom, RcptTo, Data, Quit] {
+            assert!(
+                !StartTls.can_transition_to(to),
+                "StartTls should not skip directly to {to:?}"
+            );
         }
     }
 }
@@ -791,7 +928,7 @@ mod error_tests {
 // ---------------------------------------------------------------------------
 
 mod client_tests {
-    use super::harness::{MockTransport, block_on, flatten};
+    use super::harness::{MockTransport, UpgradeBehavior, block_on, flatten};
     use crate::client::SmtpClient;
     use crate::error::{AuthError, ProtocolError, SmtpError, SmtpOp};
     use crate::protocol::AuthMechanism;
@@ -1458,5 +1595,222 @@ mod client_tests {
         let mut client = block_on(SmtpClient::connect(transport, "c.example")).expect("connect");
         let err = block_on(client.login("user", "pass")).expect_err("must fail");
         assert_eq!(during_of(err), SmtpOp::AuthPlain);
+    }
+
+    // -- STARTTLS (Phase 5) -----------------------------------------------
+
+    /// Standard STARTTLS-capable server script: plain greeting, plain EHLO
+    /// advertising STARTTLS, 220 on STARTTLS, then a fresh EHLO reply (the
+    /// post-TLS one, with new capabilities).
+    fn starttls_greeting_and_upgrade() -> Vec<u8> {
+        flatten(&[
+            // Plaintext greeting.
+            b"220 mail.example.com ESMTP\r\n",
+            // First EHLO reply: includes STARTTLS, no AUTH advertised yet.
+            b"250-mail.example.com\r\n",
+            b"250-PIPELINING\r\n",
+            b"250 STARTTLS\r\n",
+            // STARTTLS accepted.
+            b"220 ready to start TLS\r\n",
+            // Second EHLO reply (post-TLS): now AUTH is advertised.
+            b"250-mail.example.com\r\n",
+            b"250-PIPELINING\r\n",
+            b"250 AUTH PLAIN LOGIN\r\n",
+        ])
+    }
+
+    #[test]
+    fn connect_starttls_runs_full_upgrade_sequence() {
+        let (transport, written, _closed, upgrades) = MockTransport::with_starttls(
+            &[&starttls_greeting_and_upgrade()[..]],
+            UpgradeBehavior::Succeed,
+        );
+        let client = block_on(SmtpClient::connect_starttls(transport, "client.example"))
+            .expect("connect_starttls");
+
+        // After the full upgrade we should be in Authentication, with the
+        // POST-TLS capability set advertised.
+        assert_eq!(client.state(), SessionState::Authentication);
+        let caps = client.capabilities();
+        assert_eq!(caps.len(), 2);
+        assert_eq!(caps[0], "PIPELINING");
+        assert_eq!(caps[1], "AUTH PLAIN LOGIN");
+
+        // Wire bytes: EHLO, STARTTLS, EHLO again. No AUTH yet.
+        let expected = b"EHLO client.example\r\n\
+                         STARTTLS\r\n\
+                         EHLO client.example\r\n";
+        assert_eq!(&*written.borrow(), expected);
+
+        // The transport upgrade must have been invoked exactly once.
+        assert_eq!(*upgrades.borrow(), 1);
+    }
+
+    #[test]
+    fn starttls_then_login_uses_post_tls_capabilities() {
+        // After STARTTLS the second EHLO reveals AUTH PLAIN, which login()
+        // must pick up. This proves we discard the pre-TLS capabilities
+        // and parse the new ones.
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 STARTTLS\r\n",
+            b"220 ready\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 AUTH PLAIN\r\n",
+            b"235 OK\r\n",
+        ]);
+        let (transport, written, _c, _u) =
+            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+        let mut client = block_on(SmtpClient::connect_starttls(transport, "c.example"))
+            .expect("connect_starttls");
+        block_on(client.login("user", "pass")).expect("login");
+
+        let expected = b"EHLO c.example\r\n\
+                         STARTTLS\r\n\
+                         EHLO c.example\r\n\
+                         AUTH PLAIN AHVzZXIAcGFzcw==\r\n";
+        assert_eq!(&*written.borrow(), expected);
+        assert_eq!(client.state(), SessionState::MailFrom);
+    }
+
+    #[test]
+    fn starttls_fails_when_extension_not_advertised() {
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            // No STARTTLS in caps.
+            b"250-mail.example.com\r\n",
+            b"250 8BITMIME\r\n",
+        ]);
+        let (transport, written, _c, upgrades) =
+            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+        let pre_upgrade_writes_len = 0;
+        let err =
+            block_on(SmtpClient::connect_starttls(transport, "c.example")).expect_err("must fail");
+
+        match err {
+            SmtpError::Protocol(ProtocolError::ExtensionUnavailable { name }) => {
+                assert_eq!(name, "STARTTLS");
+            }
+            other => panic!("expected ExtensionUnavailable, got {other:?}"),
+        }
+        // We sent the EHLO but nothing else: STARTTLS was never written.
+        assert_eq!(&*written.borrow(), b"EHLO c.example\r\n");
+        assert!(written.borrow().len() > pre_upgrade_writes_len);
+        // upgrade_to_tls() must NOT have been called.
+        assert_eq!(*upgrades.borrow(), 0);
+    }
+
+    #[test]
+    fn starttls_fails_when_server_rejects_command() {
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 STARTTLS\r\n",
+            // Server rejects STARTTLS with a 5xx (atypical but observable).
+            b"502 STARTTLS not configured\r\n",
+        ]);
+        let (transport, _w, _c, upgrades) =
+            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+        let err =
+            block_on(SmtpClient::connect_starttls(transport, "c.example")).expect_err("must fail");
+
+        match err {
+            SmtpError::Protocol(ProtocolError::UnexpectedCode { during, actual, .. }) => {
+                assert_eq!(during, SmtpOp::StartTls);
+                assert_eq!(actual, 502);
+            }
+            other => panic!("expected UnexpectedCode for StartTls, got {other:?}"),
+        }
+        // The transport must NOT have been upgraded: the server refused.
+        assert_eq!(*upgrades.borrow(), 0);
+    }
+
+    #[test]
+    fn starttls_propagates_transport_upgrade_failure_as_io_error() {
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 STARTTLS\r\n",
+            b"220 ready\r\n",
+        ]);
+        let (transport, _w, _c, upgrades) = MockTransport::with_starttls(
+            &[&script[..]],
+            UpgradeBehavior::Fail("simulated TLS handshake failure"),
+        );
+        let err =
+            block_on(SmtpClient::connect_starttls(transport, "c.example")).expect_err("must fail");
+
+        match err {
+            SmtpError::Io(e) => {
+                assert!(format!("{e}").contains("TLS handshake"));
+            }
+            other => panic!("expected Io for upgrade failure, got {other:?}"),
+        }
+        // The upgrade was attempted exactly once.
+        assert_eq!(*upgrades.borrow(), 1);
+    }
+
+    #[test]
+    fn explicit_starttls_method_works_post_connect() {
+        // Same flow but reached via the explicit two-call API:
+        // SmtpClient::connect() then client.starttls(). This is the
+        // path callers use when they want to inspect capabilities first.
+        let (transport, written, _c, _u) = MockTransport::with_starttls(
+            &[&starttls_greeting_and_upgrade()[..]],
+            UpgradeBehavior::Succeed,
+        );
+        let mut client =
+            block_on(SmtpClient::connect(transport, "client.example")).expect("connect");
+        // Pre-STARTTLS capabilities visible to the caller.
+        assert!(client.capabilities().iter().any(|c| c == "STARTTLS"));
+        block_on(client.starttls()).expect("starttls");
+        // Post-STARTTLS capabilities have replaced the pre-TLS ones.
+        assert!(
+            client
+                .capabilities()
+                .iter()
+                .any(|c| c == "AUTH PLAIN LOGIN"),
+            "post-TLS caps should include AUTH advertisement: {:?}",
+            client.capabilities()
+        );
+        assert!(
+            !client.capabilities().iter().any(|c| c == "STARTTLS"),
+            "STARTTLS should not appear in post-TLS caps: {:?}",
+            client.capabilities()
+        );
+        assert_eq!(client.state(), SessionState::Authentication);
+
+        // Bytes match the all-in-one connect_starttls test.
+        assert_eq!(
+            &*written.borrow(),
+            b"EHLO client.example\r\nSTARTTLS\r\nEHLO client.example\r\n"
+        );
+    }
+
+    #[test]
+    fn starttls_rejects_call_after_login() {
+        // STARTTLS must be issued BEFORE auth. Calling it after login()
+        // is a programming error and must return InvalidInput.
+        let script = flatten(&[
+            b"220 mail.example.com ESMTP\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 STARTTLS\r\n",
+            b"220 ready\r\n",
+            b"250-mail.example.com\r\n",
+            b"250 AUTH PLAIN\r\n",
+            b"235 OK\r\n",
+        ]);
+        let (transport, _w, _c, upgrades) =
+            MockTransport::with_starttls(&[&script[..]], UpgradeBehavior::Succeed);
+        let mut client = block_on(SmtpClient::connect_starttls(transport, "c.example"))
+            .expect("connect_starttls");
+        block_on(client.login("user", "pass")).expect("login");
+
+        // Now the second starttls() must be refused.
+        let err = block_on(client.starttls()).expect_err("must fail");
+        assert!(matches!(err, SmtpError::InvalidInput(_)));
+        // No additional upgrade was attempted.
+        assert_eq!(*upgrades.borrow(), 1);
     }
 }

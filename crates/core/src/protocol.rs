@@ -374,6 +374,23 @@ pub fn ehlo_advertises_auth<S: AsRef<str>>(capability_lines: &[S], mechanism: &s
     false
 }
 
+/// Return `true` if the EHLO capability lines advertise the `STARTTLS`
+/// extension (RFC 3207). The check is case-insensitive on the keyword.
+///
+/// `capability_lines` is the slice of lines that follows the greeting in
+/// an `EHLO` reply; each line is one extension keyword optionally
+/// followed by parameters.
+pub fn ehlo_advertises_starttls<S: AsRef<str>>(capability_lines: &[S]) -> bool {
+    for line in capability_lines {
+        if let Some(head) = line.as_ref().split_ascii_whitespace().next()
+            && head.eq_ignore_ascii_case("STARTTLS")
+        {
+            return true;
+        }
+    }
+    false
+}
+
 // -----------------------------------------------------------------------------
 // Authentication mechanisms
 // -----------------------------------------------------------------------------

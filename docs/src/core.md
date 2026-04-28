@@ -8,17 +8,20 @@ that shaped it.
 
 ```rust
 pub use client::SmtpClient;
-pub use error::{AuthError, InvalidInputError, IoError, ProtocolError, SmtpError};
+pub use error::{
+    AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp,
+};
+pub use protocol::AuthMechanism;
 pub use session::SessionState;
-pub use transport::Transport;
+pub use transport::{StartTlsCapable, Transport};
 ```
 
-The five types together constitute the entire public API of the crate.
+These types together constitute the entire public API of the crate.
 There is no separate "builder", no separate "config", no separate
 "low-level" interface. The intent is that anyone reading `lib.rs` can
 hold the entire surface in their head.
 
-## `Transport`
+## `Transport` and `StartTlsCapable`
 
 ```rust
 pub trait Transport {
@@ -26,9 +29,13 @@ pub trait Transport {
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError>;
     async fn close(&mut self) -> Result<(), IoError>;
 }
+
+pub trait StartTlsCapable: Transport {
+    async fn upgrade_to_tls(&mut self) -> Result<(), IoError>;
+}
 ```
 
-The trait is the single I/O contract between the core and the host
+`Transport` is the single I/O contract between the core and the host
 runtime. `read` returning `Ok(0)` means the peer cleanly closed the
 connection; the state machine treats this as
 `ProtocolError::UnexpectedClose` if a reply was still being assembled.
@@ -36,6 +43,11 @@ connection; the state machine treats this as
 calls it once per command. `close` is independent of the SMTP-level
 `QUIT`: `QUIT` says "I'm done with the SMTP session"; `close` says "I'm
 done with the underlying socket".
+
+`StartTlsCapable` is an opt-in extension of `Transport` for transports
+that can be upgraded to TLS in-place. Implementing it unlocks
+`SmtpClient::starttls()` and `SmtpClient::connect_starttls()` at
+compile time. Implicit-TLS-only transports need not implement it.
 
 ## `SmtpClient`
 

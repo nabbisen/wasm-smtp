@@ -178,6 +178,49 @@ and ready for another transaction. RFC 5321 §3.3 explicitly permits
 this, and many submission servers process subsequent transactions on
 an open connection more efficiently than on fresh ones.
 
+## STARTTLS submission (port 587)
+
+For relays that listen on port 587 with the STARTTLS upgrade flow
+rather than Implicit TLS on 465, swap `connect_smtps` for
+`connect_smtp_starttls`. Everything else is identical.
+
+```rust
+use wasm_smtp_cloudflare::connect_smtp_starttls;
+use wasm_smtp_core::SmtpError;
+
+# async fn send_via_starttls() -> Result<(), SmtpError> {
+let mut client = connect_smtp_starttls(
+    "smtp.example.com",
+    587,
+    "client.example.com",
+).await?;
+
+client.login("user@example.com", "secret").await?;
+client.send_mail(
+    "user@example.com",
+    &["recipient@example.org"],
+    "From: user@example.com\r\n\
+     To: recipient@example.org\r\n\
+     Subject: Hello over 587\r\n\
+     \r\n\
+     Sent with STARTTLS.\r\n",
+).await?;
+client.quit().await?;
+# Ok(())
+# }
+```
+
+`connect_smtp_starttls` performs the entire upgrade dance — plaintext
+greeting, plaintext `EHLO`, `STARTTLS`, transport-level TLS upgrade,
+re-`EHLO` on the secure channel — before returning. The client is
+delivered in the same `Authentication` state as the Implicit-TLS
+path, so the `login` and `send_mail` calls do not change.
+
+If the server fails to advertise `STARTTLS`, the connect call
+returns `SmtpError::Protocol(ProtocolError::ExtensionUnavailable {
+name: "STARTTLS" })` and closes the session — there is no silent
+fallback to plaintext authentication.
+
 ## Acceptable use, again
 
 Every example here is a small-volume, transactional pattern: a message

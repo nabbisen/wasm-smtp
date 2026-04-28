@@ -62,7 +62,7 @@ pub use client::SmtpClient;
 pub use error::{AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp};
 pub use protocol::AuthMechanism;
 pub use session::SessionState;
-pub use transport::Transport;
+pub use transport::{StartTlsCapable, Transport};
 
 #[cfg(test)]
 mod tests;

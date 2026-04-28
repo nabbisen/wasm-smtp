@@ -144,11 +144,66 @@ A 5xx response at any AUTH step is mapped to
 [`AuthError::UnsupportedMechanism`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.AuthError.html#variant.UnsupportedMechanism
 [`ProtocolError::UnexpectedCode`]: https://docs.rs/wasm-smtp-core/latest/wasm_smtp_core/error/enum.ProtocolError.html#variant.UnexpectedCode
 
-## Implicit TLS
+## TLS models
 
-The crate operates exclusively on a byte stream that is *already*
-secure. The TLS handshake is the transport's job. The Implicit TLS
-contract — port 465, immediately TLS, immediately SMTP-on-TLS — keeps
-the state machine free of mid-session protocol switches. STARTTLS is
-out of scope for the initial release; it can be added later without
-disrupting the current state diagram.
+The crate supports two TLS models at the transport layer:
+
+### Implicit TLS
+
+```text
+client opens TCP --[TLS handshake]--> server
+                ↓
+              SMTP greeting (already encrypted)
+              EHLO ...
+              AUTH ...
+              ...
+```
+
+The TLS handshake completes before any SMTP byte is exchanged. This is
+the standard model on port 465. From the state machine's perspective
+the byte stream is encrypted from the start; nothing in `SmtpClient`
+or `SessionState` differs between Implicit TLS and a hypothetical
+plaintext run.
+
+### STARTTLS (RFC 3207)
+
+```text
+client opens TCP                                       (plaintext)
+              ↓
+              SMTP greeting (220)                       (plaintext)
+              EHLO domain                               (plaintext)
+              250-... STARTTLS ...                      (plaintext)
+              ↓
+              C: STARTTLS                               (plaintext)
+              S: 220 ready                              (plaintext)
+              ↓
+              [TLS handshake]                           (handshake)
+              ↓
+              EHLO domain                               (encrypted)
+              250-... AUTH PLAIN ...                    (encrypted)
+              AUTH ...                                  (encrypted)
+              ...
+```
+
+Two protocol-level details deserve attention:
+
+1. **Re-EHLO is mandatory.** Per RFC 3207 §4.2, after the TLS
+   handshake the client must re-issue `EHLO` and discard the
+   pre-handshake capability list. Servers may legitimately advertise
+   different extensions before and after the upgrade — most commonly,
+   submission servers refuse to advertise `AUTH` until the channel is
+   secure. `wasm-smtp-core` clears `client.capabilities()` on the
+   transport upgrade and re-populates it from the second EHLO reply,
+   so callers always observe the post-TLS capability set.
+
+2. **No fallback to plaintext.** If the caller asked for STARTTLS and
+   the server did not advertise the extension, the crate returns
+   `ProtocolError::ExtensionUnavailable { name: "STARTTLS" }` and
+   moves the session to `Closed` rather than continuing in cleartext.
+   Likewise, a 5xx from the server in response to the `STARTTLS`
+   command is reported as `ProtocolError::UnexpectedCode { during:
+   SmtpOp::StartTls, .. }` and ends the session.
+
+The TLS handshake itself, in either model, is the transport's job.
+The state machine sees only an opaque byte stream and a single
+upgrade signal.

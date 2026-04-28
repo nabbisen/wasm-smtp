@@ -69,23 +69,48 @@ Production-quality polish on top of a working stack.
   contact-form delivery, transactional alert, multiple recipients,
   multiple messages on one connection.
 
-## Phase 5 — Future work *(not scheduled)*
+## Phase 5 — STARTTLS *(complete)*
+
+Support for the in-place TLS upgrade flow (RFC 3207), enabling the
+crate to work against submission servers that listen on port 587 in
+addition to the existing Implicit-TLS path on port 465.
+
+- ✅ `StartTlsCapable: Transport` trait — a separate marker so that
+  STARTTLS-incapable transports remain usable for Implicit TLS, and
+  so that calling `starttls()` on the wrong transport is a
+  compile-time error.
+- ✅ `SessionState::StartTls` variant and the `Authentication →
+  StartTls → Ehlo → Authentication` transition path. The state
+  machine now models RFC 3207 §4.2's mandatory re-EHLO directly.
+- ✅ `SessionState` and `ProtocolError` are now `non_exhaustive`, so
+  future extensions can add variants without forcing a major bump.
+- ✅ `ProtocolError::ExtensionUnavailable { name }` for the case
+  where `STARTTLS` is requested but not advertised.
+- ✅ `SmtpOp::StartTls` so `UnexpectedCode` errors during the
+  STARTTLS handshake are tagged just like `MAIL FROM` etc.
+- ✅ `SmtpClient::starttls()` and `SmtpClient::connect_starttls()` —
+  the explicit and convenience entry points respectively.
+- ✅ `wasm-smtp-cloudflare`: `connect_starttls(host, port)` and
+  `connect_smtp_starttls(host, port, ehlo_domain)`, plus a
+  `StartTlsCapable` impl on `CloudflareTransport` that calls
+  `worker::Socket::start_tls()` on the underlying socket.
+
+## Phase 6 — Future work *(not scheduled)*
 
 Items that may be revisited in a future cycle. None of these is a
 commitment.
 
 - Additional adapters for non-Cloudflare runtimes.
-- `STARTTLS` for ports 587/25 (still secondary to Implicit TLS).
 - Extra SASL mechanisms (`XOAUTH2`, `SCRAM-SHA-256`).
 - Pipelining (RFC 2920) for slightly better latency on high-RTT links.
 - DSN / ENHANCEDSTATUSCODES extension parsing.
+- SMTPUTF8 / international addresses.
 
 ## Out of scope (for now)
 
-The following are deliberately omitted from the initial roadmap. They
-may be revisited later, but are not implied commitments.
+The following are deliberately omitted from the roadmap. They may be
+revisited later, but are not implied commitments.
 
-- STARTTLS (Implicit TLS on 465 is the standard model for this project)
 - SMTPUTF8 / international addresses
 - MIME composition or attachment building
 - Bulk delivery, retry queues, rate limiting

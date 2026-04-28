@@ -24,9 +24,16 @@
 //!
 //! ## TLS
 //!
-//! Implicit TLS (port 465) is the standard connection model for this crate.
-//! The TLS handshake itself is the transport implementation's responsibility:
-//! the SMTP state machine sees only an already-secure byte stream.
+//! Two TLS models are supported, selected by the transport:
+//!
+//! - **Implicit TLS** (port 465): the transport is already TLS-secured before
+//!   the SMTP state machine sees it. Plain [`Transport`] is sufficient.
+//! - **STARTTLS** (port 587 / 25): the transport is initially plaintext and
+//!   is upgraded to TLS in-place after the `STARTTLS` SMTP command. Such
+//!   transports must additionally implement [`StartTlsCapable`].
+//!
+//! The TLS handshake itself, in either model, is the transport
+//! implementation's responsibility.
 
 use crate::error::IoError;
 
@@ -61,4 +68,33 @@ pub trait Transport {
     /// SMTP `QUIT` command: `QUIT` is an SMTP-level shutdown, `close` is a
     /// transport-level shutdown.
     async fn close(&mut self) -> Result<(), IoError>;
+}
+
+/// Marker for a [`Transport`] that can be upgraded to TLS in-place after
+/// connection.
+///
+/// This is what enables the SMTP `STARTTLS` flow (RFC 3207). The plaintext
+/// SMTP greeting and the initial `EHLO` are exchanged in cleartext; the
+/// client then issues `STARTTLS`, awaits a `220` reply, and asks the
+/// transport to upgrade. From that point on the byte stream is TLS-secured
+/// and the SMTP state machine continues as if it had always been so (with
+/// a second `EHLO` per RFC 3207 §4.2).
+///
+/// Transports that are connected with Implicit TLS (port 465) need not
+/// implement this trait — they are already secure at construction time.
+#[allow(async_fn_in_trait)]
+pub trait StartTlsCapable: Transport {
+    /// Upgrade the byte stream to TLS in-place.
+    ///
+    /// On success, all subsequent [`Transport::read`] and
+    /// [`Transport::write_all`] calls operate on a TLS-secured stream. On
+    /// failure, the transport must be considered unusable: the caller will
+    /// transition to [`crate::SessionState::Closed`] and call
+    /// [`Transport::close`].
+    ///
+    /// Implementations may perform the TLS handshake synchronously or
+    /// lazily on the next read/write; both are acceptable provided that
+    /// any handshake error eventually surfaces as an [`IoError`] in
+    /// subsequent reads or writes.
+    async fn upgrade_to_tls(&mut self) -> Result<(), IoError>;
 }
