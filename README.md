@@ -17,14 +17,17 @@ socket code so that the same SMTP engine can be reused on every host.
 
 | Crate                   | Role                                                       | Status         |
 | ----------------------- | ---------------------------------------------------------- | -------------- |
-| `wasm-smtp`        | Environment-independent SMTP state machine and parser.     | Implemented    |
-| `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp`.    | Implemented    |
+| `wasm-smtp`             | Environment-independent SMTP state machine and parser.     | Implemented    |
+| `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp`.         | Implemented    |
+| `wasm-smtp-tokio`       | Tokio + rustls socket adapter for `wasm-smtp`.             | Implemented    |
 
 `wasm-smtp` is the foundation: it implements the SMTP state
 machine, response parsing, command formatting, dot-stuffing, and error
 classification, but does no I/O of its own. Each runtime gets its own
-adapter crate that provides a [`Transport`] implementation; today, only
-the Cloudflare Workers adapter is on the roadmap.
+adapter crate that provides a [`Transport`] implementation. Two
+adapters ship today: `wasm-smtp-cloudflare` for Cloudflare Workers
+(WASM target) and `wasm-smtp-tokio` for tokio-based servers (axum,
+actix, warp, hyper, plain tokio, …).
 
 ## Minimum usage
 

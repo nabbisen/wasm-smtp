@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/wasm-smtp", "crates/cloudflare"]
+members = ["crates/wasm-smtp", "crates/cloudflare", "crates/wasm-smtp-tokio"]
 
 [workspace.package]
-version = "0.6.0"
+version = "0.7.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -50,3 +50,19 @@ tokio-test = "0.4.3"
 # stable series; minor 0.x bumps are explicit decisions, not silent
 # floor relaxations.
 worker = "0.8"
+
+# TLS stack used by `wasm-smtp-tokio`. We track tokio-rustls 0.26 (the
+# rustls 0.23 line); both have been audited and have current security
+# fixes. rustls-pki-types and the optional trust-anchor crates pair
+# with that line. Like the tokio floor above, these are minimum
+# versions; lockfile bumps inside a minor flow through `cargo update`.
+#
+# We rely on tokio-rustls's default crypto provider selection (currently
+# aws-lc-rs). Callers who need to install their own CryptoProvider can
+# do so before constructing a transport.
+tokio-rustls = "0.26"
+rustls-pki-types = "1.7"
+# Trust-anchor sources. Both are optional and gated by feature flags
+# in `wasm-smtp-tokio`.
+rustls-native-certs = "0.7"
+webpki-roots = "0.26"

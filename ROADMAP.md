@@ -214,21 +214,56 @@ work is precautionary defence-in-depth.
   documents that the crate imposes no `body.len()` limit, and
   recommends caller-side caps consistent with `SIZE` advertisement.
 
-## Phase 10 — Future work *(not scheduled)*
+## Phase 11 — Tokio adapter & composition guidance *(complete)*
+
+Closes the long-standing "tokio-based servers must hand-roll their
+`Transport`" gap and answers the recurring "where do I build the
+message body?" question.
+
+- ✅ **`wasm-smtp-tokio` adapter crate (v0.7.0).** Production-quality
+  `tokio` + `tokio-rustls` adapter. Sibling to `wasm-smtp-cloudflare`.
+  - `TokioTlsTransport::connect_implicit_tls(host, port, sni)` for
+    port-465 implicit-TLS submission.
+  - `TokioPlainTransport::connect(host, port, sni)` paired with
+    `SmtpClient::connect_starttls(...)` for port-587 STARTTLS.
+  - `ConnectOptions` builder for alternate SNI, custom root stores
+    (private CA / dev-only self-signed), and ALPN.
+  - Two cargo features for trust-anchor source: `native-roots`
+    (default) and `webpki-roots`. Mutually exclusive.
+  - **No public API to disable certificate verification.**
+    Test/dev convenience is supplied via custom root stores.
+- ✅ **Composition guidance (`docs/src/composing-messages.md`).**
+  After evaluating the request to ship a `wasm-smtp-message`
+  sibling crate, the decision was to **not build it** —
+  `mail-builder` (Stalwart Labs, no required deps, RFC 5322 +
+  full MIME) already fills the niche, and a wrapper would either
+  duplicate effort or add no value. The new chapter explains the
+  recommended `mail-builder` integration, covers the typical
+  pitfalls (CRLF normalization, RFC 2047 encoded-word, dot-
+  stuffing responsibilities, header injection), and points to
+  `lettre::message` and Stalwart's other mail crates for
+  comparison.
+
+## Phase 12 — Future work *(not scheduled)*
 
 Items that may be revisited in a future cycle. None of these is a
 commitment.
 
-- Additional adapters for non-Cloudflare runtimes (tokio, Deno,
-  WASI sockets).
+- Additional adapters for non-tokio runtimes (Deno, WASI sockets).
 - Extra SASL mechanisms (`SCRAM-SHA-256`, `OAUTHBEARER`).
 - Pipelining (RFC 2920) for slightly better latency on high-RTT links.
 - DSN extension parameters (RFC 3461) for delivery-status routing.
+- `wasm_smtp::IoError` source chain — currently the type takes only
+  a `&'static str` message, which forces adapters to discard the
+  underlying `io::Error` detail. A `Box<dyn Error>`-carrying
+  constructor would let adapters preserve the original error for
+  diagnostics without breaking the existing API.
 
 ## Out of scope (for now)
 
 The following are deliberately omitted from the roadmap. They may be
 revisited later, but are not implied commitments.
 
-- MIME composition or attachment building
-- Bulk delivery, retry queues, rate limiting
+- MIME composition or attachment building (use `mail-builder`; see
+  `docs/src/composing-messages.md`).
+- Bulk delivery, retry queues, rate limiting.

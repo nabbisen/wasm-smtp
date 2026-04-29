@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-04-29
+
+### Added (Phase 11 — `wasm-smtp-tokio` adapter crate)
+
+- **New sibling crate: `wasm-smtp-tokio`.** A production-quality
+  `Transport` implementation for tokio + rustls, parallel to
+  `wasm-smtp-cloudflare`. Lets axum / actix / warp / hyper / plain
+  tokio servers connect to SMTP submission endpoints without writing
+  the rustls + `tokio_rustls::TlsConnector` plumbing themselves.
+  - `TokioTlsTransport::connect_implicit_tls(host, port, sni)` for
+    implicit-TLS submission (port 465).
+  - `TokioPlainTransport::connect(host, port, sni)` followed by
+    `SmtpClient::connect_starttls(...)` for STARTTLS submission
+    (port 587).
+  - `ConnectOptions` builder for advanced cases: alternate SNI,
+    custom root store (private CA, dev-only self-signed certs), ALPN.
+  - Two cargo features for trust-anchor source: `native-roots`
+    (default; `rustls-native-certs`) and `webpki-roots` (bundled
+    Mozilla root set; for minimal/distroless containers). Mutually
+    exclusive — pick one. Pass-through `xoauth2` and `smtputf8`
+    features mirror the main crate.
+  - Certificate validation is on by default and there is **no**
+    public API to disable verification. Callers needing test
+    convenience install a self-signed CA via
+    `ConnectOptions::with_root_store`.
+  - 9 unit tests covering builder ergonomics, error paths
+    (unbound port, plaintext-server-on-TLS-port, invalid SNI), and
+    pre/post-upgrade lifecycle.
+  - 3 docstring examples in `lib.rs` (implicit TLS, STARTTLS,
+    custom options).
+
+### Changed
+
+- **Workspace bumped 0.6.0 → 0.7.0.** Pure SemVer would not require
+  a bump — adding a new crate at the same version line is
+  technically additive. This release uses the bump anyway because
+  it adds new top-level entries to `[workspace.dependencies]`
+  (`tokio-rustls`, `rustls-pki-types`, `rustls-native-certs`,
+  `webpki-roots`) which downstream lockfile-less builds will now
+  resolve, and bumping to 0.7.0 makes that visible.
+- `crates/cloudflare/Cargo.toml`'s pin on `wasm-smtp` is now
+  `version = "0.7.0"`.
+- Pure non-functional update for the `wasm-smtp` and
+  `wasm-smtp-cloudflare` crates themselves — the bump tracks the
+  workspace, but no public API or behaviour has changed in either.
+
+### Documentation
+
+- New `docs/src/composing-messages.md` chapter explaining the
+  recommended path for callers who need to construct RFC 5322 / MIME
+  message bodies before passing them to `SmtpClient::send_mail`.
+  Recommends [`mail-builder`] as the composition partner — actively
+  maintained by Stalwart Labs, no dependencies, RFC 5322 + RFC
+  2045-2049 + automatic encoding selection. Covers the typical
+  notification-email pattern, HTML + multipart, non-ASCII subjects
+  (RFC 2047), the SMTPUTF8 capability interaction, and dot-stuffing
+  responsibilities.
+- Decision: **`wasm-smtp-message` will not be built.** The
+  ecosystem already has `mail-builder` in this niche; rebuilding
+  it would produce either a thin wrapper (no value) or a duplicate
+  (continuing-maintenance cost). The new chapter documents the
+  integration path instead.
+
+[`mail-builder`]: https://docs.rs/mail-builder
+
 ## [0.6.0] — 2026-04-28
 
 ### Changed (breaking)
@@ -371,7 +436,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.4.0...v0.5.0
