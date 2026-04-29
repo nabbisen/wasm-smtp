@@ -12,10 +12,12 @@
 //!
 //! ## Scope
 //!
-//! - **Implicit TLS** (port 465) is the standard connection model. The TLS
-//!   handshake itself is the [`Transport`] implementation's responsibility;
-//!   the core operates on an already-secure byte stream. STARTTLS is
-//!   intentionally out of scope for the initial release.
+//! - **TLS is required.** Implicit TLS (port 465) is the standard connection
+//!   model. STARTTLS (port 587) is also supported via
+//!   [`SmtpClient::connect_starttls`] and the [`StartTlsCapable`] trait; see
+//!   those pages for usage. In both cases the TLS handshake itself is the
+//!   [`Transport`] implementation's responsibility — the core operates on an
+//!   already-secure byte stream.
 //! - **MIME composition is out of scope.** Callers pass a fully-formed,
 //!   CRLF-normalized message body string to [`SmtpClient::send_mail`].
 //! - **Bulk delivery, retry queues, and rate limiting are out of scope.** They

@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-04-29
+
+This is a maintenance release. No new features, no behaviour
+changes for callers using the default-features build.
+
+### Changed
+
+- **Renamed `crates/cloudflare/` to `crates/wasm-smtp-cloudflare/`**
+  to align the directory name with the published crate name and
+  with the `crates/wasm-smtp-tokio/` layout that landed in v0.7.0.
+  No code or API change; the published crate name has been
+  `wasm-smtp-cloudflare` since v0.4.0. Anyone tracking the
+  workspace by path (e.g. via a git submodule or a path-based
+  `[patch]`) needs to update their path; everyone using crates.io
+  is unaffected.
+
+- **`rustls-native-certs` dependency floor: 0.7 → 0.8** in
+  `wasm-smtp-tokio`. The 0.8 release changed `load_native_certs()`
+  to return a `CertificateResult` struct instead of
+  `Result<Vec<CertificateDer>, io::Error>`; the new struct exposes
+  loaded certs and per-source errors as separate fields, letting
+  the caller pick the partial-failure policy. We adopt the same
+  policy as before (accept any cert that decoded cleanly, fail
+  hard only if the resulting trust store is empty), now with a
+  slightly more informative error message when both conditions
+  hit. No API change for callers; this is a transparent dependency
+  bump.
+
+- **`webpki-roots` dependency floor: 0.26 → 1.0** in
+  `wasm-smtp-tokio`. The `webpki-roots` 0.26 line uses the
+  "semver trick" to re-export 1.0, so the floor bump is
+  source-compatible — no code changes were needed in the
+  adapter. We bump the floor anyway to make the support level
+  explicit and to signal that downstream lockfiles should
+  resolve to the 1.x line.
+
+### Documentation
+
+- **Crate-level "Scope" section in `wasm-smtp` rewritten** to
+  reflect current capabilities. The previous wording read
+  "STARTTLS is intentionally out of scope for the initial
+  release", which was accurate for v0.1.0 but became misleading
+  once STARTTLS landed in v0.2.0. The replacement text states
+  that both implicit TLS (port 465) and STARTTLS (port 587) are
+  supported, and links to `SmtpClient::connect_starttls` and
+  the `StartTlsCapable` trait. Triggered by an external
+  bug-report-turned-clarification noting that the stale wording
+  on the v0.6.0 docs.rs page was a real adoption hazard.
+
 ## [0.9.0] — 2026-04-29
 
 This release implements **SCRAM-SHA-256 (RFC 5802 / RFC 7677)** as
@@ -651,7 +700,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.0...v0.7.1

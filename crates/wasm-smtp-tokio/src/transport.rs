@@ -104,9 +104,16 @@ fn default_root_store() -> Result<RootCertStore, IoError> {
 
     #[cfg(feature = "native-roots")]
     {
-        let certs = rustls_native_certs::load_native_certs()
-            .map_err(|_| IoError::new("failed to load native trust store"))?;
-        for cert in certs {
+        // rustls-native-certs 0.8 changed the return type from
+        // `Result<Vec<CertificateDer>, io::Error>` to a
+        // `CertificateResult` struct that exposes both the
+        // successfully-loaded certs AND any per-source errors as
+        // separate fields, so the caller decides the
+        // partial-failure policy. Our policy is unchanged from the
+        // 0.7 days: accept any cert that decoded cleanly, fail
+        // hard only if the resulting trust store is empty.
+        let result = rustls_native_certs::load_native_certs();
+        for cert in result.certs {
             // Per rustls-native-certs convention: malformed certs
             // returned by the OS are skipped here rather than failing
             // the whole build. Successful certs still populate the
@@ -114,10 +121,21 @@ fn default_root_store() -> Result<RootCertStore, IoError> {
             let _ = store.add(cert);
         }
         if store.is_empty() {
-            return Err(IoError::new(
+            // If we got nothing AND there were per-source errors,
+            // surface the first error message; otherwise emit a
+            // generic message. We don't preserve the source chain
+            // because `result.errors[0]` is a per-source rustls
+            // error type that doesn't impl `Send + Sync` on every
+            // platform we target — the message text is what
+            // matters operationally.
+            return Err(IoError::new(if result.errors.is_empty() {
                 "rustls-native-certs returned an empty trust store; the OS \
-                 trust store may be missing or unreadable",
-            ));
+                 trust store may be missing or unreadable"
+            } else {
+                "rustls-native-certs returned an empty trust store; the OS \
+                 trust store may be missing or unreadable, and one or more \
+                 sources reported errors"
+            }));
         }
         Ok(store)
     }

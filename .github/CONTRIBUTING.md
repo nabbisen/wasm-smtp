@@ -21,10 +21,11 @@ for both contributors and reviewers.
 ```text
 wasm-smtp/
 ├─ crates/
-│  ├─ core/          wasm-smtp: pure protocol engine, no I/O
-│  └─ cloudflare/    wasm-smtp-cloudflare: Workers socket adapter (planned)
-├─ docs/src/         long-form, mdBook-ready documentation
-└─ .github/          policy and issue-template files
+│  ├─ wasm-smtp/              wasm-smtp: pure protocol engine, no I/O
+│  ├─ wasm-smtp-cloudflare/   Cloudflare Workers socket adapter
+│  └─ wasm-smtp-tokio/        Tokio + rustls socket adapter
+├─ docs/src/                  long-form, mdBook-ready documentation
+└─ .github/                   policy and issue-template files
 ```
 
 ## Code style

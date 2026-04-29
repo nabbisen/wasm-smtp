@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["crates/wasm-smtp", "crates/cloudflare", "crates/wasm-smtp-tokio"]
+members = ["crates/wasm-smtp", "crates/wasm-smtp-cloudflare", "crates/wasm-smtp-tokio"]
 
 [workspace.package]
-version = "0.9.0"
+version = "0.9.1"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -66,8 +66,8 @@ tokio-rustls = { version = "0.26", default-features = false, features = ["loggin
 rustls-pki-types = "1.7"
 # Trust-anchor sources. Both are optional and gated by feature flags
 # in `wasm-smtp-tokio`.
-rustls-native-certs = "0.7"
-webpki-roots = "0.26"
+rustls-native-certs = "0.8"
+webpki-roots = "1.0"
 
 # mail-builder: optional dependency for the `mail-builder` cargo
 # feature on the main crate. Stalwart Labs's RFC 5322 / MIME builder

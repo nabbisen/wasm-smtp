@@ -85,7 +85,7 @@ are TLS-secured. The original socket must have been opened with
 
 Two layers:
 
-1. **Adapter-level unit tests** (`crates/cloudflare/src/tests.rs`)
+1. **Adapter-level unit tests** (`crates/wasm-smtp-cloudflare/src/tests.rs`)
    exercise the byte-pushing helpers `read_async_io` and
    `write_all_async_io` against `tokio_test::io::Builder`. The same
    tests then drive a full SMTP transaction through `SmtpClient`
