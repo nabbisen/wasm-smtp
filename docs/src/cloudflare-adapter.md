@@ -135,3 +135,33 @@ The shape of this code is identical to the example in `core.md`; the
 only difference is which `Transport` implementation is constructed
 and whether the upgrade happens at connect time (Implicit TLS) or
 mid-session (STARTTLS). That is the point.
+
+## Building for `wasm32-unknown-unknown`
+
+When the `scram-sha-256` feature is enabled (it is, by default),
+the adapter pulls in `getrandom` for SCRAM client-nonce generation.
+On `wasm32-unknown-unknown` (the Cloudflare Workers target),
+`getrandom` 0.4 requires two pieces of build-time configuration:
+
+1. The `wasm_js` cargo feature on `getrandom`. This adapter crate
+   already enables it transitively when `scram-sha-256` is on, so
+   no action is needed in your `Cargo.toml`.
+2. A rustc `--cfg` flag pointing `getrandom`'s backend selector at
+   the JavaScript binding. Set this in `.cargo/config.toml` of
+   your Workers project:
+
+```toml
+# .cargo/config.toml
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg=getrandom_backend="wasm_js"']
+```
+
+Without this, `cargo build --target wasm32-unknown-unknown` will
+fail with a `getrandom` compile error directing you to the same
+configuration. The flag is unfortunately not expressible as a
+cargo feature; this is a `getrandom` 0.4 design decision to keep
+the WASM JS backend explicit and opt-in.
+
+If you disable `scram-sha-256` (e.g. `default-features = false,
+features = ["xoauth2"]`) you can skip this configuration; SCRAM is
+the only consumer of `getrandom` in the dependency tree.

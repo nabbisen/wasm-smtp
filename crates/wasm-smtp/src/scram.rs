@@ -90,7 +90,9 @@ pub(crate) const CLIENT_NONCE_LEN: usize = 24;
 /// surface as `AuthError::Other`.
 pub(crate) fn generate_client_nonce() -> Result<String, AuthError> {
     let mut bytes = [0u8; CLIENT_NONCE_LEN];
-    getrandom::getrandom(&mut bytes).map_err(|_| AuthError::Other("CSPRNG unavailable"))?;
+    // getrandom 0.4 renamed `getrandom::getrandom(&mut buf)` to
+    // `getrandom::fill(&mut buf)`. Same semantics.
+    getrandom::fill(&mut bytes).map_err(|_| AuthError::Other("CSPRNG unavailable"))?;
     // Per RFC 5802 §5.1, the nonce is "a sequence of random printable
     // ASCII characters excluding ','". Base64 satisfies that.
     Ok(base64_encode(&bytes))

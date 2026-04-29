@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-04-29
+
+This is a maintenance release. `getrandom` major bump for the
+SCRAM-SHA-256 implementation. Native build is unchanged for
+callers; **Cloudflare Workers deployments require one new
+build-time configuration step** (see Documentation below).
+
+### Changed
+
+- **`getrandom` dependency floor: 0.2 → 0.4** (skipping the 0.3
+  intermediate generation). The 0.2 → 0.4 jump is a deliberate
+  jump of two majors:
+  - 0.3 changed how `wasm32-unknown-unknown` targets configure
+    their JS backend (cargo feature `js` → `wasm_js` + a rustc
+    `--cfg` flag).
+  - 0.4 removed several legacy backends and adjusted the public
+    function naming (`getrandom::getrandom` → `getrandom::fill`).
+  Adopting 0.4 directly captures both sets of changes in a single
+  release.
+
+  Code change: a single line in `crates/wasm-smtp/src/scram.rs`
+  renamed `getrandom::getrandom(&mut bytes)` to
+  `getrandom::fill(&mut bytes)`. Same semantics; same RFC 7677
+  output (verified by the round-trip test, which still passes).
+
+- **`wasm-smtp-cloudflare` features section reorganized.** The
+  adapter's pass-through feature list now mirrors the main
+  crate's feature surface in full:
+
+  | Feature | 0.9.2 | 0.9.3 |
+  |---|---|---|
+  | `xoauth2` (default) | ✅ | ✅ |
+  | `smtputf8` | ✅ | ✅ |
+  | `mail-builder` | ❌ (gap) | ✅ |
+  | `scram-sha-256` (default) | ❌ (gap) | ✅ |
+
+  The gaps in 0.9.2 were oversights — callers depending only on
+  `wasm-smtp-cloudflare` had to refer to the main crate's name to
+  toggle these. Now the adapter exposes the full surface
+  symmetrically with `wasm-smtp-tokio`.
+
+  Additionally, the `scram-sha-256` feature pulls in `getrandom`
+  with the `wasm_js` cargo feature enabled, so consumers do not
+  need to add it manually to their `Cargo.toml` for Workers
+  deployments.
+
+### Documentation
+
+- **New "Building for `wasm32-unknown-unknown`" section** in the
+  Cloudflare adapter chapter. `getrandom` 0.4 requires both the
+  `wasm_js` cargo feature (handled automatically by this adapter
+  when SCRAM is enabled) AND a rustc `--cfg` flag in the
+  consumer's `.cargo/config.toml`:
+
+  ```toml
+  [target.wasm32-unknown-unknown]
+  rustflags = ['--cfg=getrandom_backend="wasm_js"']
+  ```
+
+  The flag is a `getrandom` 0.4 design decision that cannot be
+  expressed as a cargo feature, so consumer-side configuration
+  is unavoidable for SCRAM-enabled Workers deployments. The
+  adapter chapter spells out the recipe.
+
+  Consumers who disable `scram-sha-256` (e.g. only XOAUTH2
+  for Gmail submission) avoid this configuration entirely;
+  `getrandom` is not pulled into the dep graph in that case.
+
 ## [0.9.2] — 2026-04-29
 
 This is a maintenance release. RustCrypto major bump for the
@@ -729,7 +797,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.3...HEAD
+[0.9.3]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.8.0...v0.9.0
