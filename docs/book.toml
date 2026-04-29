@@ -1,6 +1,6 @@
 [book]
 title = "wasm-smtp"
-authors = ["nabbisen <nabbisen@scqr.net>"]
+authors = ["nabbisen"]
 description = "SMTP client crates for WebAssembly runtimes."
 language = "en"
 src = "src"

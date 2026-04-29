@@ -39,11 +39,14 @@ spaces when an individual is representing the project or its community.
 ## Enforcement
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may
-be reported by contacting the project maintainer at
-`nabbisen <nabbisen@scqr.net>`. All complaints will be reviewed and
-investigated promptly and fairly.
+be reported by contacting the project maintainers via GitHub.
 
-The project maintainer is obligated to respect the privacy and security
+- **Report via GitHub**: Open a private issue or contact the maintainers through the repository's contact methods.
+- **Alternative**: If you prefer not to use GitHub, you can reach us at `abuse@example.com` (optional, only if you have a dedicated alias).
+
+All complaints will be reviewed and investigated promptly and fairly.
+
+The project maintainers are obligated to respect the privacy and security
 of the reporter of any incident.
 
 ## Attribution
