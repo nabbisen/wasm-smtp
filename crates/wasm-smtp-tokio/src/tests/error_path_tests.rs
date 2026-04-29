@@ -23,6 +23,35 @@ async fn implicit_tls_to_unbound_port_fails() {
 }
 
 #[tokio::test]
+async fn tcp_connect_failure_preserves_io_source() {
+    use std::error::Error;
+
+    // The io::Error from TcpStream::connect should be preserved
+    // through wasm_smtp::IoError's source chain (Phase 12). Caller-
+    // side diagnostics that walk `.source()` should reach the
+    // underlying io::Error::ConnectionRefused (or whatever the OS
+    // returned).
+    let result = TokioPlainTransport::connect("127.0.0.1", 1, "localhost").await;
+    let Err(err) = result else {
+        panic!("connect to port 1 should fail")
+    };
+
+    // The IoError's Display is the high-level context string we
+    // attached in `map_io_err`.
+    assert_eq!(format!("{err}"), "TCP connect failed");
+
+    // Source chain: walk one level and confirm we get the io::Error.
+    let src = err.source().expect("source should be present");
+    let src_msg = format!("{src}");
+    // The exact OS message varies (refused / connection refused / ...)
+    // but it should not be empty.
+    assert!(
+        !src_msg.is_empty(),
+        "source error display should not be empty"
+    );
+}
+
+#[tokio::test]
 async fn implicit_tls_to_plaintext_endpoint_fails() {
     // Stand up a TCP listener that does not speak TLS and confirm
     // that the TLS handshake fails with an IoError rather than

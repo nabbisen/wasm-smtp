@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-04-29
+
+### Added
+
+- **`IoError` source chain support (Phase 12).** Adapter crates can
+  now preserve the underlying `io::Error`, rustls handshake error,
+  etc. as the [`std::error::Error::source`] chain on
+  [`wasm_smtp::IoError`]. Caller-side error formatters (anyhow's
+  `{:#}`, eyre, manual `.source()` walks) see the full diagnostic
+  while the high-level `Display` of `IoError` stays terse.
+  - New constructor: `IoError::with_source(message, source)` accepts
+    any `StdError + Send + Sync + 'static`.
+  - New `From<std::io::Error> for IoError` conversion: `io_err.into()`
+    produces an `IoError` carrying the original as its source.
+  - `IoError` is now `Send + Sync` (its source field is
+    `Box<dyn Error + Send + Sync>`), important for tokio-based
+    adapters where errors may surface on a different worker
+    thread than the one that observed them.
+  - 6 new unit tests in `error_tests.rs` covering the new
+    constructor, the `From<io::Error>` conversion, source-chain
+    walking through `SmtpError → IoError → io::Error`, and the
+    `Send + Sync` bounds at compile time.
+
+### Changed
+
+- **`wasm-smtp-tokio` adapter now preserves `io::Error` source.**
+  The internal `map_io_err` helper switched from
+  `IoError::new(static_context)` to
+  `IoError::with_source(static_context, io_err)`, propagating the
+  underlying TCP / TLS / handshake error into the source chain.
+  No public API or behaviour change for callers using the adapter
+  through its public API; the change is visible via `.source()`
+  walks.
+- **No changes to `IoError::new` or `IoError::message`.** Adapters
+  not yet migrated to `with_source` continue to compile and behave
+  as before — `new()` simply produces an `IoError` with no source.
+
+### Documentation
+
+- The `IoError` rustdoc carries a worked example showing how an
+  adapter preserves an `io::Error` through the source chain.
+- ROADMAP Phase 12 reflects this item as complete.
+
+[`std::error::Error::source`]: https://doc.rust-lang.org/std/error/trait.Error.html#method.source
+[`wasm_smtp::IoError`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.IoError.html
+
 ## [0.7.0] — 2026-04-29
 
 ### Added (Phase 11 — `wasm-smtp-tokio` adapter crate)
@@ -436,7 +482,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.0...v0.5.1

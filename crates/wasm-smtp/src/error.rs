@@ -111,20 +111,79 @@ impl From<InvalidInputError> for SmtpError {
 /// A failure that originated below SMTP, in the transport (TCP, TLS, the
 /// runtime's socket API).
 ///
-/// Adapter crates (e.g. `wasm-smtp-cloudflare`) convert their runtime-specific
-/// errors into this type at the transport boundary. The conversion is lossy by
-/// design: it preserves a human-readable message but discards the original
-/// type, which keeps adapter-specific types out of the core public API.
+/// Adapter crates (e.g. `wasm-smtp-cloudflare`, `wasm-smtp-tokio`) convert
+/// their runtime-specific errors into this type at the transport boundary.
+/// The wire-level details — the failing socket call, the underlying
+/// `std::io::Error`, the rustls handshake error — can optionally be
+/// preserved as the [`std::error::Error::source`] chain so callers see
+/// the full diagnostic when formatting the error chain.
+///
+/// # Backwards compatibility
+///
+/// The simplest constructor [`Self::new`] continues to accept any
+/// `Display`-able message and produces an `IoError` without a source.
+/// Adapters wishing to preserve the original cause should use
+/// [`Self::with_source`] (or the `From<std::io::Error>` impl).
+///
+/// # Example: preserving the `io::Error` in an adapter
+///
+/// ```
+/// use wasm_smtp::IoError;
+/// use std::io;
+///
+/// fn map_tcp_failure(e: io::Error) -> IoError {
+///     IoError::with_source("TCP connect failed", e)
+/// }
+///
+/// let original = io::Error::new(io::ErrorKind::ConnectionRefused, "refused");
+/// let wrapped = map_tcp_failure(original);
+///
+/// // The high-level message is what Display shows:
+/// assert_eq!(wrapped.to_string(), "TCP connect failed");
+///
+/// // The source chain still carries the original io::Error.
+/// use std::error::Error;
+/// assert!(wrapped.source().is_some());
+/// ```
 #[derive(Debug)]
 pub struct IoError {
     message: String,
+    source: Option<Box<dyn StdError + Send + Sync + 'static>>,
 }
 
 impl IoError {
-    /// Construct from any `Display`-able message.
+    /// Construct from any `Display`-able message, without an underlying
+    /// source.
+    ///
+    /// This is the simplest constructor and the right choice when the
+    /// adapter does not have a structured error to preserve (e.g. when
+    /// surfacing a programmer-supplied invariant violation).
     pub fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),
+            source: None,
+        }
+    }
+
+    /// Construct with a high-level message and an underlying error
+    /// preserved as the [`std::error::Error::source`] chain.
+    ///
+    /// Adapter crates use this to retain the original `io::Error`,
+    /// rustls handshake error, etc. so caller-side error-chain
+    /// formatters (anyhow's `{:#}`, eyre, manual walks of
+    /// `.source()`) can render the full diagnostic.
+    ///
+    /// The `Send + Sync + 'static` bounds match the conventions of
+    /// `Box<dyn Error>` carried across thread boundaries — important
+    /// for tokio-based adapters where errors may surface on a
+    /// different thread than the one that observed them.
+    pub fn with_source<E>(message: impl Into<String>, source: E) -> Self
+    where
+        E: StdError + Send + Sync + 'static,
+    {
+        Self {
+            message: message.into(),
+            source: Some(Box::new(source)),
         }
     }
 
@@ -140,7 +199,29 @@ impl fmt::Display for IoError {
     }
 }
 
-impl StdError for IoError {}
+impl StdError for IoError {
+    fn source(&self) -> Option<&(dyn StdError + 'static)> {
+        self.source
+            .as_deref()
+            .map(|e| e as &(dyn StdError + 'static))
+    }
+}
+
+impl From<std::io::Error> for IoError {
+    /// Convenience conversion: every adapter that wraps a `std::io::Error`
+    /// can write `io_error.into()` to produce an `IoError` whose message
+    /// is the original error's `Display` and whose source chain preserves
+    /// the original.
+    ///
+    /// Most adapters will prefer [`IoError::with_source`] directly,
+    /// because it lets them attach a higher-level context message
+    /// ("TCP connect failed", "TLS handshake failed", "read short")
+    /// rather than relying on the often-terse `io::Error` Display.
+    fn from(e: std::io::Error) -> Self {
+        let message = e.to_string();
+        Self::with_source(message, e)
+    }
+}
 
 // -----------------------------------------------------------------------------
 // ProtocolError

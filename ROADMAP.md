@@ -244,20 +244,28 @@ message body?" question.
   `lettre::message` and Stalwart's other mail crates for
   comparison.
 
-## Phase 12 — Future work *(not scheduled)*
+## Phase 12 — Future work *(in progress)*
 
-Items that may be revisited in a future cycle. None of these is a
-commitment.
+Items that may be revisited in a future cycle. Some have already been
+delivered; the rest are not commitments.
+
+### Delivered
+
+- ✅ **`wasm_smtp::IoError` source chain** (v0.7.1). New
+  `IoError::with_source(message, source)` constructor and a
+  `From<std::io::Error>` conversion let adapters preserve the
+  underlying `io::Error` / TLS handshake error etc. as the
+  `std::error::Error::source` chain. `wasm-smtp-tokio` adopted
+  the new API in the same release. Backwards-compatible: the
+  existing `IoError::new` continues to work and produces an
+  `IoError` with no source.
+
+### Not yet scheduled
 
 - Additional adapters for non-tokio runtimes (Deno, WASI sockets).
 - Extra SASL mechanisms (`SCRAM-SHA-256`, `OAUTHBEARER`).
 - Pipelining (RFC 2920) for slightly better latency on high-RTT links.
 - DSN extension parameters (RFC 3461) for delivery-status routing.
-- `wasm_smtp::IoError` source chain — currently the type takes only
-  a `&'static str` message, which forces adapters to discard the
-  underlying `io::Error` detail. A `Box<dyn Error>`-carrying
-  constructor would let adapters preserve the original error for
-  diagnostics without breaking the existing API.
 
 ## Out of scope (for now)
 

@@ -88,3 +88,104 @@ fn smtp_error_source_chains_to_inner_variant() {
     let src = e.source().expect("should have source");
     assert!(format!("{src}").contains("inner"));
 }
+
+// -- IoError source chain (Phase 12) --------------------------------------
+
+#[test]
+fn io_error_new_has_no_source() {
+    let e = IoError::new("simple message");
+    assert_eq!(e.message(), "simple message");
+    assert_eq!(format!("{e}"), "simple message");
+    assert!(e.source().is_none(), "new() must not synthesize a source");
+}
+
+#[test]
+fn io_error_with_source_preserves_inner() {
+    use std::io;
+
+    let inner = io::Error::new(io::ErrorKind::ConnectionRefused, "no listener at port 1");
+    let outer = IoError::with_source("TCP connect failed", inner);
+
+    // Display shows only the high-level message.
+    assert_eq!(format!("{outer}"), "TCP connect failed");
+
+    // The source chain carries the original io::Error.
+    let src = outer.source().expect("source must be present");
+    let src_str = format!("{src}");
+    assert!(
+        src_str.contains("no listener at port 1"),
+        "source should preserve original message: {src_str}"
+    );
+}
+
+#[test]
+fn io_error_with_source_accepts_arbitrary_error_types() {
+    // The bound is `StdError + Send + Sync + 'static`. Confirm a few
+    // representative concrete types compose.
+    use std::io;
+
+    // Synthetic custom error type — defined first so that the lints
+    // about items-after-statements stay quiet.
+    #[derive(Debug)]
+    struct CustomError(&'static str);
+    impl std::fmt::Display for CustomError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str(self.0)
+        }
+    }
+    impl Error for CustomError {}
+
+    // io::Error
+    let _ = IoError::with_source("io", io::Error::other("x"));
+
+    // Custom Error type
+    let _ = IoError::with_source("custom", CustomError("oops"));
+}
+
+#[test]
+fn io_error_from_io_error_carries_source() {
+    use std::io;
+
+    let original = io::Error::new(io::ErrorKind::TimedOut, "read timed out");
+    let wrapped: IoError = original.into();
+
+    // Display message comes from the original io::Error.
+    assert!(
+        format!("{wrapped}").contains("read timed out"),
+        "From<io::Error> should use the io::Error's Display as message",
+    );
+    assert!(
+        wrapped.source().is_some(),
+        "From<io::Error> should preserve source"
+    );
+}
+
+#[test]
+fn io_error_chains_through_smtp_error_source() {
+    use std::io;
+
+    // Verify the full chain: SmtpError -> IoError -> io::Error.
+    // Caller-side error formatters that walk `.source()` repeatedly
+    // should reach the original io::Error.
+    let inner = io::Error::new(io::ErrorKind::BrokenPipe, "EPIPE");
+    let io = IoError::with_source("write failed", inner);
+    let smtp: SmtpError = io.into();
+
+    let level1 = smtp.source().expect("SmtpError should have source");
+    assert!(format!("{level1}").contains("write failed"));
+
+    let level2 = level1.source().expect("IoError should have source too");
+    assert!(format!("{level2}").contains("EPIPE"));
+}
+
+#[test]
+fn io_error_send_sync_bounds_compile() {
+    // The `Box<dyn StdError + Send + Sync>` source means an `IoError`
+    // can be carried across thread boundaries, important for tokio
+    // adapters where errors may surface on a different worker
+    // thread than the one that observed them. We verify the bound
+    // here at compile time.
+    fn assert_send_sync<T: Send + Sync>() {}
+    assert_send_sync::<IoError>();
+    assert_send_sync::<SmtpError>();
+}

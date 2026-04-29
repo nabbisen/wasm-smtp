@@ -952,11 +952,11 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp"
-version = "0.7.0"
+version = "0.7.1"
 
 [[package]]
 name = "wasm-smtp-cloudflare"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "tokio",
  "tokio-test",
@@ -966,7 +966,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-tokio"
-version = "0.7.0"
+version = "0.7.1"
 dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",

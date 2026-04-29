@@ -29,7 +29,7 @@ xoauth2 = ["wasm-smtp/xoauth2"]
 smtputf8 = ["wasm-smtp/smtputf8"]
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.7.0", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.7.1", default-features = false }
 tokio = { workspace = true, features = ["net", "io-util"] }
 tokio-rustls = { workspace = true }
 rustls-pki-types = { workspace = true }

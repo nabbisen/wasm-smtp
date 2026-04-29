@@ -159,13 +159,13 @@ fn build_client_config(opts: &ConnectOptions) -> Result<Arc<ClientConfig>, IoErr
     Ok(Arc::new(config))
 }
 
-fn map_io_err(_e: &io::Error, context: &'static str) -> IoError {
-    // wasm_smtp::IoError requires a 'static str for `new`. Until we
-    // can attach a Box<dyn Error> source (Phase 12 candidate), we
-    // discard the underlying io::Error detail and surface a fixed
-    // context string. The original error is reachable to the
-    // adapter author at debug time via the same call site.
-    IoError::new(context)
+fn map_io_err(e: io::Error, context: &'static str) -> IoError {
+    // Preserve the original io::Error in the source chain so caller-side
+    // diagnostics (anyhow's `{:#}`, eyre, manual `.source()` walks) see
+    // the underlying TCP / TLS failure, while the high-level `context`
+    // string identifies which step of the SMTP submission sequence
+    // failed.
+    IoError::with_source(context, e)
 }
 
 // -- TokioPlainTransport (for STARTTLS) -------------------------------------
@@ -220,7 +220,7 @@ impl TokioPlainTransport {
     ) -> Result<Self, IoError> {
         let stream = TcpStream::connect((host, port))
             .await
-            .map_err(|e| map_io_err(&e, "TCP connect failed"))?;
+            .map_err(|e| map_io_err(e, "TCP connect failed"))?;
         Ok(Self {
             plain: Some(stream),
             tls: None,
@@ -240,9 +240,9 @@ impl TokioPlainTransport {
 impl Transport for TokioPlainTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         if let Some(s) = self.tls.as_mut() {
-            s.read(buf).await.map_err(|e| map_io_err(&e, "read failed"))
+            s.read(buf).await.map_err(|e| map_io_err(e, "read failed"))
         } else if let Some(s) = self.plain.as_mut() {
-            s.read(buf).await.map_err(|e| map_io_err(&e, "read failed"))
+            s.read(buf).await.map_err(|e| map_io_err(e, "read failed"))
         } else {
             Err(IoError::new("transport in invalid state: no live stream"))
         }
@@ -252,11 +252,11 @@ impl Transport for TokioPlainTransport {
         if let Some(s) = self.tls.as_mut() {
             s.write_all(buf)
                 .await
-                .map_err(|e| map_io_err(&e, "write failed"))
+                .map_err(|e| map_io_err(e, "write failed"))
         } else if let Some(s) = self.plain.as_mut() {
             s.write_all(buf)
                 .await
-                .map_err(|e| map_io_err(&e, "write failed"))
+                .map_err(|e| map_io_err(e, "write failed"))
         } else {
             Err(IoError::new("transport in invalid state: no live stream"))
         }
@@ -291,7 +291,7 @@ impl StartTlsCapable for TokioPlainTransport {
         let tls = connector
             .connect(server_name, plain)
             .await
-            .map_err(|e| map_io_err(&e, "TLS handshake failed"))?;
+            .map_err(|e| map_io_err(e, "TLS handshake failed"))?;
 
         self.tls = Some(tls);
         Ok(())
@@ -341,7 +341,7 @@ impl TokioTlsTransport {
     ) -> Result<Self, IoError> {
         let tcp = TcpStream::connect((host, port))
             .await
-            .map_err(|e| map_io_err(&e, "TCP connect failed"))?;
+            .map_err(|e| map_io_err(e, "TCP connect failed"))?;
 
         let config = build_client_config(&opts)?;
         let connector = TlsConnector::from(config);
@@ -352,7 +352,7 @@ impl TokioTlsTransport {
         let tls = connector
             .connect(server_name, tcp)
             .await
-            .map_err(|e| map_io_err(&e, "TLS handshake failed"))?;
+            .map_err(|e| map_io_err(e, "TLS handshake failed"))?;
 
         Ok(Self { tls: Some(tls) })
     }
@@ -361,7 +361,7 @@ impl TokioTlsTransport {
 impl Transport for TokioTlsTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         match self.tls.as_mut() {
-            Some(s) => s.read(buf).await.map_err(|e| map_io_err(&e, "read failed")),
+            Some(s) => s.read(buf).await.map_err(|e| map_io_err(e, "read failed")),
             None => Err(IoError::new("transport already closed")),
         }
     }
@@ -371,7 +371,7 @@ impl Transport for TokioTlsTransport {
             Some(s) => s
                 .write_all(buf)
                 .await
-                .map_err(|e| map_io_err(&e, "write failed")),
+                .map_err(|e| map_io_err(e, "write failed")),
             None => Err(IoError::new("transport already closed")),
         }
     }
