@@ -6,6 +6,25 @@
 //! tokio-based servers — axum, actix, warp, hyper, plain tokio — need
 //! to connect to a real SMTP submission endpoint.
 //!
+//! # Cargo features
+//!
+//! Two pairs of mutually-exclusive features select the TLS stack:
+//!
+//! | Trust source     | Pick one                                |
+//! |------------------|-----------------------------------------|
+//! | `native-roots`   | OS trust store via `rustls-native-certs` (default) |
+//! | `webpki-roots`   | Bundled Mozilla root set                |
+//!
+//! | Crypto provider  | Pick one                                |
+//! |------------------|-----------------------------------------|
+//! | `aws-lc-rs`      | BoringSSL-derived, default, FIPS paths  |
+//! | `ring`           | Traditional rustls provider, faster to compile |
+//!
+//! Picking both members of a pair, or neither, is a configuration
+//! error: this crate fails to compile in either case (see the
+//! `compile_error!` block below) so the misconfiguration is caught at
+//! `cargo build` time rather than in production.
+//!
 //! # Quick start (implicit TLS, port 465)
 //!
 //! ```no_run
@@ -103,6 +122,41 @@
 //! [`wasm-smtp`]: https://docs.rs/wasm-smtp
 //! [`rustls-native-certs`]: https://docs.rs/rustls-native-certs
 //! [`webpki-roots`]: https://docs.rs/webpki-roots
+
+// ---- compile-time feature validation -------------------------------------
+//
+// `cargo` does not support mutually-exclusive features natively. We use
+// `compile_error!` to surface misconfigurations as a build error rather
+// than letting them slip through and produce a runtime panic from rustls's
+// `CryptoProvider::install_default()`.
+
+#[cfg(all(feature = "native-roots", feature = "webpki-roots"))]
+compile_error!(
+    "wasm-smtp-tokio: the `native-roots` and `webpki-roots` features are \
+     mutually exclusive. Pick exactly one. To use webpki-roots, set \
+     `default-features = false, features = [\"webpki-roots\", \"aws-lc-rs\"]` \
+     (or substitute `ring` for `aws-lc-rs`)."
+);
+
+#[cfg(not(any(feature = "native-roots", feature = "webpki-roots")))]
+compile_error!(
+    "wasm-smtp-tokio: a trust-anchor source is required. Enable exactly \
+     one of `native-roots` (default) or `webpki-roots`."
+);
+
+#[cfg(all(feature = "aws-lc-rs", feature = "ring"))]
+compile_error!(
+    "wasm-smtp-tokio: the `aws-lc-rs` and `ring` features are mutually \
+     exclusive. Pick exactly one. The default is `aws-lc-rs`; set \
+     `default-features = false` and add `ring` (plus a trust-anchor \
+     feature) to switch."
+);
+
+#[cfg(not(any(feature = "aws-lc-rs", feature = "ring")))]
+compile_error!(
+    "wasm-smtp-tokio: a rustls crypto provider is required. Enable \
+     exactly one of `aws-lc-rs` (default) or `ring`."
+);
 
 mod transport;
 

@@ -16,20 +16,39 @@ categories = ["email", "network-programming", "asynchronous"]
 path = "src/lib.rs"
 
 [features]
-# By default we ship system-trust-anchor support via rustls-native-certs.
-# Containerised deployments and minimal images may prefer the bundled
-# Mozilla root set from webpki-roots: opt out of `native-roots` and
-# opt in to `webpki-roots` instead.
-default = ["native-roots"]
+# By default we ship system-trust-anchor support via rustls-native-certs
+# and the aws-lc-rs crypto provider. Containerised deployments and
+# minimal images may prefer the bundled Mozilla root set from
+# webpki-roots: opt out of `native-roots` and opt in to `webpki-roots`
+# instead. Build-time-sensitive callers may prefer `ring` over
+# `aws-lc-rs` (the latter compiles native code via aws-lc-sys; the
+# former is a more traditional, faster-to-build choice).
+default = ["native-roots", "aws-lc-rs"]
+
+# Trust-anchor source. Mutually exclusive — pick one.
 native-roots = ["dep:rustls-native-certs"]
 webpki-roots = ["dep:webpki-roots"]
+
+# Crypto provider for rustls. Mutually exclusive — pick one.
+#
+# - `aws-lc-rs` (default): AWS's BoringSSL-derived provider. Best
+#   performance, FIPS-compliant build paths, but compiles C code at
+#   build time (~3-5 minutes for a fresh build).
+# - `ring`: the traditional rustls provider. Faster to compile, no
+#   C dependencies. Use if build time matters or if your target
+#   doesn't support aws-lc-rs.
+aws-lc-rs = ["tokio-rustls/aws-lc-rs"]
+ring = ["tokio-rustls/ring"]
+
 # Pass-through to wasm-smtp's `xoauth2` feature (Gmail / Microsoft 365).
 xoauth2 = ["wasm-smtp/xoauth2"]
 # Pass-through to wasm-smtp's `smtputf8` feature (international addresses).
 smtputf8 = ["wasm-smtp/smtputf8"]
+# Pass-through to wasm-smtp's `mail-builder` feature.
+mail-builder = ["wasm-smtp/mail-builder"]
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.7.1", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.8.0", default-features = false }
 tokio = { workspace = true, features = ["net", "io-util"] }
 tokio-rustls = { workspace = true }
 rustls-pki-types = { workspace = true }

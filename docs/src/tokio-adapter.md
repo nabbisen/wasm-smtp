@@ -14,28 +14,65 @@ between tokio's `AsyncRead`/`AsyncWrite` and `wasm-smtp`'s
 
 ## Features
 
-| Feature        | Default | Trust-anchor source                                          |
-|----------------|---------|--------------------------------------------------------------|
-| `native-roots` | yes     | System trust store via [`rustls-native-certs`].              |
-| `webpki-roots` | no      | Bundled Mozilla root set via [`webpki-roots`].               |
-| `xoauth2`      | yes     | Pass-through to `wasm-smtp/xoauth2` (Gmail / Microsoft 365). |
-| `smtputf8`     | no      | Pass-through to `wasm-smtp/smtputf8`.                        |
+Two pairs of mutually-exclusive features select the TLS stack:
 
-`native-roots` and `webpki-roots` are mutually exclusive — pick one.
+### Trust-anchor source
+
+| Feature        | Default | Source                                          |
+|----------------|---------|-------------------------------------------------|
+| `native-roots` | yes     | OS trust store via [`rustls-native-certs`].     |
+| `webpki-roots` | no      | Bundled Mozilla root set via [`webpki-roots`].  |
+
 `native-roots` is right for desktop and traditional server
 deployments where the OS already manages CA trust. `webpki-roots`
 is right for minimal containers (distroless, scratch-based images,
 WASM-adjacent constrained environments) without a system CA store.
 
+### Crypto provider
+
+| Feature      | Default | Provider                                              |
+|--------------|---------|-------------------------------------------------------|
+| `aws-lc-rs`  | yes     | AWS BoringSSL-derived. FIPS paths, fastest at runtime. |
+| `ring`       | no      | Traditional rustls provider. Faster to compile.       |
+
+`aws-lc-rs` is the modern default and the right choice for most
+deployments. It does, however, compile native C code via
+`aws-lc-sys`, which adds 3-5 minutes to a clean build. If build
+time is critical (CI, container layer caching) or your target
+doesn't support `aws-lc-sys`, switch to `ring`.
+
+### Other features
+
+| Feature        | Default | Behaviour                                          |
+|----------------|---------|----------------------------------------------------|
+| `xoauth2`      | yes     | Pass-through to `wasm-smtp/xoauth2`.               |
+| `smtputf8`     | no      | Pass-through to `wasm-smtp/smtputf8`.              |
+| `mail-builder` | no      | Pass-through to `wasm-smtp/mail-builder`.          |
+
+### Mutual exclusion
+
+Each pair (trust-anchor and crypto-provider) is mutually exclusive.
+Picking both, or neither, of a pair is a configuration error and
+the crate fails to compile with a descriptive `compile_error!`
+message — the misconfiguration is caught at `cargo build` time
+rather than as a runtime panic from rustls.
+
+### Common configurations
+
 ```toml
+# Default — system trust, aws-lc-rs.
 [dependencies]
-wasm-smtp = "0.7"
+wasm-smtp = "0.8"
+wasm-smtp-tokio = "0.8"
 
-# Default (system trust):
-wasm-smtp-tokio = "0.7"
+# Distroless container with bundled Mozilla roots, aws-lc-rs:
+# wasm-smtp-tokio = { version = "0.8", default-features = false, features = ["webpki-roots", "aws-lc-rs"] }
 
-# Or explicitly bundled Mozilla roots:
-# wasm-smtp-tokio = { version = "0.7", default-features = false, features = ["webpki-roots"] }
+# Fast-rebuild CI with system trust, ring:
+# wasm-smtp-tokio = { version = "0.8", default-features = false, features = ["native-roots", "ring"] }
+
+# Most minimal — bundled roots, ring (smallest dep tree, fastest build):
+# wasm-smtp-tokio = { version = "0.8", default-features = false, features = ["webpki-roots", "ring"] }
 ```
 
 ## Implicit TLS (port 465)

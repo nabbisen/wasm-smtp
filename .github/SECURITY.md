@@ -9,7 +9,7 @@ priority they deserve.
 Please **do not** open a public GitHub issue for a suspected security
 problem. Instead, please report it privately using GitHub's security advisory feature:
 
-> https://github.com/YOUR_ORG/YOUR_REPO/security/advisories/new
+> https://github.com/nabbisen/wasm-smtp/security/advisories/new
 
 Please include:
 

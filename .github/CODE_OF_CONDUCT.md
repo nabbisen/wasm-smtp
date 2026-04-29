@@ -42,7 +42,7 @@ Instances of abusive, harassing, or otherwise unacceptable behavior may
 be reported by contacting the project maintainers via GitHub.
 
 - **Report via GitHub**: Open a private issue or contact the maintainers through the repository's contact methods.
-- **Alternative**: If you prefer not to use GitHub, you can reach us at `abuse@example.com` (optional, only if you have a dedicated alias).
+- **Confidentiality**: Reports are visible only to the maintainers. We respect the privacy of all parties involved in an incident.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

@@ -9,5 +9,6 @@
 - [Protocol](./protocol.md)
 - [Errors](./errors.md)
 - [Usage](./usage.md)
+- [Connection reuse](./connection-reuse.md)
 - [Composing messages](./composing-messages.md)
 - [Examples](./examples.md)

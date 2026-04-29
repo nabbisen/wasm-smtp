@@ -259,6 +259,24 @@ delivered; the rest are not commitments.
   the new API in the same release. Backwards-compatible: the
   existing `IoError::new` continues to work and produces an
   `IoError` with no source.
+- ✅ **`mail-builder` integration helper** (v0.8.0). New
+  `SmtpClient::send_message` method behind the `mail-builder`
+  cargo feature accepts `mail_builder::MessageBuilder` directly,
+  saving the manual `write_to_string()?` step. Off by default;
+  `mail-builder` is not pulled into the dependency graph unless
+  the feature is enabled.
+- ✅ **Connection reuse documentation** (v0.8.0). New chapter
+  `docs/src/connection-reuse.md` documents the existing
+  multi-message-per-connection pattern (state persistence, idle
+  timeouts, retry semantics, intentional absence of a built-in
+  connection pool). Code changes: none — the support has been
+  there since Phase 1.
+- ✅ **Crypto provider switching for the Tokio adapter** (v0.8.0).
+  `wasm-smtp-tokio` now exposes mutually-exclusive `aws-lc-rs`
+  (default) and `ring` cargo features so callers can choose
+  between performance/FIPS (aws-lc-rs) and fast-build/zero-C
+  (ring). Misconfiguration is caught at build time via
+  `compile_error!`.
 
 ### Not yet scheduled
 

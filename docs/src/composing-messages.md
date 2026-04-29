@@ -45,6 +45,47 @@ wasm-smtp-tokio = "0.7"     # or wasm-smtp-cloudflare, depending on runtime
 mail-builder = "0.4"
 ```
 
+### Convenience: `SmtpClient::send_message` (with the `mail-builder` feature)
+
+To skip the explicit `write_to_string()?` step, enable the
+`mail-builder` cargo feature on `wasm-smtp` and use
+`SmtpClient::send_message`:
+
+```toml
+[dependencies]
+wasm-smtp = { version = "0.8", features = ["mail-builder"] }
+mail-builder = "0.4"
+```
+
+```rust,ignore
+use mail_builder::MessageBuilder;
+# async fn run(client: &mut wasm_smtp::SmtpClient<impl wasm_smtp::Transport>) -> Result<(), Box<dyn std::error::Error>> {
+let message = MessageBuilder::new()
+    .from(("Notify", "notify@example.com"))
+    .to(("Alice", "alice@example.org"))
+    .subject("Update")
+    .text_body("Hello.");
+
+client.send_message(
+    "notify@example.com",
+    &["alice@example.org"],
+    message,
+).await?;
+# Ok(())
+# }
+```
+
+The feature is **off by default** because `mail-builder` is a real
+dependency (small, but not nothing). Enabling it adds
+`mail-builder` to your dependency graph and exposes the
+`send_message` method; leaving it off means callers fall back to
+the manual `write_to_string()? + send_mail` pattern shown earlier.
+
+Note that `from` and `to` here are still the **SMTP envelope**, not
+the message headers. The same Bcc rule applies: include Bcc
+recipients in the envelope `to` argument, but `mail-builder`
+handles stripping them from the headers in its serialization.
+
 ### Plain text notification
 
 The 80% case:

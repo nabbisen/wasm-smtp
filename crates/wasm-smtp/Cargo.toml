@@ -48,7 +48,19 @@ smtputf8 = []
 # arm.
 xoauth2 = []
 
+# mail-builder integration: convenience method `SmtpClient::send_message`
+# accepting `mail_builder::MessageBuilder` directly. Off by default
+# because `mail-builder` is a real (though tiny, no-deps) dependency
+# and most callers either use the manual `send_mail` path or compose
+# their own message bodies. Enable when you want to skip the
+# `MessageBuilder::write_to_string` call.
+#
+# When disabled, `send_message` is not compiled and `mail-builder` is
+# not pulled into the dependency graph at all.
+mail-builder = ["dep:mail-builder"]
+
 [dependencies]
+mail-builder = { workspace = true, optional = true }
 
 [lints]
 workspace = true

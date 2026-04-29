@@ -24,6 +24,8 @@
 //! `send_mail` before `connect`, or any operation after `quit`) return
 //! [`InvalidInputError`] without touching the wire.
 
+#[cfg(feature = "mail-builder")]
+use crate::error::IoError;
 use crate::error::{AuthError, InvalidInputError, ProtocolError, SmtpError, SmtpOp};
 use crate::protocol::{
     self, AuthMechanism, MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply,
@@ -436,6 +438,88 @@ impl<T: Transport> SmtpClient<T> {
 
     /// Send a single message using the SMTPUTF8 extension (RFC 6531),
     /// allowing UTF-8 characters in envelope addresses.
+    ///
+    /// Identical to [`Self::send_mail`] except:
+    ///
+    /// - Address validation uses [`protocol::validate_address_utf8`]
+    ///   instead of the strict ASCII validator, so codepoints outside
+    ///   the ASCII range are accepted in `from` and `to`.
+    /// - The `MAIL FROM` command is suffixed with the `SMTPUTF8`
+    ///   ESMTP parameter so the server knows to expect UTF-8.
+    /// - The server must have advertised `SMTPUTF8` in its `EHLO`
+    ///   response. If it did not, this method returns
+    ///   [`ProtocolError::ExtensionUnavailable`] without sending any
+    ///   bytes.
+    ///
+    /// The body must still be CRLF-normalized; any UTF-8 in headers
+    /// (e.g. `Subject:` containing non-ASCII characters) is the
+    /// caller's responsibility to format correctly. RFC 6531 §3.2
+    /// permits raw UTF-8 in headers when SMTPUTF8 is in effect, but
+    /// strict deployments may still expect MIME encoded-words; this
+    /// crate makes no claim either way.
+    ///
+    /// Convenience: serialize a `mail-builder` `MessageBuilder` to a
+    /// CRLF-normalized string and submit it.
+    ///
+    /// Equivalent to:
+    ///
+    /// ```ignore
+    /// let body = message.write_to_string()?;
+    /// client.send_mail(from, to, &body).await?;
+    /// ```
+    ///
+    /// `from` is the SMTP envelope sender (`MAIL FROM:`); `to` is the
+    /// envelope recipient list (`RCPT TO:`). These are **separate** from
+    /// the `From:` and `To:` headers that `MessageBuilder` writes into
+    /// the message body — they often coincide in practice, but the
+    /// envelope is what the SMTP server uses for routing, while the
+    /// headers are what the recipient's MUA displays. `Bcc` recipients
+    /// must appear in `to` (the envelope) but **not** in any
+    /// `MessageBuilder::bcc(...)` call (or, if they do, `MessageBuilder`
+    /// strips them from the headers when serializing — verify against
+    /// your `mail-builder` version).
+    ///
+    /// Available only with the `mail-builder` cargo feature enabled.
+    ///
+    /// # Errors
+    ///
+    /// All the categories returned by [`Self::send_mail`], plus:
+    ///
+    /// - [`SmtpError::Io`] with the underlying `mail_builder` error
+    ///   preserved as the source chain if `MessageBuilder::write_to_string`
+    ///   fails (effectively only on out-of-memory in current
+    ///   `mail-builder` versions).
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use mail_builder::MessageBuilder;
+    /// let message = MessageBuilder::new()
+    ///     .from(("Notify", "notify@example.com"))
+    ///     .to("alice@example.org")
+    ///     .subject("Status update")
+    ///     .text_body("Hello.");
+    ///
+    /// client.send_message(
+    ///     "notify@example.com",
+    ///     &["alice@example.org"],
+    ///     message,
+    /// ).await?;
+    /// ```
+    #[cfg(feature = "mail-builder")]
+    pub async fn send_message(
+        &mut self,
+        from: &str,
+        to: &[&str],
+        message: ::mail_builder::MessageBuilder<'_>,
+    ) -> Result<(), SmtpError> {
+        let body = message
+            .write_to_string()
+            .map_err(|e| SmtpError::Io(IoError::with_source("failed to serialize message", e)))?;
+        self.send_mail(from, to, &body).await
+    }
+
+    /// Submit a UTF-8 (RFC 6531) message and recipient set.
     ///
     /// Identical to [`Self::send_mail`] except:
     ///

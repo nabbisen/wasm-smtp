@@ -7,6 +7,93 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-04-29
+
+This release bundles three Phase-12 follow-ups that landed together
+because none of them was large enough to warrant its own version
+bump.
+
+### Added
+
+- **`mail-builder` integration helper** (Phase 12 step 1). New
+  `SmtpClient::send_message` method behind the `mail-builder` cargo
+  feature accepts a `mail_builder::MessageBuilder` directly:
+
+  ```rust,ignore
+  client.send_message(
+      "notify@example.com",
+      &["alice@example.org"],
+      MessageBuilder::new()
+          .from("notify@example.com")
+          .to("alice@example.org")
+          .subject("hi")
+          .text_body("hello"),
+  ).await?;
+  ```
+
+  Equivalent to `let body = msg.write_to_string()?;
+  client.send_mail(from, to, &body).await?` but skips the manual
+  serialization step and preserves any `mail_builder` error as the
+  `IoError` source chain.
+
+  - Off by default — enable with `features = ["mail-builder"]`.
+  - When disabled, `mail-builder` is not pulled into the
+    dependency graph at all.
+  - SMTP envelope vs. message-header semantics are unchanged from
+    the manual `send_mail` path; the helper is purely a
+    serialization shortcut.
+
+- **`wasm-smtp-tokio`: `aws-lc-rs` and `ring` cargo features**
+  (Phase 12 step 3). Callers can now switch the rustls crypto
+  provider:
+
+  - `aws-lc-rs` (default): AWS BoringSSL-derived provider.
+    Best runtime performance, FIPS-compliant build paths.
+    Compiles C code (~3-5 min on a clean build).
+  - `ring`: the traditional rustls provider. Faster to compile,
+    no C dependencies. Use if build time matters or if your
+    target doesn't support `aws-lc-sys`.
+
+  The two are mutually exclusive at build time: picking both, or
+  neither, fails the build with a descriptive `compile_error!`.
+  Same hard-error treatment is now applied to the existing
+  `native-roots` / `webpki-roots` pair so configuration mistakes
+  are caught at `cargo build` rather than as a runtime panic.
+
+### Changed
+
+- **Workspace bumped 0.7.1 → 0.8.0.** Adding new optional cargo
+  features and exposing a new public method on `SmtpClient`
+  warrants a minor bump under our 0.x versioning posture so
+  downstream lockfile-less builds notice the change.
+- **`tokio-rustls` is now configured with `default-features = false`**
+  in the workspace dependency declaration so individual crypto
+  providers can be selected through the `wasm-smtp-tokio`
+  feature surface. Callers using `wasm-smtp-tokio` through its
+  default features see no behaviour change (`aws-lc-rs` is still
+  the default provider).
+
+### Documentation
+
+- New chapter **"Connection reuse"** (`docs/src/connection-reuse.md`,
+  Phase 12 step 2) documents the existing connection-reuse pattern:
+  one `SmtpClient` instance can submit multiple messages over a
+  single authenticated session. Covers what state persists, idle
+  timeouts, graceful failure handling, the `quit()` vs drop
+  behaviour, why connection pooling is not built in, and the
+  authentication-reuse subtlety. No code changes — the support
+  has been there since Phase 1; the chapter just makes it
+  discoverable.
+- The "Composing messages" chapter now leads with the
+  `send_message` shortcut for callers who enable the
+  `mail-builder` feature, retaining the manual
+  `write_to_string()? + send_mail` pattern as the explicit
+  fallback.
+- The Tokio adapter chapter rewrites its features table to cover
+  both pairs of mutually-exclusive features (trust source,
+  crypto provider) and lists four representative cargo
+  configurations side-by-side.
+
 ## [0.7.1] — 2026-04-29
 
 ### Added
@@ -482,7 +569,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.1...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.1...v0.6.0

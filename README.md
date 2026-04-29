@@ -1,12 +1,14 @@
 # wasm-smtp
 
-[![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](https://github.com/nabbisen/wasm-smtp/blob/main/LICENSE)
-
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp?label=core)](https://crates.io/crates/wasm-smtp)
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp-cloudflare?label=cloudflare)](https://crates.io/crates/wasm-smtp-cloudflare)
+[![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](https://github.com/nabbisen/wasm-smtp/blob/main/LICENSE)    
+[![crates.io](https://img.shields.io/crates/v/wasm-smtp?label=wasm-smtp)](https://crates.io/crates/wasm-smtp)
 [![Rust Documentation](https://docs.rs/wasm-smtp/badge.svg?version=latest)](https://docs.rs/wasm-smtp)
+[![Dependency Status](https://deps.rs/crate/wasm-smtp/latest/status.svg)](https://deps.rs/crate/wasm-smtp)    
+[![crates.io](https://img.shields.io/crates/v/wasm-smtp-tokio?label=tokio-adapter)](https://crates.io/crates/wasm-smtp-tokio)
+[![Rust Documentation](https://docs.rs/wasm-smtp-tokio/badge.svg?version=latest)](https://docs.rs/wasm-smtp-tokio)
+[![Dependency Status](https://deps.rs/crate/wasm-smtp-tokio/latest/status.svg)](https://deps.rs/crate/wasm-smtp-tokio)
+[![crates.io](https://img.shields.io/crates/v/wasm-smtp-cloudflare?label=cloudflare-adapter)](https://crates.io/crates/wasm-smtp-cloudflare)
 [![Rust Documentation](https://docs.rs/wasm-smtp-cloudflare/badge.svg?version=latest)](https://docs.rs/wasm-smtp-cloudflare)
-[![Dependency Status](https://deps.rs/crate/wasm-smtp/latest/status.svg)](https://deps.rs/crate/wasm-smtp)
 [![Dependency Status](https://deps.rs/crate/wasm-smtp-cloudflare/latest/status.svg)](https://deps.rs/crate/wasm-smtp-cloudflare)
 
 Rust crates for sending mail by SMTP from WebAssembly runtimes. The

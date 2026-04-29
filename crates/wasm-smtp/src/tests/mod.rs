@@ -38,3 +38,6 @@ mod session_tests;
 
 #[cfg(feature = "smtputf8")]
 mod smtputf8_tests;
+
+#[cfg(feature = "mail-builder")]
+mod mail_builder_tests;
