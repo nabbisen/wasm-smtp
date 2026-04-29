@@ -58,6 +58,9 @@ pub mod protocol;
 pub mod session;
 pub mod transport;
 
+#[cfg(feature = "scram-sha-256")]
+mod scram;
+
 pub use client::SmtpClient;
 pub use error::{AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp};
 pub use protocol::{AuthMechanism, EnhancedStatus};

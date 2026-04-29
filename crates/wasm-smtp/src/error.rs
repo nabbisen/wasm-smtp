@@ -255,6 +255,10 @@ pub enum SmtpOp {
     /// `AUTH XOAUTH2` exchange (Google / Microsoft OAuth 2.0 SASL
     /// profile).
     AuthXOAuth2,
+    /// `AUTH SCRAM-SHA-256` exchange (RFC 5802 / RFC 7677). Available
+    /// only with the `scram-sha-256` cargo feature; the variant
+    /// itself is always present for source-compatibility stability.
+    AuthScramSha256,
     /// `MAIL FROM:<...>` envelope-sender announcement.
     MailFrom,
     /// `RCPT TO:<...>` recipient announcement (any of several when the
@@ -280,6 +284,7 @@ impl SmtpOp {
             Self::AuthPlain => "AUTH PLAIN",
             Self::AuthLogin => "AUTH LOGIN",
             Self::AuthXOAuth2 => "AUTH XOAUTH2",
+            Self::AuthScramSha256 => "AUTH SCRAM-SHA-256",
             Self::MailFrom => "MAIL FROM",
             Self::RcptTo => "RCPT TO",
             Self::Data => "DATA",
@@ -466,6 +471,14 @@ pub enum AuthError {
     /// The server returned a 334 prompt that did not look like a valid
     /// base64 challenge.
     MalformedChallenge(String),
+    /// A mechanism-specific protocol failure that does not fit the
+    /// other variants. Currently used by SCRAM-SHA-256 to surface
+    /// malformed `server-first` / `server-final` messages, salt or
+    /// signature decode failures, server-signature mismatch, and
+    /// out-of-policy iteration counts. The `&'static str` is a
+    /// debug aid; callers should not pattern-match on its content
+    /// (it is not part of the API contract).
+    Other(&'static str),
 }
 
 impl fmt::Display for AuthError {
@@ -503,6 +516,9 @@ impl fmt::Display for AuthError {
             }
             Self::MalformedChallenge(s) => {
                 write!(f, "server sent a malformed AUTH challenge: {s}")
+            }
+            Self::Other(detail) => {
+                write!(f, "authentication failed: {detail}")
             }
         }
     }

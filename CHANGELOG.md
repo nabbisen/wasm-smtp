@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-04-29
+
+This release implements **SCRAM-SHA-256 (RFC 5802 / RFC 7677)** as
+a default-on authentication mechanism, completing Phase 12.
+
+### Added
+
+- **`AUTH SCRAM-SHA-256` support** behind the new `scram-sha-256`
+  cargo feature (default-on). SCRAM is the modern challenge-response
+  SASL mechanism: the client never transmits the password in
+  plaintext, and the server proves possession of the salted hash
+  through a signature step that the client verifies. The
+  implementation passes the official RFC 7677 §3 test vector.
+
+  ```rust,ignore
+  // Auto-selection now prefers SCRAM-SHA-256:
+  client.login("user@example.com", "secret").await?;
+
+  // Or pin explicitly:
+  client.login_with(AuthMechanism::ScramSha256, user, password).await?;
+  ```
+
+  Defenses included:
+  - PBKDF2 iteration count clamped to `[4096, 600_000]` to defend
+    against weak server policies and DoS attacks.
+  - Server nonce MUST start with the client nonce we sent (replay
+    defense per RFC 5802 §5.1).
+  - Unknown SCRAM `m=` extensions reject the exchange.
+  - Server signature verified with constant-time comparison
+    (`subtle` crate) before the client returns success.
+  - Both the standard 334-then-235 server response and the inline
+    235-with-signature variant (Stalwart, some Postfix builds)
+    are accepted.
+
+- **`AuthMechanism::ScramSha256`** variant. The enum is
+  `non_exhaustive`, so this is source-compatible: existing
+  pattern-match code with a wildcard arm continues to compile.
+
+- **`SmtpOp::AuthScramSha256`** variant for error attribution
+  during `AUTH SCRAM-SHA-256` exchanges.
+
+- **`AuthError::Other(&'static str)`** variant for surfacing
+  SCRAM-specific protocol failures (server-nonce mismatch,
+  iteration count out of bounds, server signature verification
+  failure, malformed server messages). Callers should NOT
+  pattern-match on the static-str content; it is a debug aid only.
+
+- **`protocol::base64_decode`** is now public, mirroring the
+  existing `base64_encode`. Standard RFC 4648 padded base64. Used
+  internally by SCRAM but generally useful and worth exposing.
+
+### Changed
+
+- **`select_auth_mechanism` (and `SmtpClient::login` auto-selection)**
+  now prefers `SCRAM-SHA-256` over `PLAIN` over `LOGIN` when the
+  server advertises multiple mechanisms. Previously the order was
+  `PLAIN > LOGIN`. This is a behaviour change for callers who use
+  `login()` against servers that advertise both `SCRAM-SHA-256`
+  and `PLAIN`: they will now use SCRAM. The change is a security
+  improvement (passwords stop being transmitted in plaintext) and
+  is the reason this is a minor bump rather than a patch bump.
+
+  Callers who specifically need the old behaviour — for example,
+  testing PLAIN-only paths — should use
+  `login_with(AuthMechanism::Plain, ...)` explicitly. When
+  `scram-sha-256` is disabled at the feature level, the selection
+  function falls through to the previous PLAIN/LOGIN ordering.
+
+- **`AuthError` is `non_exhaustive`** (already was) — the new
+  `Other(&'static str)` variant fits without breaking pattern
+  matches that use a wildcard arm.
+
+- **`SmtpOp` is `non_exhaustive`** (already was) — same story for
+  `AuthScramSha256`.
+
+### Documentation
+
+- New chapter section on SCRAM-SHA-256 in the protocol reference,
+  documenting the four-message exchange, our defenses, and what's
+  intentionally not implemented (channel binding / `-PLUS`,
+  SCRAM-SHA-1, SASLprep normalization).
+
 ## [0.8.0] — 2026-04-29
 
 This release bundles three Phase-12 follow-ups that landed together
@@ -569,7 +651,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.6.0...v0.7.0

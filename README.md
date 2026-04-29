@@ -113,14 +113,14 @@ senders against a self-hosted Postfix or commercial relay using static
 passwords):
 
 ```toml
-wasm-smtp = { version = "0.4", default-features = false }
+wasm-smtp = { version = "0.9", default-features = false }
 ```
 
 To opt into international addresses while keeping the OAuth 2.0
 support:
 
 ```toml
-wasm-smtp = { version = "0.4", features = ["smtputf8"] }
+wasm-smtp = { version = "0.9", features = ["smtputf8"] }
 ```
 
 The `wasm-smtp-cloudflare` adapter exposes a matching `smtputf8`

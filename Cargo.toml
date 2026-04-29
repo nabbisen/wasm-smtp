@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/wasm-smtp", "crates/cloudflare", "crates/wasm-smtp-tokio"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -75,3 +75,21 @@ webpki-roots = "0.26"
 # stable for over a year). We do not enable optional features so the
 # crate adds no transitive deps either.
 mail-builder = { version = "0.4", default-features = false }
+
+# Crypto crates used by the optional `scram-sha-256` feature on the
+# main crate. RustCrypto project, no_std-compatible, RustSec-clean.
+# Floors are conservative — current minors are well past these.
+hmac = { version = "0.12", default-features = false }
+sha2 = { version = "0.10", default-features = false }
+pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+# CSPRNG for SCRAM client nonce. The `std` feature is needed for
+# OsRng; the `js` feature is needed only for wasm32-unknown-unknown
+# targets and is NOT enabled here — adapter crates that target WASM
+# (wasm-smtp-cloudflare) opt into it themselves.
+getrandom = { version = "0.2", default-features = false }
+# constant-time comparison for the server signature verification
+# step. Tiny crate (~50 LOC), no_std-compatible, no transitive deps.
+subtle = { version = "2.5", default-features = false }
+# base64 for SCRAM message encoding. We already implement minimal
+# base64 in protocol.rs for SASL framing; SCRAM uses standard b64
+# but the existing helper is sufficient.

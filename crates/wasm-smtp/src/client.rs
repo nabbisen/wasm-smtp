@@ -207,10 +207,32 @@ impl<T: Transport> SmtpClient<T> {
                 protocol::validate_xoauth2_user(user)?;
                 protocol::validate_oauth2_token(credential)?;
             }
-            #[cfg(not(feature = "xoauth2"))]
+            #[cfg(feature = "scram-sha-256")]
+            AuthMechanism::ScramSha256 => {
+                // Same validators as PLAIN/LOGIN: NUL bytes break SASL
+                // framing on the post-base64 server side regardless of
+                // the mechanism.
+                protocol::validate_plain_username(user)?;
+                protocol::validate_plain_password(credential)?;
+            }
+            #[cfg(not(any(feature = "xoauth2", feature = "scram-sha-256")))]
             _ => {
                 return Err(InvalidInputError::new(
-                    "XOAUTH2 support is not compiled in (enable the `xoauth2` feature)",
+                    "the requested AUTH mechanism is not compiled in",
+                )
+                .into());
+            }
+            #[cfg(all(feature = "xoauth2", not(feature = "scram-sha-256")))]
+            _ => {
+                return Err(InvalidInputError::new(
+                    "SCRAM-SHA-256 is not compiled in (enable the `scram-sha-256` feature)",
+                )
+                .into());
+            }
+            #[cfg(all(not(feature = "xoauth2"), feature = "scram-sha-256"))]
+            _ => {
+                return Err(InvalidInputError::new(
+                    "XOAUTH2 is not compiled in (enable the `xoauth2` feature)",
                 )
                 .into());
             }
@@ -227,8 +249,10 @@ impl<T: Transport> SmtpClient<T> {
             AuthMechanism::Login => self.run_auth_login(user, credential).await?,
             #[cfg(feature = "xoauth2")]
             AuthMechanism::XOAuth2 => self.run_auth_xoauth2(user, credential).await?,
-            #[cfg(not(feature = "xoauth2"))]
-            _ => unreachable!("XOAUTH2 was screened out above when the feature is disabled"),
+            #[cfg(feature = "scram-sha-256")]
+            AuthMechanism::ScramSha256 => self.run_auth_scram_sha256(user, credential).await?,
+            #[cfg(not(all(feature = "xoauth2", feature = "scram-sha-256")))]
+            _ => unreachable!("variants screened out above when feature is disabled"),
         }
 
         self.transition(SessionState::MailFrom)?;
@@ -368,6 +392,170 @@ impl<T: Transport> SmtpClient<T> {
                 })
             }
         }
+    }
+
+    /// `AUTH SCRAM-SHA-256` exchange (RFC 5802 / RFC 7677).
+    ///
+    /// Wire form:
+    /// 1. `C: AUTH SCRAM-SHA-256 <b64(client-first)>`
+    /// 2. `S: 334 <b64(server-first)>`
+    /// 3. `C: <b64(client-final-with-proof)>`
+    /// 4. `S: 334 <b64(server-final)>` then `S: 235 <ok>`
+    ///    (or `S: 535` if the proof failed verification on the
+    ///    server side).
+    ///
+    /// Note that step 4 has the server returning `334` *with* the
+    /// signature, not directly `235`. The client must verify the
+    /// server's signature locally (mutual authentication) and then
+    /// reply with an empty continuation. The `235` confirms the
+    /// session is authenticated.
+    #[cfg(feature = "scram-sha-256")]
+    async fn run_auth_scram_sha256(&mut self, user: &str, password: &str) -> Result<(), SmtpError> {
+        // Step 1: client-first.
+        let client_nonce = crate::scram::generate_client_nonce().map_err(SmtpError::Auth)?;
+        let client_first = crate::scram::build_client_first(user, &client_nonce);
+        let client_first_b64 = protocol::base64_encode(client_first.as_bytes());
+
+        let mut cmd = String::with_capacity(20 + client_first_b64.len() + 2);
+        cmd.push_str("AUTH SCRAM-SHA-256 ");
+        cmd.push_str(&client_first_b64);
+        cmd.push_str("\r\n");
+        self.write_all(cmd.as_bytes()).await?;
+
+        // Step 2: read 334 with server-first.
+        let reply = self.read_reply().await?;
+        if reply.code != 334 {
+            self.mark_closed_on_logical_failure();
+            return Err(if (500..600).contains(&reply.code) {
+                SmtpError::Auth(AuthError::Rejected {
+                    code: reply.code,
+                    enhanced: reply.enhanced(),
+                    message: reply.joined_text(),
+                })
+            } else {
+                SmtpError::Protocol(ProtocolError::UnexpectedCode {
+                    during: SmtpOp::AuthScramSha256,
+                    expected_class: 3,
+                    actual: reply.code,
+                    enhanced: reply.enhanced(),
+                    message: reply.joined_text(),
+                })
+            });
+        }
+
+        // The 334 reply text is the base64 of the server-first message.
+        let server_first_b64 = reply.joined_text();
+        let server_first_bytes = protocol::base64_decode(&server_first_b64).map_err(|_| {
+            self.mark_closed_on_logical_failure();
+            SmtpError::Auth(AuthError::MalformedChallenge(
+                "SCRAM server-first not valid base64".into(),
+            ))
+        })?;
+        let server_first_str = std::str::from_utf8(&server_first_bytes).map_err(|_| {
+            self.mark_closed_on_logical_failure();
+            SmtpError::Auth(AuthError::MalformedChallenge(
+                "SCRAM server-first not valid UTF-8".into(),
+            ))
+        })?;
+
+        let server_first = crate::scram::parse_server_first(server_first_str, &client_nonce)
+            .map_err(|e| {
+                self.mark_closed_on_logical_failure();
+                SmtpError::Auth(e)
+            })?;
+
+        // Step 3: compute and send client-final.
+        let cf = crate::scram::compute_client_final(
+            user,
+            password,
+            &client_nonce,
+            &server_first,
+            server_first_str,
+        );
+        let client_final_b64 = protocol::base64_encode(cf.message.as_bytes());
+        let mut cmd = String::with_capacity(client_final_b64.len() + 2);
+        cmd.push_str(&client_final_b64);
+        cmd.push_str("\r\n");
+        self.write_all(cmd.as_bytes()).await?;
+
+        // Step 4: server-final + confirmation.
+        let reply = self.read_reply().await?;
+        match reply.code {
+            334 => {
+                // Server is sending its signature as a challenge; verify
+                // and continue with empty response.
+                self.scram_verify_server_final(
+                    &reply.joined_text(),
+                    &cf.expected_server_signature,
+                )?;
+                // Send empty continuation.
+                self.write_all(b"\r\n").await?;
+                // Now expect 235.
+                self.expect_code(235, SmtpOp::AuthScramSha256)
+                    .await
+                    .map_err(convert_auth)?;
+                Ok(())
+            }
+            235 => {
+                // Some servers (Stalwart in some configurations) return
+                // the server-final embedded in the 235 line directly,
+                // skipping the 334-then-235 dance. RFC 5802 §5.1 allows
+                // this. We still verify the signature.
+                self.scram_verify_server_final(
+                    &reply.joined_text(),
+                    &cf.expected_server_signature,
+                )?;
+
+                Ok(())
+            }
+            other => {
+                self.mark_closed_on_logical_failure();
+                Err(if (500..600).contains(&other) {
+                    SmtpError::Auth(AuthError::Rejected {
+                        code: other,
+                        enhanced: reply.enhanced(),
+                        message: reply.joined_text(),
+                    })
+                } else {
+                    SmtpError::Protocol(ProtocolError::UnexpectedCode {
+                        during: SmtpOp::AuthScramSha256,
+                        expected_class: 2,
+                        actual: other,
+                        enhanced: reply.enhanced(),
+                        message: reply.joined_text(),
+                    })
+                })
+            }
+        }
+    }
+
+    /// Helper for [`Self::run_auth_scram_sha256`]: base64-decode and
+    /// UTF-8-decode a `server-final` payload, then verify it against
+    /// the expected `ServerSignature`. Marks the session closed and
+    /// returns an [`AuthError`] on any failure.
+    #[cfg(feature = "scram-sha-256")]
+    fn scram_verify_server_final(
+        &mut self,
+        server_final_b64: &str,
+        expected_signature: &[u8; 32],
+    ) -> Result<(), SmtpError> {
+        let server_final_bytes = protocol::base64_decode(server_final_b64).map_err(|_| {
+            self.mark_closed_on_logical_failure();
+            SmtpError::Auth(AuthError::MalformedChallenge(
+                "SCRAM server-final not valid base64".into(),
+            ))
+        })?;
+        let server_final_str = std::str::from_utf8(&server_final_bytes).map_err(|_| {
+            self.mark_closed_on_logical_failure();
+            SmtpError::Auth(AuthError::MalformedChallenge(
+                "SCRAM server-final not valid UTF-8".into(),
+            ))
+        })?;
+        crate::scram::verify_server_final(server_final_str, expected_signature).map_err(|e| {
+            self.mark_closed_on_logical_failure();
+            SmtpError::Auth(e)
+        })?;
+        Ok(())
     }
 
     /// Send a single message.

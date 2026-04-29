@@ -41,3 +41,6 @@ mod smtputf8_tests;
 
 #[cfg(feature = "mail-builder")]
 mod mail_builder_tests;
+
+#[cfg(feature = "scram-sha-256")]
+mod scram_tests;

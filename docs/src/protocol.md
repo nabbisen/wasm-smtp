@@ -102,27 +102,108 @@ to its own policy.
 
 ## Authentication
 
-The crate implements three SASL mechanisms: `PLAIN` (RFC 4616), the
+The crate implements four SASL mechanisms: `SCRAM-SHA-256`
+(RFC 5802 / RFC 7677, default-on), `PLAIN` (RFC 4616), the
 historical `LOGIN` mechanism, and `XOAUTH2` (the Google / Microsoft
-OAuth 2.0 SASL profile). `PLAIN` is the default for static-password
-flows because it is the IETF-standard SASL mechanism and completes
-in a single round-trip; `LOGIN` is retained for older submission
+OAuth 2.0 SASL profile). `SCRAM-SHA-256` is the modern preferred
+mechanism for static-password flows because the password is never
+transmitted in plaintext, encrypted or otherwise; `PLAIN` is the
+universal fallback; `LOGIN` is retained for older submission
 servers; `XOAUTH2` is opt-in for OAuth 2.0 bearer-token flows.
 
 ### Mechanism selection
 
 The high-level [`SmtpClient::login`] method consults the server's
-`EHLO` capabilities and picks the best **static-password** mechanism:
-`PLAIN` if advertised, otherwise `LOGIN`, otherwise
-[`AuthError::UnsupportedMechanism`]. It deliberately does not pick
-`XOAUTH2` even when advertised, because the credential semantics are
-different (a short-lived bearer token rather than a static password).
-Callers that want OAuth 2.0 use [`SmtpClient::login_xoauth2`]
-explicitly.
+`EHLO` capabilities and picks the best **static-password**
+mechanism:
+
+1. `SCRAM-SHA-256` if advertised (and the `scram-sha-256` feature
+   is enabled, which is the default).
+2. `PLAIN` if advertised, otherwise
+3. `LOGIN` if advertised, otherwise
+4. [`AuthError::UnsupportedMechanism`].
+
+It deliberately does not pick `XOAUTH2` even when advertised,
+because the credential semantics are different (a short-lived
+bearer token rather than a static password). Callers that want
+OAuth 2.0 use [`SmtpClient::login_xoauth2`] explicitly.
 
 Callers that need a specific mechanism — for example, to reproduce a
 failure tied to one mechanism — should use [`SmtpClient::login_with`]
 instead.
+
+### AUTH SCRAM-SHA-256 (RFC 5802 / RFC 7677)
+
+The four-message Salted Challenge Response Authentication Mechanism:
+
+```text
+C: AUTH SCRAM-SHA-256 <base64(client-first)>
+   client-first = "n,,n=user,r=client_nonce"
+S: 334 <base64(server-first)>
+   server-first = "r=server_nonce,s=salt_b64,i=iter_count"
+C: <base64(client-final)>
+   client-final = "c=biws,r=server_nonce,p=proof_b64"
+S: 334 <base64(server-final)>
+   server-final = "v=server_signature_b64"
+C: (empty continuation)
+S: 235 <message>
+```
+
+(Some servers — Stalwart, certain Postfix builds — embed the
+`server-final` directly in a `235` response, skipping the second
+`334`. Both wire forms are accepted.)
+
+The client proof is computed without ever sending the password to
+the server. Both sides derive shared key material via
+`PBKDF2-HMAC-SHA-256(password, salt, iter_count, 32)`; the
+client's proof is HMAC-derived from this, bound to the entire
+exchange through the `AuthMessage`. A man-in-the-middle that
+observed only the SCRAM messages cannot recover the password.
+
+#### Defenses
+
+- **Replay defense.** The server's nonce MUST start with the
+  client nonce we sent (RFC 5802 §5.1). A server that returns an
+  unrelated nonce is treated as broken or hostile and the
+  exchange is aborted before any password-derived material
+  leaves the client.
+- **DoS defense.** PBKDF2 iteration counts are clamped to
+  `[4096, 600_000]`. A malicious or misconfigured server cannot
+  cause the client to spend minutes computing a key derivation
+  for an attack-controlled iteration count.
+- **Constant-time signature verification.** The server signature
+  comparison uses `subtle::ConstantTimeEq` to prevent timing
+  side-channels.
+- **Unknown extensions are rejected.** RFC 5802 §5.1 mandates
+  failure on unknown `m=` extension attributes; the crate
+  follows this rule.
+
+#### What is not implemented
+
+- **`SCRAM-SHA-256-PLUS` (channel binding).** This requires
+  per-connection TLS binding tokens that the current `Transport`
+  contract does not surface. Callers who need MITM defense
+  beyond what baseline SCRAM gives should ensure their
+  `Transport` implementation validates certificates and
+  hostnames — both are required by `wasm-smtp-tokio` already.
+- **`SCRAM-SHA-1`.** SHA-1 is obsolete; only the SHA-256 variant
+  is implemented.
+- **`SASLprep` (RFC 4013).** Username and password normalization
+  is not performed. For ASCII credentials this is a no-op; for
+  non-ASCII credentials, callers must normalize before
+  submission.
+
+#### Errors
+
+- [`AuthError::Other(&'static str)`] for SCRAM-specific protocol
+  failures: nonce-prefix mismatch, iteration count out of range,
+  server signature verification failure, unsupported `m=`
+  extension, malformed messages. The static-str is a debug aid;
+  callers should not pattern-match on its content.
+- [`AuthError::MalformedChallenge`] if the server's `334` reply
+  is not valid base64 or not valid UTF-8.
+- [`AuthError::Rejected`] if the server returns a 5xx at any
+  step (e.g. invalid credentials).
 
 ### AUTH PLAIN (RFC 4616)
 

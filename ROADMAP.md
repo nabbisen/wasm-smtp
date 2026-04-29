@@ -277,11 +277,32 @@ delivered; the rest are not commitments.
   between performance/FIPS (aws-lc-rs) and fast-build/zero-C
   (ring). Misconfiguration is caught at build time via
   `compile_error!`.
+- ✅ **`AUTH SCRAM-SHA-256`** (v0.9.0). RFC 5802 / RFC 7677
+  challenge-response SASL: the password never crosses the wire,
+  even encrypted. Implements PBKDF2-HMAC-SHA-256 key derivation,
+  the four-message client-first/server-first/client-final/
+  server-final exchange, server-signature verification (constant
+  time via `subtle`), iteration count clamping for DoS defense,
+  and replay defense via the nonce-prefix check. Behind the
+  default-on `scram-sha-256` cargo feature. The
+  `select_auth_mechanism` helper now prefers SCRAM over PLAIN
+  over LOGIN, so existing `login()` callers automatically benefit
+  on servers that advertise it.
+
+  Out of scope: `SCRAM-SHA-256-PLUS` (channel binding) requires
+  per-connection binding tokens from the TLS layer that the
+  current `Transport` contract does not expose. SCRAM-SHA-1 and
+  `SASLprep` normalization are also not implemented; SHA-1 is
+  obsolete and SASLprep matters only for non-ASCII credentials.
 
 ### Not yet scheduled
 
 - Additional adapters for non-tokio runtimes (Deno, WASI sockets).
-- Extra SASL mechanisms (`SCRAM-SHA-256`, `OAUTHBEARER`).
+- `OAUTHBEARER` (RFC 7628) — the IETF-standard OAuth 2.0 SASL
+  mechanism, complementing the ad-hoc `XOAUTH2` already supported.
+- `SCRAM-SHA-256-PLUS` (channel binding) once a clean way to
+  surface TLS binding tokens through the `Transport` contract is
+  identified.
 - Pipelining (RFC 2920) for slightly better latency on high-RTT links.
 - DSN extension parameters (RFC 3461) for delivery-status routing.
 

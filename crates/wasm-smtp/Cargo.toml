@@ -16,12 +16,11 @@ categories = ["email", "network-programming", "wasm"]
 path = "src/lib.rs"
 
 [features]
-# Default features. `xoauth2` is enabled by default for backwards
-# compatibility with v0.3.x; callers that do not use OAuth 2.0
-# authentication (Gmail / Microsoft 365 submission) can disable it
-# with `default-features = false` to shave roughly 250 LOC of
-# protocol logic and helpers from their build.
-default = ["xoauth2"]
+# Default features. `xoauth2` and `scram-sha-256` are enabled by default
+# because they represent the modern, secure authentication mechanisms;
+# callers that do not need them can disable with `default-features = false`
+# to shave protocol logic and crypto dependencies from their build.
+default = ["xoauth2", "scram-sha-256"]
 
 # SMTPUTF8 (RFC 6531) — international (UTF-8) addresses in MAIL FROM /
 # RCPT TO. Off by default: the feature is a niche opt-in, and disabling
@@ -48,6 +47,35 @@ smtputf8 = []
 # arm.
 xoauth2 = []
 
+# AUTH SCRAM-SHA-256 (RFC 5802) — challenge-response SASL mechanism
+# that does not transmit the password in plaintext. Default-on
+# because:
+#
+# - SCRAM is the modern preferred SASL mechanism for SMTP
+#   submission; PLAIN/LOGIN remain only for legacy server
+#   compatibility.
+# - The auto-mechanism-selection in `SmtpClient::login` prefers
+#   SCRAM-SHA-256 when both client and server support it; disabling
+#   this feature silently degrades to PLAIN/LOGIN, which is exactly
+#   the wrong default for security-conscious callers.
+#
+# Adds `hmac`, `sha2`, `pbkdf2`, `getrandom`, and `subtle` to the
+# dependency tree (~150 KB compressed binary impact). Disable via
+# `default-features = false` when binary size matters more than
+# the strongest available authentication.
+#
+# Note: this feature implements `SCRAM-SHA-256` only, NOT
+# `SCRAM-SHA-256-PLUS` (channel binding). The latter requires
+# extracting binding tokens from the TLS implementation, which is
+# out of scope for the current adapter contract.
+scram-sha-256 = [
+    "dep:hmac",
+    "dep:sha2",
+    "dep:pbkdf2",
+    "dep:getrandom",
+    "dep:subtle",
+]
+
 # mail-builder integration: convenience method `SmtpClient::send_message`
 # accepting `mail_builder::MessageBuilder` directly. Off by default
 # because `mail-builder` is a real (though tiny, no-deps) dependency
@@ -61,6 +89,11 @@ mail-builder = ["dep:mail-builder"]
 
 [dependencies]
 mail-builder = { workspace = true, optional = true }
+hmac = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+pbkdf2 = { workspace = true, optional = true }
+getrandom = { workspace = true, optional = true }
+subtle = { workspace = true, optional = true }
 
 [lints]
 workspace = true

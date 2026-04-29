@@ -464,6 +464,67 @@ fn push_b64(out: &mut String, n: u32, count: u8) {
     }
 }
 
+/// Standard base64 decoding (RFC 4648), padded with `=`.
+///
+/// The symmetric counterpart of [`base64_encode`]. Used for SCRAM
+/// `server-first` and `server-final` decoding.
+///
+/// Returns `Err` for inputs whose length is not a multiple of 4, or
+/// that contain characters outside the standard base64 alphabet
+/// (`A-Z`, `a-z`, `0-9`, `+`, `/`, `=`). Padding is allowed only at
+/// the end.
+///
+/// # Errors
+///
+/// Returns the static string `"invalid base64"` on any decode
+/// failure. The caller is expected to wrap this in a
+/// domain-appropriate error type.
+pub fn base64_decode(input: &str) -> Result<Vec<u8>, &'static str> {
+    let bytes = input.as_bytes();
+    if bytes.is_empty() {
+        return Ok(Vec::new());
+    }
+    if bytes.len() % 4 != 0 {
+        return Err("invalid base64");
+    }
+
+    let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
+    for (chunk_idx, chunk) in bytes.chunks_exact(4).enumerate() {
+        let is_last = chunk_idx == (bytes.len() / 4) - 1;
+        let mut buf = [0u8; 4];
+        let mut pad = 0usize;
+        for (i, &c) in chunk.iter().enumerate() {
+            buf[i] = match c {
+                b'A'..=b'Z' => c - b'A',
+                b'a'..=b'z' => c - b'a' + 26,
+                b'0'..=b'9' => c - b'0' + 52,
+                b'+' => 62,
+                b'/' => 63,
+                b'=' => {
+                    pad += 1;
+                    0
+                }
+                _ => return Err("invalid base64"),
+            };
+        }
+        if pad > 0 && !is_last {
+            return Err("invalid base64");
+        }
+        let n = (u32::from(buf[0]) << 18)
+            | (u32::from(buf[1]) << 12)
+            | (u32::from(buf[2]) << 6)
+            | u32::from(buf[3]);
+        out.push(((n >> 16) & 0xff) as u8);
+        if pad < 2 {
+            out.push(((n >> 8) & 0xff) as u8);
+        }
+        if pad < 1 {
+            out.push((n & 0xff) as u8);
+        }
+    }
+    Ok(out)
+}
+
 // -----------------------------------------------------------------------------
 // Input validation
 // -----------------------------------------------------------------------------
@@ -694,18 +755,29 @@ pub enum AuthMechanism {
     /// token, not a static password — auto-selection by `login()`
     /// deliberately does NOT pick this mechanism for that reason.
     XOAuth2,
+    /// SASL `SCRAM-SHA-256` (RFC 5802 / RFC 7677). Challenge-response
+    /// authentication: the client never transmits the password, and
+    /// the server proves possession of the salted hash through a
+    /// signature step. Auto-selection by `login()` prefers this
+    /// mechanism over `PLAIN` and `LOGIN` when the server advertises
+    /// it.
+    ///
+    /// Available only with the `scram-sha-256` cargo feature
+    /// (default-on).
+    ScramSha256,
 }
 
 impl AuthMechanism {
     /// SMTP-on-the-wire keyword for this mechanism, as it appears after
     /// `AUTH` in an `EHLO` advertisement (`"PLAIN"`, `"LOGIN"`,
-    /// `"XOAUTH2"`).
+    /// `"XOAUTH2"`, `"SCRAM-SHA-256"`).
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Plain => "PLAIN",
             Self::Login => "LOGIN",
             Self::XOAuth2 => "XOAUTH2",
+            Self::ScramSha256 => "SCRAM-SHA-256",
         }
     }
 }
@@ -716,15 +788,31 @@ impl core::fmt::Display for AuthMechanism {
     }
 }
 
-/// Pick the best mechanism advertised by the server, preferring `PLAIN`
-/// over `LOGIN`. Returns `None` if the server advertised neither.
+/// Pick the best mechanism advertised by the server, preferring
+/// `SCRAM-SHA-256` over `PLAIN` over `LOGIN`. Returns `None` if the
+/// server advertised none of these.
 ///
 /// Use this when you want a single `login` call to do the right thing
 /// across the variety of submission servers in deployment. If you need
 /// to lock in a specific mechanism (for example, to reproduce a
 /// production failure in a test), call [`crate::client::SmtpClient::login_with`]
 /// directly.
+///
+/// `SCRAM-SHA-256` is the modern default: it does not transmit the
+/// password in plaintext and is supported by all current submission
+/// servers (Postfix + Dovecot SASL, Exchange, Stalwart). `PLAIN` is
+/// the universal fallback. `LOGIN` is retained only for very old
+/// servers.
+///
+/// Note: when the `scram-sha-256` feature is disabled, the function
+/// behaves as if SCRAM were not in the picture and falls through to
+/// the PLAIN/LOGIN preference.
 pub fn select_auth_mechanism<S: AsRef<str>>(capability_lines: &[S]) -> Option<AuthMechanism> {
+    #[cfg(feature = "scram-sha-256")]
+    if ehlo_advertises_auth(capability_lines, "SCRAM-SHA-256") {
+        return Some(AuthMechanism::ScramSha256);
+    }
+
     if ehlo_advertises_auth(capability_lines, "PLAIN") {
         Some(AuthMechanism::Plain)
     } else if ehlo_advertises_auth(capability_lines, "LOGIN") {
