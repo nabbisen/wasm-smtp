@@ -50,7 +50,7 @@
 //!   with non-ASCII credentials should normalize them before
 //!   submission.
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 
@@ -333,8 +333,12 @@ pub(crate) fn verify_server_final(
 
 /// HMAC-SHA-256 returning a fixed-size 32-byte array.
 fn hmac_sha256(key: &[u8], message: &[u8]) -> [u8; SHA256_LEN] {
+    // RustCrypto 0.13: `new_from_slice` moved from the `Mac` trait
+    // to the `KeyInit` trait (along with most key-initialization
+    // methods). Same semantics — accepts any key length, the SHA-256
+    // HMAC construction handles the keying internally.
     let mut mac =
-        <Hmac<Sha256> as Mac>::new_from_slice(key).expect("HMAC accepts arbitrary key length");
+        <Hmac<Sha256> as KeyInit>::new_from_slice(key).expect("HMAC accepts arbitrary key length");
     mac.update(message);
     mac.finalize().into_bytes().into()
 }

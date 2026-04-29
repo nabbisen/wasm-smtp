@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/wasm-smtp", "crates/wasm-smtp-cloudflare", "crates/wasm-smtp-tokio"]
 
 [workspace.package]
-version = "0.9.1"
+version = "0.9.2"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -79,9 +79,9 @@ mail-builder = { version = "0.4", default-features = false }
 # Crypto crates used by the optional `scram-sha-256` feature on the
 # main crate. RustCrypto project, no_std-compatible, RustSec-clean.
 # Floors are conservative — current minors are well past these.
-hmac = { version = "0.12", default-features = false }
-sha2 = { version = "0.10", default-features = false }
-pbkdf2 = { version = "0.12", default-features = false, features = ["hmac"] }
+hmac = { version = "0.13", default-features = false }
+sha2 = { version = "0.11", default-features = false }
+pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 # CSPRNG for SCRAM client nonce. The `std` feature is needed for
 # OsRng; the `js` feature is needed only for wasm32-unknown-unknown
 # targets and is NOT enabled here — adapter crates that target WASM

@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-04-29
+
+This is a maintenance release. RustCrypto major bump for the
+SCRAM-SHA-256 implementation. No API changes for callers.
+
+### Changed
+
+- **RustCrypto crates major bump** for the optional `scram-sha-256`
+  feature on `wasm-smtp`:
+
+  | Crate    | Floor 0.9.1 | Floor 0.9.2 |
+  |----------|-------------|-------------|
+  | `hmac`   | 0.12        | **0.13**    |
+  | `sha2`   | 0.10        | **0.11**    |
+  | `pbkdf2` | 0.12        | **0.13**    |
+
+  These three crates upgrade in lockstep because they share the
+  `digest` crate's trait surface, which underwent a major revision
+  in this generation. The user-visible API change is small —
+  `new_from_slice` moved from the `Mac` trait to the `KeyInit`
+  trait — and is contained inside the SCRAM helper module. Crate
+  consumers see no change.
+
+  RFC 7677 §3 official SCRAM-SHA-256 test vector still round-trips
+  correctly on the new crates, confirming that the cryptographic
+  output is byte-identical between the old and new RustCrypto
+  generations. This is the most important regression test for a
+  crypto-dep major bump and it passes.
+
 ## [0.9.1] — 2026-04-29
 
 This is a maintenance release. No new features, no behaviour
@@ -700,7 +729,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.1...v0.8.0
