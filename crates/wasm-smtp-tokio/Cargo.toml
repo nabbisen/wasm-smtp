@@ -46,9 +46,19 @@ xoauth2 = ["wasm-smtp/xoauth2"]
 smtputf8 = ["wasm-smtp/smtputf8"]
 # Pass-through to wasm-smtp's `mail-builder` feature.
 mail-builder = ["wasm-smtp/mail-builder"]
+# Pass-through to wasm-smtp's `scram-sha-256` feature. SCRAM is the
+# preferred SASL mechanism over PLAIN/LOGIN; on this adapter
+# enabling it does not add any new transitive dependencies beyond
+# what `wasm-smtp` itself adds.
+scram-sha-256 = ["wasm-smtp/scram-sha-256"]
+# Pass-through to wasm-smtp's `tracing` feature: structured logging
+# at the SMTP-state-machine level. Off by default. Enable when you
+# want to observe SMTP session transitions in your tracing
+# subscriber output.
+tracing = ["wasm-smtp/tracing"]
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.9.3", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.9.4", default-features = false }
 tokio = { workspace = true, features = ["net", "io-util"] }
 tokio-rustls = { workspace = true }
 rustls-pki-types = { workspace = true }

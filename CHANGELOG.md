@@ -7,6 +7,222 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.4] — 2026-05-02
+
+This release introduces a single breaking change: the
+`send_mail` family of methods now return [`SendOutcome`] instead
+of `()`. Most callers will not need code changes; see "Migration
+guide" below for the details.
+
+### Breaking
+
+- **`SendOutcome` return type for the `send_mail` family.** All
+  three submission methods now return `Result<SendOutcome,
+  SmtpError>` instead of `Result<(), SmtpError>`:
+
+  - [`SmtpClient::send_mail`]
+  - `SmtpClient::send_mail_smtputf8` (with the `smtputf8` feature)
+  - `SmtpClient::send_message` (with the `mail-builder` feature)
+
+  The `SendOutcome` struct exposes the SMTP reply code, the full
+  server reply text, and a best-effort extraction of the server's
+  queue identifier:
+
+  ```rust,ignore
+  pub struct SendOutcome {
+      pub code: u16,
+      pub server_message: String,
+      pub queue_id: Option<String>,
+  }
+  ```
+
+  Queue id extraction recognises the patterns used by Postfix
+  (`Ok: queued as 4ABCDE12345`), Exim (`OK id=...`), and Stalwart
+  (`Message queued with id ...`). Servers that do not emit a
+  recognisable pattern (Microsoft Exchange / O365 most notably)
+  yield `queue_id: None`; the verbatim reply is preserved in
+  `server_message` for application-side parsing if needed. The
+  extractor is intentionally conservative — better `None` than
+  a fabricated string.
+
+#### Migration guide
+
+The most common pattern continues to work unchanged. The `?`
+operator drops the `SendOutcome` on the floor for callers who
+do not need it:
+
+```rust,ignore
+// v0.9.0~v0.9.3 and v0.9.4 — unchanged:
+client.send_mail(from, to, body).await?;
+client.send_message(from, to, msg).await?;
+```
+
+Callers using `match` need a one-character change in the `Ok`
+arm:
+
+```rust,ignore
+// v0.9.0~v0.9.3:
+match client.send_mail(from, to, body).await {
+    Ok(()) => { /* ... */ }
+    Err(e) => { /* ... */ }
+}
+
+// v0.9.4:
+match client.send_mail(from, to, body).await {
+    Ok(_) => { /* ... */ }              // or Ok(outcome) to use it
+    Err(e) => { /* ... */ }
+}
+```
+
+Callers with explicit return-type annotations need to update them:
+
+```rust,ignore
+// ~v0.9.3:
+let r: Result<(), SmtpError> = client.send_mail(from, to, body).await;
+
+// v0.9.4:
+let r: Result<SendOutcome, SmtpError> = client.send_mail(from, to, body).await;
+```
+
+#### Why this is in 0.9.4 (not v0.9.0~0.9.3)
+
+Adding fields to a return type widens the public API; we keep
+that change behind a minor-major boundary so downstream
+lockfile-less builds notice it. The change was prompted by
+production-deployment feedback asking for the queue id to be
+available for audit-log correlation with later DSN bounces —
+the queue id was already coming over the wire in the
+post-`DATA` reply text, but the previous API discarded it.
+
+### Added
+
+- **`SendOutcome` struct** at the crate root. Carries SMTP reply
+  code, full reply text, and extracted queue id. Implements
+  `Display`, `Debug`, `Clone`, `PartialEq`, `Eq`. The constructor
+  `SendOutcome::new(code, server_message)` runs the queue-id
+  extractor — public for callers writing custom client code on
+  top of the lower-level protocol primitives.
+
+- **Two new wire-level tests** verifying that the queue id is
+  correctly extracted end-to-end: one with a Postfix-style 250
+  reply, one with a Microsoft-style reply that omits the queue
+  id (`queue_id` is `None`).
+
+### Documentation
+
+- New "Capturing the queue id and server response" section in
+  `usage.md` showing the typical audit-logging pattern and how to
+  drop the outcome with `?` when it is not needed.
+
+- The four existing `match` examples in `connection-reuse.md`,
+  `errors.md`, and `usage.md` updated from `Ok(())` to `Ok(_)`.
+
+### Acknowledgements
+
+This release closes the last item from the production-deployment
+feedback documented in v0.9.4's acknowledgements section.
+
+[`SendOutcome`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SendOutcome.html
+[`SmtpClient::send_mail`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.send_mail
+
+## [0.9.4] — 2026-05-02
+
+This release adds three observability and ergonomics improvements
+based on production-deployment feedback. All changes are
+non-breaking.
+
+### Added
+
+- **`tracing` cargo feature** on `wasm-smtp` (default-off). When
+  enabled, the crate emits structured `tracing` events at the
+  major SMTP transitions:
+
+  | Event | Level |
+  |---|---|
+  | Connect / `EHLO` complete | `debug` |
+  | `AUTH` start (auto-selected mechanism) | `debug` |
+  | `AUTH` success | `debug` |
+  | `AUTH`: no supported mechanism | `warn` |
+  | `STARTTLS` upgrade requested / completed | `debug` |
+  | `STARTTLS` extension not advertised | `error` |
+  | `STARTTLS` buffer-residue defense triggered | `error` |
+  | `MAIL FROM` accepted (with envelope sender) | `debug` |
+  | `RCPT TO` accepted (per recipient) | `debug` |
+  | `DATA` accepted | `debug` |
+  | `QUIT` | `debug` |
+  | Session moved to `Closed` on logical failure | `warn` |
+
+  Events use `target = "wasm_smtp"` so `tracing-subscriber` can
+  filter on this single name. Passwords, OAuth tokens, AUTH
+  challenge bytes (server-first, server-final, SCRAM nonces),
+  and message bodies are **never** logged at any level. Envelope
+  addresses (`MAIL FROM` / `RCPT TO`) are logged at `debug` — they
+  are already visible in the server's own SMTP log, so this is
+  not new exposure.
+
+  When the feature is disabled, all log calls compile to no-ops
+  and `tracing` is not pulled into the dependency graph. Both
+  adapter crates (`wasm-smtp-tokio`, `wasm-smtp-cloudflare`)
+  expose a matching `tracing` pass-through feature.
+
+- **`IoError` classification helpers** (pure additions; no
+  breaking change). Useful for retry-decision logic in caller
+  code:
+
+  ```rust,ignore
+  use wasm_smtp::SmtpError;
+  match client.send_mail("from", &["to"], &body).await {
+      Err(SmtpError::Io(e)) if e.is_timeout() => {
+          // retry with backoff
+      }
+      Err(SmtpError::Io(e)) if e.is_connection_refused() => {
+          // server down; switch to fallback host
+      }
+      // ...
+  }
+  ```
+
+  New methods on [`IoError`]:
+  - `io_kind() -> Option<std::io::ErrorKind>`: walks the
+    [`std::error::Error::source`] chain and returns the kind of
+    the first `std::io::Error` found, or `None` if the chain
+    contains no `io::Error`. Useful for kinds not covered by a
+    named helper (e.g. `NotFound` for missing certificates).
+  - `is_timeout()`, `is_connection_refused()`,
+    `is_connection_reset()`, `is_connection_aborted()`:
+    convenience methods that wrap `io_kind()` for the most
+    common retry-relevant kinds.
+
+  All four `is_*` helpers correctly walk through nested error
+  wrappers (e.g. when an adapter wraps an `io::Error` inside an
+  intermediate error type before passing to `IoError`).
+
+### Documentation
+
+- New **"DKIM signing"** chapter section in
+  `composing-messages.md`. DKIM (RFC 6376) is a message-layer
+  concern, not an SMTP-layer concern, so `wasm-smtp` does not
+  sign messages itself. The new section documents the
+  recommended pairing with [Stalwart Labs's `mail-auth`] crate,
+  including:
+  - A minimum signing example (Ed25519 / RFC 8463).
+  - Clarification of what DKIM does and does not protect
+    (tamper-evidence and domain accountability — not
+    confidentiality, not envelope-sender authentication).
+  - Operational notes on key management, DNS publishing, and
+    interaction with SPF/DMARC.
+
+  No code changes; pure documentation.
+
+[Stalwart Labs's `mail-auth`]: https://crates.io/crates/mail-auth
+
+### Acknowledgements
+
+Improvements in this release were prompted by deployment
+feedback from a production user. The feedback distinguished
+between requirements that fit a general SMTP client and those
+that did not, which made the integration scope easy to define.
+
 ## [0.9.3] — 2026-04-29
 
 This is a maintenance release. `getrandom` major bump for the
@@ -797,7 +1013,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.3...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.4...HEAD
+[0.9.4]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.3...v0.9.4
 [0.9.3]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.2...v0.9.3
 [0.9.2]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.0...v0.9.1

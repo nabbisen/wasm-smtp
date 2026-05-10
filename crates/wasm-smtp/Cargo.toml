@@ -87,6 +87,34 @@ scram-sha-256 = [
 # not pulled into the dependency graph at all.
 mail-builder = ["dep:mail-builder"]
 
+# Optional structured logging via the `tracing` crate. Off by
+# default; enable when you want to observe SMTP session
+# transitions in your logs.
+#
+# When enabled, the crate emits:
+# - `trace!`-level events for each wire frame (request/response)
+# - `debug!`-level events for major SMTP transitions (EHLO,
+#   AUTH outcome, STARTTLS upgrade, MAIL FROM, RCPT TO, DATA
+#   completion, QUIT) including envelope addresses and reply
+#   codes
+# - `warn!`-level events for non-fatal failures (e.g. an
+#   intermediate AUTH challenge that turned out invalid but
+#   recoverable)
+# - `error!`-level events when the session is moved to `Closed`
+#   on a logical failure
+#
+# What is NOT logged at any level: passwords, OAuth tokens,
+# AUTH challenge bytes (server-first, server-final, etc.),
+# SCRAM client/server nonces, message bodies. Envelope
+# addresses (MAIL FROM / RCPT TO) ARE logged at `debug!`
+# because they are already visible in the server's own SMTP
+# log; this is information you control your own retention of,
+# not new exposure.
+#
+# When disabled, all log calls compile to no-ops and `tracing`
+# is not pulled into the dependency graph.
+tracing = ["dep:tracing"]
+
 [dependencies]
 mail-builder = { workspace = true, optional = true }
 hmac = { workspace = true, optional = true }
@@ -94,6 +122,7 @@ sha2 = { workspace = true, optional = true }
 pbkdf2 = { workspace = true, optional = true }
 getrandom = { workspace = true, optional = true }
 subtle = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
 
 [lints]
 workspace = true

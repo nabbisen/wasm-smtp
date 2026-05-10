@@ -27,6 +27,7 @@
 #[cfg(feature = "mail-builder")]
 use crate::error::IoError;
 use crate::error::{AuthError, InvalidInputError, ProtocolError, SmtpError, SmtpOp};
+use crate::outcome::SendOutcome;
 use crate::protocol::{
     self, AuthMechanism, MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply,
     build_auth_plain_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth,
@@ -34,6 +35,7 @@ use crate::protocol::{
     format_command_arg, format_mail_from, format_rcpt_to, parse_reply_line, select_auth_mechanism,
 };
 use crate::session::SessionState;
+use crate::tracing_helpers::{smtp_debug, smtp_error, smtp_trace, smtp_warn};
 use crate::transport::{StartTlsCapable, Transport};
 
 const READ_CHUNK: usize = 1024;
@@ -90,6 +92,7 @@ impl<T: Transport> SmtpClient<T> {
     /// [`Self::send_mail`] may be called.
     pub async fn connect(transport: T, ehlo_domain: &str) -> Result<Self, SmtpError> {
         protocol::validate_ehlo_domain(ehlo_domain)?;
+        smtp_debug!(ehlo_domain = %ehlo_domain, "SMTP session: connect");
         let mut client = Self {
             transport,
             state: SessionState::Greeting,
@@ -101,6 +104,10 @@ impl<T: Transport> SmtpClient<T> {
         };
         client.read_greeting().await?;
         client.send_ehlo(ehlo_domain).await?;
+        smtp_debug!(
+            capability_count = client.capabilities.len(),
+            "SMTP session: ready"
+        );
         Ok(client)
     }
 
@@ -154,8 +161,12 @@ impl<T: Transport> SmtpClient<T> {
     /// environment variable into a long-lived `String`.
     pub async fn login(&mut self, user: &str, pass: &str) -> Result<(), SmtpError> {
         if let Some(mech) = select_auth_mechanism(&self.capabilities) {
+            smtp_debug!(mechanism = mech.name(), "AUTH: auto-selected mechanism");
             self.login_with(mech, user, pass).await
         } else {
+            smtp_warn!(
+                "AUTH: no supported mechanism advertised; failing with UnsupportedMechanism"
+            );
             // Validate inputs first so the caller still gets a clean
             // InvalidInputError on empty credentials, even if the
             // server would have refused us anyway.
@@ -256,6 +267,7 @@ impl<T: Transport> SmtpClient<T> {
         }
 
         self.transition(SessionState::MailFrom)?;
+        smtp_debug!(mechanism = mechanism.name(), "AUTH: succeeded");
         Ok(())
     }
 
@@ -586,7 +598,7 @@ impl<T: Transport> SmtpClient<T> {
         from: &str,
         to: &[&str],
         body: &str,
-    ) -> Result<(), SmtpError> {
+    ) -> Result<SendOutcome, SmtpError> {
         protocol::validate_address(from)?;
         if to.is_empty() {
             return Err(InvalidInputError::new("at least one recipient is required").into());
@@ -596,10 +608,18 @@ impl<T: Transport> SmtpClient<T> {
         }
         self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
 
+        smtp_debug!(
+            from = %from,
+            recipient_count = to.len(),
+            body_bytes = body.len(),
+            "send_mail: starting transaction"
+        );
+
         // Issue MAIL FROM.
         self.transition(SessionState::MailFrom)?;
         self.write_all(&format_mail_from(from)).await?;
         self.expect_class(2, SmtpOp::MailFrom).await?;
+        smtp_debug!(from = %from, "MAIL FROM accepted");
 
         // Issue RCPT TO for every recipient. 250 (OK) and 251 (forwarded)
         // are both acceptances; treat any 2xx as success.
@@ -607,6 +627,7 @@ impl<T: Transport> SmtpClient<T> {
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
             self.expect_class(2, SmtpOp::RcptTo).await?;
+            smtp_debug!(rcpt = %addr, "RCPT TO accepted");
         }
 
         // Issue DATA, expect 354.
@@ -614,14 +635,23 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&format_command("DATA")).await?;
         self.expect_code(354, SmtpOp::Data).await?;
 
-        // Send the body with dot-stuffing and terminator.
+        // Send the body with dot-stuffing and terminator. The
+        // post-terminator reply carries the queue id (if the server
+        // assigns one) — capture it and return it to the caller.
         let payload = dot_stuff_and_terminate(body.as_bytes());
         self.write_all(&payload).await?;
-        self.expect_class(2, SmtpOp::Data).await?;
+        let final_reply = self.expect_class(2, SmtpOp::Data).await?;
+        let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
+        smtp_debug!(
+            body_bytes = body.len(),
+            code = outcome.code,
+            queue_id = outcome.queue_id.as_deref().unwrap_or("<none>"),
+            "DATA accepted; transaction complete"
+        );
 
         // Ready for another transaction.
         self.transition(SessionState::MailFrom)?;
-        Ok(())
+        Ok(outcome)
     }
 
     /// Send a single message using the SMTPUTF8 extension (RFC 6531),
@@ -700,7 +730,7 @@ impl<T: Transport> SmtpClient<T> {
         from: &str,
         to: &[&str],
         message: ::mail_builder::MessageBuilder<'_>,
-    ) -> Result<(), SmtpError> {
+    ) -> Result<SendOutcome, SmtpError> {
         let body = message
             .write_to_string()
             .map_err(|e| SmtpError::Io(IoError::with_source("failed to serialize message", e)))?;
@@ -744,7 +774,7 @@ impl<T: Transport> SmtpClient<T> {
         from: &str,
         to: &[&str],
         body: &str,
-    ) -> Result<(), SmtpError> {
+    ) -> Result<SendOutcome, SmtpError> {
         protocol::validate_address_utf8(from)?;
         if to.is_empty() {
             return Err(InvalidInputError::new("at least one recipient is required").into());
@@ -782,10 +812,11 @@ impl<T: Transport> SmtpClient<T> {
 
         let payload = dot_stuff_and_terminate(body.as_bytes());
         self.write_all(&payload).await?;
-        self.expect_class(2, SmtpOp::Data).await?;
+        let final_reply = self.expect_class(2, SmtpOp::Data).await?;
+        let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
 
         self.transition(SessionState::MailFrom)?;
-        Ok(())
+        Ok(outcome)
     }
 
     /// Send `QUIT` and close the transport.
@@ -796,8 +827,10 @@ impl<T: Transport> SmtpClient<T> {
     /// the transport-level failure.
     pub async fn quit(mut self) -> Result<(), SmtpError> {
         if self.state == SessionState::Closed {
+            smtp_trace!("quit: already closed; nothing to do");
             return Ok(());
         }
+        smtp_debug!("QUIT: closing session");
         // Best-effort QUIT: if the server has already closed, we still want
         // to release the transport.
         let send_result: Result<(), SmtpError> = async {
@@ -1041,6 +1074,12 @@ impl<T: Transport> SmtpClient<T> {
     fn mark_closed_on_logical_failure(&mut self) {
         // After any unrecoverable error, the connection is poisoned. Move to
         // Closed so subsequent calls fail fast with InvalidInput.
+        if self.state != SessionState::Closed {
+            smtp_warn!(
+                state = ?self.state,
+                "session closed on logical failure; further calls will fail fast"
+            );
+        }
         self.state = SessionState::Closed;
     }
 }
@@ -1102,8 +1141,10 @@ impl<T: StartTlsCapable> SmtpClient<T> {
     /// - [`SmtpError::Io`] if the transport-level upgrade fails.
     pub async fn starttls(&mut self) -> Result<(), SmtpError> {
         self.assert_state_in(&[SessionState::Authentication])?;
+        smtp_debug!("STARTTLS: requesting upgrade");
 
         if !ehlo_advertises_starttls(&self.capabilities) {
+            smtp_error!("STARTTLS: extension not advertised; refusing to fall back to plaintext");
             self.mark_closed_on_logical_failure();
             return Err(ProtocolError::ExtensionUnavailable { name: "STARTTLS" }.into());
         }
@@ -1137,6 +1178,10 @@ impl<T: StartTlsCapable> SmtpClient<T> {
         // loudly rather than silently absorb.
         let residue = self.rx_buf.len() - self.rx_pos;
         if residue > 0 {
+            smtp_error!(
+                byte_count = residue,
+                "STARTTLS: refusing to upgrade due to non-empty rx buffer (injection defense)"
+            );
             self.mark_closed_on_logical_failure();
             return Err(ProtocolError::StartTlsBufferResidue {
                 byte_count: residue,
@@ -1149,6 +1194,7 @@ impl<T: StartTlsCapable> SmtpClient<T> {
         // advertise a different set after the TLS upgrade.
         self.capabilities.clear();
         self.transport.upgrade_to_tls().await.map_err(|e| {
+            smtp_error!("STARTTLS: TLS upgrade failed at transport layer");
             self.mark_closed_on_logical_failure();
             SmtpError::Io(e)
         })?;
@@ -1162,6 +1208,10 @@ impl<T: StartTlsCapable> SmtpClient<T> {
         // borrow-checker conflict with the &mut self call.
         let domain = self.ehlo_domain.clone();
         self.send_ehlo(&domain).await?;
+        smtp_debug!(
+            capability_count = self.capabilities.len(),
+            "STARTTLS: upgrade complete; re-EHLO done"
+        );
         Ok(())
     }
 }

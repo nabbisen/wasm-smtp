@@ -56,6 +56,7 @@
 
 pub mod client;
 pub mod error;
+pub mod outcome;
 pub mod protocol;
 pub mod session;
 pub mod transport;
@@ -63,8 +64,11 @@ pub mod transport;
 #[cfg(feature = "scram-sha-256")]
 mod scram;
 
+mod tracing_helpers;
+
 pub use client::SmtpClient;
 pub use error::{AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp};
+pub use outcome::SendOutcome;
 pub use protocol::{AuthMechanism, EnhancedStatus};
 pub use session::SessionState;
 pub use transport::{StartTlsCapable, Transport};

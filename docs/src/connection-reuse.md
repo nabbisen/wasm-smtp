@@ -104,7 +104,7 @@ and reconnect:
 use wasm_smtp::SmtpError;
 # async fn try_send(client: &mut wasm_smtp::SmtpClient<impl wasm_smtp::Transport>) -> Result<(), SmtpError> {
 match client.send_mail("a@x.com", &["b@x.com"], "...").await {
-    Ok(()) => Ok(()),
+    Ok(_) => Ok(()),
     Err(SmtpError::Io(_)) => {
         // Connection's gone. Drop the client, reconnect fresh,
         // and retry. Don't try to revive the existing client —

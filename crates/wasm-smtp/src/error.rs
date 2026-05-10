@@ -191,6 +191,78 @@ impl IoError {
     pub fn message(&self) -> &str {
         &self.message
     }
+
+    /// Walk the [`std::error::Error::source`] chain looking for an
+    /// [`std::io::Error`], then expose its [`std::io::ErrorKind`].
+    ///
+    /// Returns `None` when the chain contains no `io::Error` — for
+    /// example, a TLS handshake error from rustls that did not wrap
+    /// an underlying I/O error, or an [`IoError`] constructed via
+    /// [`Self::new`] without a source.
+    ///
+    /// This is the foundation for the `is_*` helpers below; callers
+    /// who need a kind not covered by a named helper (e.g.
+    /// [`std::io::ErrorKind::NotFound`] for a missing certificate
+    /// file) can use `io_kind` directly.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use wasm_smtp::IoError;
+    /// # use std::io;
+    /// let io = io::Error::new(io::ErrorKind::PermissionDenied, "no");
+    /// let wrapped = IoError::with_source("connect failed", io);
+    /// assert_eq!(wrapped.io_kind(), Some(io::ErrorKind::PermissionDenied));
+    /// ```
+    #[must_use]
+    pub fn io_kind(&self) -> Option<std::io::ErrorKind> {
+        // Walk the source chain manually rather than using a fixed
+        // depth: rustls and tokio may nest the io::Error one or two
+        // levels deep depending on the operation. The chain is
+        // typically very short (1–3 nodes) so this is cheap.
+        let mut current: Option<&(dyn StdError + 'static)> = self.source();
+        while let Some(err) = current {
+            if let Some(io) = err.downcast_ref::<std::io::Error>() {
+                return Some(io.kind());
+            }
+            current = err.source();
+        }
+        None
+    }
+
+    /// `true` when the underlying I/O error is a timeout
+    /// ([`std::io::ErrorKind::TimedOut`]). Useful for retry-or-give-up
+    /// decisions in retry layers.
+    #[must_use]
+    pub fn is_timeout(&self) -> bool {
+        self.io_kind() == Some(std::io::ErrorKind::TimedOut)
+    }
+
+    /// `true` when the underlying I/O error indicates the peer
+    /// refused the connection ([`std::io::ErrorKind::ConnectionRefused`]).
+    /// Typically means the server is down, the wrong port was used,
+    /// or a firewall is blocking the connection.
+    #[must_use]
+    pub fn is_connection_refused(&self) -> bool {
+        self.io_kind() == Some(std::io::ErrorKind::ConnectionRefused)
+    }
+
+    /// `true` when the underlying I/O error indicates the connection
+    /// was reset by the peer ([`std::io::ErrorKind::ConnectionReset`]).
+    /// Typically means the server hung up unexpectedly, often after
+    /// an authentication failure or a protocol violation the server
+    /// chose not to spell out.
+    #[must_use]
+    pub fn is_connection_reset(&self) -> bool {
+        self.io_kind() == Some(std::io::ErrorKind::ConnectionReset)
+    }
+
+    /// `true` when the underlying I/O error indicates the connection
+    /// was aborted ([`std::io::ErrorKind::ConnectionAborted`]).
+    #[must_use]
+    pub fn is_connection_aborted(&self) -> bool {
+        self.io_kind() == Some(std::io::ErrorKind::ConnectionAborted)
+    }
 }
 
 impl fmt::Display for IoError {

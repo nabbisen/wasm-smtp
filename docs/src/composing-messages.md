@@ -288,3 +288,107 @@ A few reasons you might still build messages yourself:
   attachments before re-sending). Independent of composition.
 
 [Stalwart Labs]: https://stalw.art/
+
+## DKIM signing
+
+Mailers that want a higher chance of landing in inboxes — rather
+than spam folders — sign their outgoing messages with DKIM
+(RFC 6376). The signature attests that a specific domain
+authorised the message and lets receiving servers verify the
+message has not been tampered with in transit.
+
+DKIM signing is a **message-layer concern**, not an SMTP-layer
+concern: the signature is a header (`DKIM-Signature: ...`)
+prepended to the RFC 5322 message before submission. `wasm-smtp`
+does not sign messages; the `body` argument you pass to
+[`SmtpClient::send_mail`] is whatever you have already prepared,
+including any `DKIM-Signature` header. This keeps the SMTP layer
+focused and lets you choose any DKIM implementation.
+
+The recommended pairing is [Stalwart Labs]'s [`mail-auth`] crate,
+which is no-deps-required and supports both signing and
+verification.
+
+### Minimum signing example
+
+```toml
+[dependencies]
+wasm-smtp = "0.9"
+mail-builder = "0.4"
+mail-auth = "0.7"
+```
+
+```rust,ignore
+use mail_auth::common::crypto::{Ed25519Key, SigningKey};
+use mail_auth::dkim::DkimSigner;
+use mail_builder::MessageBuilder;
+use wasm_smtp::SmtpClient;
+
+# async fn run<T: wasm_smtp::Transport>(
+#     mut client: SmtpClient<T>,
+#     signing_key_pem: &[u8],
+# ) -> Result<(), Box<dyn std::error::Error>> {
+// 1. Compose the message body in the usual way.
+let unsigned = MessageBuilder::new()
+    .from(("Notify", "notify@example.com"))
+    .to("alice@example.org")
+    .subject("Hello")
+    .text_body("Hi there.")
+    .write_to_string()?;
+
+// 2. Sign it. The selector ("notify._domainkey.example.com" via
+//    the s= and d= attributes) and the key must already be
+//    published in DNS.
+let key = Ed25519Key::from_pkcs8_der(signing_key_pem)?;
+let signature = DkimSigner::from_key(key)
+    .domain("example.com")
+    .selector("notify")
+    .headers(["From", "To", "Subject", "Date", "Message-ID"])
+    .sign(unsigned.as_bytes())?;
+
+// 3. Prepend the signature header to the message body.
+let signed = format!("{signature}\r\n{unsigned}");
+
+// 4. Submit through wasm-smtp as usual.
+client.send_mail(
+    "notify@example.com",
+    &["alice@example.org"],
+    &signed,
+).await?;
+# Ok(())
+# }
+```
+
+### What the signing layer does (and does not) protect
+
+- ✅ **Tamper-evidence in transit**: a forwarder that rewrites
+  any signed header invalidates the signature. Receiving servers
+  detect this and adjust the spam score accordingly.
+- ✅ **Domain accountability**: the receiving side can confirm
+  that the signing domain actually permitted the message (the
+  domain's DNS record holds the public key).
+- ❌ **Confidentiality**: DKIM is signing, not encryption. The
+  message body is still visible on the wire and at every hop.
+  TLS (Implicit TLS or STARTTLS) is what keeps it confidential.
+- ❌ **Sender authentication**: DKIM does not bind the
+  signature to the *envelope* sender (`MAIL FROM`); SPF and
+  DMARC do. A complete deliverability story usually combines
+  all three. Those are also message-layer concerns and
+  configured at the DNS / sending domain layer; the SMTP
+  client does not need to know about them.
+
+### Operational notes
+
+- Generate keys with `mail-auth`'s helpers, OpenSSL, or
+  `opendkim-genkey`. Ed25519 (RFC 8463) is the modern choice;
+  RSA is the universal fallback.
+- The `DKIM-Signature` header lists which other headers it
+  signs (`h=From:To:Subject:Date:Message-ID` in the example
+  above). Receivers verify exactly that list, in that order;
+  do not change it after signing.
+- Deploying DKIM also means publishing a TXT record at
+  `<selector>._domainkey.<domain>` containing the public key.
+  This is outside `wasm-smtp`'s scope but is a hard prerequisite
+  for the signature to be useful.
+
+[`mail-auth`]: https://crates.io/crates/mail-auth

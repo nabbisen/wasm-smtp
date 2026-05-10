@@ -182,6 +182,44 @@ The crate handles this transparently and surfaces the result as
 `AuthError::Rejected`. The final reply text is preserved so callers
 can log the provider's diagnostic.
 
+## Capturing the queue id and server response
+
+Every successful `send_mail` (and its siblings `send_mail_smtputf8`,
+`send_message`) returns a [`SendOutcome`] carrying the SMTP reply
+code, the server's full reply text, and the server's queue
+identifier when it could be extracted. This is useful for audit
+logging and for correlating later DSN (delivery status
+notification) bounces back to the original submission:
+
+```rust,ignore
+let outcome = client.send_mail(from, &[recipient], body).await?;
+
+// Audit-log everything; the queue id (if present) is the key
+// you'd later use to look up DSNs in the server's logs.
+audit::record(audit::Event {
+    kind: "auth.password.reset_email_sent",
+    queue_id: outcome.queue_id.clone(),
+    server_message: outcome.server_message.clone(),
+    code: outcome.code,
+});
+```
+
+If you do not need any of this, drop the outcome with `?`:
+
+```rust,ignore
+client.send_mail(from, &[recipient], body).await?;
+```
+
+The crate recognises queue-id formats from Postfix
+(`Ok: queued as 4ABCDE12345`), Exim (`OK id=...`), and Stalwart
+(`Message queued with id ...`). For servers that don't emit a
+recognisable pattern (Microsoft Exchange / O365 most notably),
+`outcome.queue_id` will be `None` and `outcome.server_message`
+will hold the verbatim reply for application-side parsing if
+you really need it.
+
+[`SendOutcome`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SendOutcome.html
+
 ## Reading enhanced status codes
 
 When the server advertises `ENHANCEDSTATUSCODES` (RFC 2034), every
@@ -194,7 +232,7 @@ the structured code instead of grepping the message text:
 use wasm_smtp::{EnhancedStatus, ProtocolError, SmtpError};
 
 match client.send_mail(from, &[to], body).await {
-    Ok(()) => {}
+    Ok(_) => {}
     Err(SmtpError::Protocol(ProtocolError::UnexpectedCode {
         enhanced: Some(EnhancedStatus { class: 5, subject: 1, .. }),
         ..
@@ -288,7 +326,7 @@ give it; nothing else.
 
 ```rust
 match client.send_mail(from, recipients, body).await {
-    Ok(()) => log::info!("delivered"),
+    Ok(_) => log::info!("delivered"),
     Err(wasm_smtp::SmtpError::Io(e)) => {
         log::warn!("transport failure, will retry: {e}");
         // Re-establish the connection on the next attempt.

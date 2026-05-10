@@ -189,3 +189,109 @@ fn io_error_send_sync_bounds_compile() {
     assert_send_sync::<IoError>();
     assert_send_sync::<SmtpError>();
 }
+
+// -- io_kind() and is_* helpers ---------------------------------------------
+
+#[test]
+fn io_kind_extracts_kind_from_direct_io_error() {
+    use std::io;
+    let inner = io::Error::new(io::ErrorKind::TimedOut, "took too long");
+    let wrapped = IoError::with_source("connect failed", inner);
+    assert_eq!(wrapped.io_kind(), Some(io::ErrorKind::TimedOut));
+}
+
+#[test]
+fn io_kind_extracts_kind_through_nested_source_chain() {
+    use std::io;
+    // Simulate an adapter that wraps an io::Error inside an
+    // intermediate error type before handing it to IoError. The
+    // io_kind walker should find the io::Error two levels down.
+    #[derive(Debug)]
+    struct Outer {
+        inner: io::Error,
+    }
+    impl std::fmt::Display for Outer {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("outer wrapper")
+        }
+    }
+    impl std::error::Error for Outer {
+        fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+            Some(&self.inner)
+        }
+    }
+
+    let outer = Outer {
+        inner: io::Error::new(io::ErrorKind::ConnectionRefused, "no listener"),
+    };
+    let wrapped = IoError::with_source("smtp connect failed", outer);
+    assert_eq!(wrapped.io_kind(), Some(io::ErrorKind::ConnectionRefused));
+}
+
+#[test]
+fn io_kind_returns_none_when_no_io_error_in_chain() {
+    // Source chain contains no io::Error. The walker must return
+    // None rather than fabricating a kind.
+    #[derive(Debug)]
+    struct NotAnIoError;
+    impl std::fmt::Display for NotAnIoError {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("custom")
+        }
+    }
+    impl std::error::Error for NotAnIoError {}
+
+    let wrapped = IoError::with_source("certificate parse failed", NotAnIoError);
+    assert_eq!(wrapped.io_kind(), None);
+}
+
+#[test]
+fn io_kind_returns_none_when_no_source() {
+    // IoError::new() produces an IoError with no source at all.
+    let wrapped = IoError::new("plain message");
+    assert_eq!(wrapped.io_kind(), None);
+}
+
+#[test]
+fn is_timeout_recognizes_timed_out() {
+    use std::io;
+    let inner = io::Error::new(io::ErrorKind::TimedOut, "deadline");
+    assert!(IoError::with_source("write failed", inner).is_timeout());
+}
+
+#[test]
+fn is_timeout_rejects_other_kinds() {
+    use std::io;
+    let inner = io::Error::new(io::ErrorKind::ConnectionRefused, "no");
+    assert!(!IoError::with_source("write failed", inner).is_timeout());
+}
+
+#[test]
+fn is_connection_refused_recognizes_kind() {
+    use std::io;
+    let inner = io::Error::new(io::ErrorKind::ConnectionRefused, "no");
+    assert!(IoError::with_source("connect failed", inner).is_connection_refused());
+}
+
+#[test]
+fn is_connection_reset_recognizes_kind() {
+    use std::io;
+    let inner = io::Error::new(io::ErrorKind::ConnectionReset, "rst");
+    assert!(IoError::with_source("read failed", inner).is_connection_reset());
+}
+
+#[test]
+fn is_connection_aborted_recognizes_kind() {
+    use std::io;
+    let inner = io::Error::new(io::ErrorKind::ConnectionAborted, "abort");
+    assert!(IoError::with_source("session failed", inner).is_connection_aborted());
+}
+
+#[test]
+fn is_helpers_all_false_when_no_source() {
+    let wrapped = IoError::new("just a message");
+    assert!(!wrapped.is_timeout());
+    assert!(!wrapped.is_connection_refused());
+    assert!(!wrapped.is_connection_reset());
+    assert!(!wrapped.is_connection_aborted());
+}

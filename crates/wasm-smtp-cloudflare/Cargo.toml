@@ -43,8 +43,15 @@ mail-builder = ["wasm-smtp/mail-builder"]
 # see the crate README for the full deployment recipe.
 scram-sha-256 = ["wasm-smtp/scram-sha-256", "dep:getrandom"]
 
+# Pass-through to wasm-smtp's `tracing` feature: structured logging
+# at the SMTP-state-machine level. Off by default. Cloudflare
+# Workers users can pair this with `tracing-subscriber` (or the
+# `worker` crate's built-in logging) to surface SMTP session
+# events in the Workers tail log.
+tracing = ["wasm-smtp/tracing"]
+
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.9.3", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.9.4", default-features = false }
 worker = { workspace = true }
 tokio = { workspace = true, features = ["io-util"] }
 

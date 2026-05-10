@@ -141,6 +141,53 @@ fn login_rejects_empty_username_before_io() {
 // -- send_mail ----------------------------------------------------------
 
 #[test]
+fn send_mail_returns_send_outcome_with_queue_id() {
+    // Postfix-style 250 reply with queue id; the SendOutcome
+    // returned by send_mail should carry the parsed queue id.
+    let server_script = flatten(&[
+        b"220 mail.example.com ESMTP\r\n",
+        b"250-mail.example.com\r\n",
+        b"250 8BITMIME\r\n",
+        b"250 OK\r\n",
+        b"250 OK\r\n",
+        b"354 OK\r\n",
+        b"250 2.0.0 Ok: queued as 4ABCDE12345\r\n",
+    ]);
+    let (transport, _written, _closed) = MockTransport::new(&[&server_script[..]]);
+    let mut client = block_on(SmtpClient::connect(transport, "c.example")).expect("connect");
+    let body = "Subject: t\r\n\r\nbody\r\n";
+    let outcome = block_on(client.send_mail("a@b.com", &["c@d.com"], body)).expect("send");
+
+    assert_eq!(outcome.code, 250);
+    assert_eq!(outcome.queue_id.as_deref(), Some("4ABCDE12345"));
+    assert!(outcome.server_message.contains("queued as 4ABCDE12345"));
+}
+
+#[test]
+fn send_mail_returns_send_outcome_without_queue_id_when_server_omits_it() {
+    // Microsoft-style reply with no extractable queue id; the
+    // queue_id field is None, but server_message still preserves
+    // the verbatim reply for application-side parsing.
+    let server_script = flatten(&[
+        b"220 mail.example.com ESMTP\r\n",
+        b"250-mail.example.com\r\n",
+        b"250 8BITMIME\r\n",
+        b"250 OK\r\n",
+        b"250 OK\r\n",
+        b"354 OK\r\n",
+        b"250 2.6.0 Queued mail for delivery\r\n",
+    ]);
+    let (transport, _written, _closed) = MockTransport::new(&[&server_script[..]]);
+    let mut client = block_on(SmtpClient::connect(transport, "c.example")).expect("connect");
+    let body = "Subject: t\r\n\r\nbody\r\n";
+    let outcome = block_on(client.send_mail("a@b.com", &["c@d.com"], body)).expect("send");
+
+    assert_eq!(outcome.code, 250);
+    assert_eq!(outcome.queue_id, None);
+    assert!(outcome.server_message.contains("Queued mail for delivery"));
+}
+
+#[test]
 fn send_mail_full_transaction_no_auth() {
     let server_script = flatten(&[
         b"220 mail.example.com ESMTP\r\n",

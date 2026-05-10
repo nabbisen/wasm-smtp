@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/wasm-smtp", "crates/wasm-smtp-cloudflare", "crates/wasm-smtp-tokio"]
 
 [workspace.package]
-version = "0.9.3"
+version = "0.9.4"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
@@ -93,6 +93,14 @@ getrandom = { version = "0.4", default-features = false }
 # constant-time comparison for the server signature verification
 # step. Tiny crate (~50 LOC), no_std-compatible, no transitive deps.
 subtle = { version = "2.5", default-features = false }
+
+# Optional structured logging for the `tracing` feature on the main
+# crate. We keep this at the crate root because adapters might one
+# day adopt it too, and centralising the version pin is cheap.
+# `default-features = false` opts out of `attributes` (the
+# proc-macro `#[instrument]` helper) which we do not use; reduces
+# build time for callers who only need the bare API.
+tracing = { version = "0.1", default-features = false }
 # base64 for SCRAM message encoding. We already implement minimal
 # base64 in protocol.rs for SASL framing; SCRAM uses standard b64
 # but the existing helper is sufficient.
