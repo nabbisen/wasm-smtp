@@ -51,7 +51,7 @@ scram-sha-256 = ["wasm-smtp/scram-sha-256", "dep:getrandom"]
 tracing = ["wasm-smtp/tracing"]
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.11.0", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.12.0", default-features = false }
 worker = { workspace = true }
 tokio = { workspace = true, features = ["io-util"] }
 

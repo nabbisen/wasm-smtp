@@ -1,0 +1,50 @@
+[package]
+name = "wasm-smtp-wasi"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "WASI sockets adapter for wasm-smtp (wasm32-wasip2 target)."
+readme = "README.md"
+keywords = ["smtp", "email", "wasm", "wasi", "async"]
+categories = ["email", "network-programming", "wasm"]
+
+[lib]
+path = "src/lib.rs"
+
+[features]
+# Trust-anchor source. Pick exactly one.
+# native-roots: use the OS trust store at runtime (not applicable on WASI,
+#   so native-roots falls back to webpki-roots when targeting wasm32).
+# webpki-roots: bundle the Mozilla root CA set at compile time.
+default = ["webpki-roots"]
+webpki-roots = ["dep:webpki-roots"]
+native-roots = ["dep:rustls-native-certs"]
+
+# plaintext-only: connect without TLS. FOR TEST / PROXY-OFFLOAD ONLY.
+# Emits a compile-time warning when enabled.
+# DO NOT enable in production.
+plaintext-only = []
+
+[dependencies]
+wasm-smtp = { path = "../wasm-smtp", version = "0.12.0", default-features = false }
+rustls = { version = "0.23", features = ["ring", "tls12", "logging"] }
+rustls-pki-types = { version = "1.14", workspace = true }
+
+# Trust anchor sources (feature-gated; at most one should be enabled).
+webpki-roots  = { version = "1.0", optional = true }
+rustls-native-certs = { version = "0.8", optional = true }
+
+# WASI socket bindings — only used when targeting wasm32-wasip2.
+# On other targets this dep is absent; the socket code is behind cfg(target_arch = "wasm32").
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasi = { version = "0.14", default-features = false }
+
+[dev-dependencies]
+wasm-smtp-test = { path = "../wasm-smtp-test" }
+
+[lints]
+workspace = true

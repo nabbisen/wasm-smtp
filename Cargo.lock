@@ -290,7 +290,7 @@ checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi",
+ "wasi 0.11.1+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -576,7 +576,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "50b7e5b27aa02a74bac8c3f23f448f8d87ff11f92d3aac1a6ed369ee08cc56c1"
 dependencies = [
  "libc",
- "wasi",
+ "wasi 0.11.1+wasi-snapshot-preview1",
  "windows-sys 0.61.2",
 ]
 
@@ -1098,6 +1098,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
+name = "wasi"
+version = "0.14.7+wasi-0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "883478de20367e224c0090af9cf5f9fa85bed63a95c1abf3afc5c083ebc06e8c"
+dependencies = [
+ "wasip2",
+]
+
+[[package]]
 name = "wasip2"
 version = "1.0.1+wasi-0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1194,7 +1203,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "getrandom 0.4.2",
  "hmac",
@@ -1207,7 +1216,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-cloudflare"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "getrandom 0.4.2",
  "tokio",
@@ -1218,14 +1227,14 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-test"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "wasm-smtp",
 ]
 
 [[package]]
 name = "wasm-smtp-tokio"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",
@@ -1233,6 +1242,19 @@ dependencies = [
  "tokio-rustls",
  "tokio-test",
  "wasm-smtp",
+ "webpki-roots",
+]
+
+[[package]]
+name = "wasm-smtp-wasi"
+version = "0.12.0"
+dependencies = [
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pki-types",
+ "wasi 0.14.7+wasi-0.2.4",
+ "wasm-smtp",
+ "wasm-smtp-test",
  "webpki-roots",
 ]
 

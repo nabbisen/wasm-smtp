@@ -1,6 +1,6 @@
 # RFC 017 — WASI TLS strategy
 
-**Status.** Proposed
+**Status.** Implemented (v0.12.0)
 **Priority.** P2
 **Tracks.** WASI / TLS / Security
 **Touches.** `docs/src/wasi-tls.md`, `crates/wasm-smtp-wasi/` (future)
