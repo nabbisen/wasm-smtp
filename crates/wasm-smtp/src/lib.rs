@@ -54,9 +54,11 @@
 //! to deliver unsolicited bulk mail, to impersonate other senders, or to
 //! deliver mail that violates the operating policy of any SMTP server.
 
+pub mod audit;
 pub mod client;
 pub mod error;
 pub mod outcome;
+pub mod policy;
 pub mod protocol;
 pub mod session;
 pub mod transport;
@@ -66,8 +68,8 @@ mod scram;
 
 mod tracing_helpers;
 
-pub use client::SmtpClient;
-pub use error::{AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp};
+pub use client::{SmtpClient, SmtpClientOptions};
+pub use error::{AuthError, InvalidInputError, IoError, PolicyError, ProtocolError, SmtpError, SmtpOp};
 pub use outcome::SendOutcome;
 pub use protocol::{AuthMechanism, EnhancedStatus};
 pub use session::SessionState;

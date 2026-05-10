@@ -418,6 +418,125 @@ pub fn dot_stuff_and_terminate(body: &[u8]) -> Vec<u8> {
     out
 }
 
+// ---------------------------------------------------------------------------
+// Streaming dot-stuffer state machine
+// ---------------------------------------------------------------------------
+
+/// Streaming version of the RFC 5321 dot-stuffer.
+///
+/// Unlike [`dot_stuff_and_terminate`], this processes the message body
+/// one chunk at a time, keeping memory usage at O(chunk size) rather than
+/// O(body size). Suitable for large messages and memory-constrained runtimes.
+///
+/// ## Usage
+///
+/// ```rust
+/// use wasm_smtp::protocol::DotStufferState;
+///
+/// let mut stuffer = DotStufferState::new();
+///
+/// // Process each chunk.
+/// let chunk1 = b"Subject: test\r\n\r\n";
+/// let out1 = stuffer.process_chunk(chunk1);
+///
+/// let chunk2 = b".dotted line\r\nend\r\n";
+/// let out2 = stuffer.process_chunk(chunk2);
+///
+/// // Produce the end-of-data terminator.
+/// let terminator = stuffer.finish();
+///
+/// // on-wire: out1 + out2 + terminator
+/// assert_eq!(&out2[..2], b".."); // dot-stuffed
+/// assert_eq!(terminator, b".\r\n");
+/// ```
+#[derive(Debug, Clone)]
+pub struct DotStufferState {
+    /// True when the next byte to process is at the start of a line.
+    at_line_start: bool,
+    /// The last byte fed to `process_chunk`. Used by `finish()` to
+    /// determine whether a trailing `\r\n` must be added.
+    prev: u8,
+    /// The second-to-last byte. Together with `prev`, tells `finish()`
+    /// whether the body already ended with `\r\n`.
+    prev_prev: u8,
+    /// True until the first call to `process_chunk` with non-empty input.
+    empty: bool,
+}
+
+impl DotStufferState {
+    /// Create a new state machine, ready to process the first chunk.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            at_line_start: true,
+            prev: 0,
+            prev_prev: 0,
+            empty: true,
+        }
+    }
+
+    /// Dot-stuff one chunk and return the processed bytes.
+    ///
+    /// The returned `Vec` is slightly larger than `chunk` only when one or
+    /// more lines in the chunk begin with `.`. All other bytes pass through
+    /// unchanged.
+    ///
+    /// `process_chunk` with an empty slice is a no-op and returns an empty
+    /// `Vec`.
+    ///
+    /// # Cross-chunk dot-stuffing
+    ///
+    /// The state machine correctly handles dots that appear at the start of
+    /// a line which spans two consecutive chunks. For example, if chunk N
+    /// ends with `\r\n` and chunk N+1 starts with `.`, the leading dot in
+    /// chunk N+1 will be stuffed.
+    pub fn process_chunk(&mut self, chunk: &[u8]) -> Vec<u8> {
+        if chunk.is_empty() {
+            return Vec::new();
+        }
+        // Worst case: every byte is a leading dot; output is 2× input.
+        let mut out = Vec::with_capacity(chunk.len() + 4);
+        for &b in chunk {
+            if self.at_line_start && b == b'.' {
+                out.push(b'.');
+            }
+            out.push(b);
+            let new_at_line_start = self.prev == b'\r' && b == b'\n';
+            self.prev_prev = self.prev;
+            self.prev = b;
+            self.at_line_start = new_at_line_start;
+        }
+        self.empty = false;
+        out
+    }
+
+    /// Consume the state machine and produce the end-of-DATA bytes.
+    ///
+    /// The output is:
+    ///
+    /// - `\r\n.\r\n` if the body did not end with `\r\n` (or was empty).
+    /// - `.\r\n` if the body already ended with `\r\n`.
+    ///
+    /// This matches the semantics of [`dot_stuff_and_terminate`] exactly.
+    #[must_use]
+    pub fn finish(self) -> Vec<u8> {
+        let ends_with_crlf =
+            !self.empty && self.prev_prev == b'\r' && self.prev == b'\n';
+        let mut out = Vec::with_capacity(5);
+        if !ends_with_crlf {
+            out.extend_from_slice(b"\r\n");
+        }
+        out.extend_from_slice(b".\r\n");
+        out
+    }
+}
+
+impl Default for DotStufferState {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 // -----------------------------------------------------------------------------
 // Base64
 // -----------------------------------------------------------------------------

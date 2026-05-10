@@ -1,0 +1,24 @@
+[package]
+name = "wasm-smtp-test"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Test transport and fixtures for wasm-smtp (dev-only, not for production use)."
+readme = "README.md"
+keywords = ["smtp", "email", "testing", "mock"]
+categories = ["email", "development-tools::testing"]
+# Do not publish to crates.io — dev-only helper.
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+wasm-smtp = { path = "../wasm-smtp", version = "*" }
+
+[lints]
+workspace = true

@@ -244,7 +244,7 @@ message body?" question.
   `lettre::message` and Stalwart's other mail crates for
   comparison.
 
-## Phase 12 — Future work *(in progress)*
+## Phase 12 — Future work *(complete)*
 
 Items that may be revisited in a future cycle. Some have already been
 delivered; the rest are not commitments.
@@ -306,6 +306,78 @@ delivered; the rest are not commitments.
 - Pipelining (RFC 2920) for slightly better latency on high-RTT links.
 - DSN extension parameters (RFC 3461) for delivery-status routing.
 
+## Phase 13 — RFC governance and anti-abuse hardening *(complete)*
+
+Introduces RFC-based design governance, extracts the test transport into
+a dedicated crate, and adds two new core features gated by the extension
+development plan.
+
+- ✅ **RFC lifecycle** (v0.10.0). 24 design documents across `rfcs/`
+  with a 5-folder lifecycle (`draft/`, `proposed/`, `accepted/`, `done/`,
+  `archive/`). RFC 000 (policy) through RFC 023 (browser secrets) cover
+  the full extension roadmap.
+- ✅ **`wasm-smtp-test` crate** (v0.10.0). `MockTransport`, `block_on`,
+  and `flatten` extracted from the core's `#[cfg(test)]` harness into a
+  standalone dev-dependency crate usable by downstream projects.
+- ✅ **`SendPolicy` hook** (v0.10.0). Pre-send validation via the
+  `SendPolicy` trait. Ships with `DefaultPolicy` (allow all) and
+  `BoundedPolicy` (max-recipients, max-size). Rejections surface as the
+  new `SmtpError::Policy(PolicyError)` variant.
+- ✅ **Audit event model** (v0.10.0). `AuditSink` trait and
+  `SmtpAuditEvent` enum. Events: `Connected`, `GreetingReceived`,
+  `EhloCompleted`, `TlsUpgraded`, `AuthCompleted`, `MailFromAccepted`,
+  `RecipientAccepted`, `RecipientRejected`, `MessageAccepted`,
+  `QuitCompleted`, `SessionAborted`. Ships with `NoopAuditSink` and
+  `VecAuditSink`. No credentials or message body in any event.
+- ✅ **`SmtpClientOptions` builder** (v0.10.0). Attaches a policy and/or
+  audit sink before connecting via `SmtpClient::connect_with`.
+
+## Phase 14 — Byte-slice send and large-message hardening *(complete)*
+
+- ✅ **`send_mail_bytes`** (v0.11.0). Accepts `&[u8]` instead of `&str`,
+  bypassing the UTF-8 validity check while applying the same dot-stuffing,
+  policy checks, and audit events as `send_mail`. Useful for pre-serialised
+  payloads from `mail-builder` and for messages with non-UTF-8 octets.
+- ✅ **Large-message and dot-stuffing stress tests** (v0.11.0). 100 KB,
+  1 MB, and (opt-in) 10 MB body tests; 10 000-line dot-heavy body test;
+  10-recipient test; max-line-length (998 bytes) test. All use
+  `send_mail_bytes` and verify on-wire output. RFC 020 complete.
+- ✅ **`no_std` feasibility study** (v0.11.0). Audited all `std::` usages
+  in the core. Recommendation: **defer** — no concrete IoT use case yet,
+  WASI adapter (RFC 016) is the better path, and streaming DATA (RFC 019
+  Phase 3) is a prerequisite. RFC 021 complete.
+
+## Phase 15 — WASI adapter *(complete)*
+
+- ✅ **RFC 017 resolved** (v0.12.0): TLS Strategy A — rustls 0.23 + ring +
+  webpki-roots over WASI streams. Certificate validation enforced; no API to
+  disable it.
+- ✅ **`wasm-smtp-wasi` crate** (v0.12.0):
+  - `WasiTlsTransport` implementing `Transport` and `StartTlsCapable`.
+  - DNS resolution via `wasi:sockets/ip-name-lookup`.
+  - TCP connect via `wasi:sockets/tcp`.
+  - TLS handshake via rustls `StreamOwned<ClientConnection, WasiStreamIo>`.
+  - `connect_smtps` (implicit TLS) and `connect_smtp_starttls` (STARTTLS).
+  - `ConnectOptions` builder: SNI override, custom root store, ALPN.
+  - `plaintext-only` feature for TLS-offload deployments.
+  - 9 native-host tests (no WASI runtime required for `cargo test`).
+- ✅ Target: `wasm32-wasip2`.
+
+## Phase 16 — Streaming DATA *(complete)*
+
+- ✅ **`DotStufferState`** (v0.13.0). Streaming dot-stuffer state machine.
+  Tracks `at_line_start`, `prev`, and `prev_prev` across chunk boundaries.
+  `process_chunk(&[u8])` + `finish()` API. Verified to match the batch
+  `dot_stuff_and_terminate` output byte-for-byte, including the
+  byte-by-byte chunk boundary case.
+- ✅ **`MessageBody` trait** (v0.13.0). Runtime-independent streaming
+  body source. Built-in: `SliceBody<'a>`, `StrBody<'a>`.
+- ✅ **`SmtpClient::send_mail_stream`** (v0.13.0). Reads body in 8 KB
+  chunks. Full policy + audit integration. Wire output identical to
+  `send_mail` / `send_mail_bytes` for the same content.
+
+## Phase 17 — Component Model WIT interface *(planned)*
+
 ## Out of scope (for now)
 
 The following are deliberately omitted from the roadmap. They may be
@@ -314,3 +386,11 @@ revisited later, but are not implied commitments.
 - MIME composition or attachment building (use `mail-builder`; see
   `docs/src/composing-messages.md`).
 - Bulk delivery, retry queues, rate limiting.
+
+Design and ship the WASM Component Model WIT interface for `wasm-smtp`
+(RFC 018), enabling language-neutral SMTP send components.
+
+- [ ] Finalise `wit/smtp.wit` WIT interface.
+- [ ] Implement the Rust WIT shim layer.
+- [ ] Build and test the component with `cargo component`.
+- [ ] Publish `docs/src/component-model.md`.

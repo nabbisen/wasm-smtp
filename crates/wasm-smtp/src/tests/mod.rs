@@ -33,6 +33,8 @@
 mod client_tests;
 mod error_tests;
 mod harness;
+mod policy_tests;
+mod audit_tests;
 mod protocol_tests;
 mod session_tests;
 

@@ -7,6 +7,124 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-05-10
+
+### Added
+
+- **`SmtpClient::send_mail_stream`** (RFC 019 Phase 3). Streaming DATA
+  transmission: the message body is read from a [`MessageBody`] source in
+  8 KB chunks, dot-stuffed incrementally, and written to the transport.
+  Peak memory is O(chunk size) rather than O(body size).
+
+- **`MessageBody` trait** (`wasm_smtp::message_body`). Project-defined async
+  read abstraction (runtime-independent, no tokio dependency). Built-in
+  implementations:
+  - `SliceBody<'a>`: wraps `&[u8]`.
+  - `StrBody<'a>`: wraps `&str`.
+
+- **`DotStufferState`** (`wasm_smtp::DotStufferState`). Streaming dot-stuffer
+  state machine. Correctly handles `.` at line starts across chunk boundaries.
+  `process_chunk(&[u8]) -> Vec<u8>` + `finish() -> Vec<u8>` API.
+
+### Notes
+
+`send_mail_stream` passes `usize::MAX` to `SendPolicy::check_message_size`
+because total body size is unknown. Callers that need precise size enforcement
+should use `send_mail_bytes` instead.
+
+## [0.12.0] — 2026-05-10
+
+### Added
+
+- **`wasm-smtp-wasi` crate** (RFC 016 + RFC 017). New adapter crate for
+  `wasm32-wasip2` (WASI 0.2 Component Model) runtimes.
+
+  - **`connect_smtps(host, port, ehlo_domain)`** — Implicit TLS (port 465):
+    DNS lookup via `wasi:sockets/ip-name-lookup`, TCP connect via
+    `wasi:sockets/tcp`, TLS handshake via rustls + ring + webpki-roots.
+    Returns a ready-to-use `SmtpClient<WasiTlsTransport>`.
+  - **`connect_smtp_starttls(host, port, ehlo_domain)`** — STARTTLS (port 587):
+    plaintext TCP connect followed by in-place rustls upgrade after the SMTP
+    `STARTTLS` handshake. Implements `StartTlsCapable`.
+  - **`ConnectOptions`** — optional SNI override, custom root store, ALPN.
+  - **TLS strategy** (RFC 017 Strategy A): rustls 0.23 + ring + webpki-roots.
+    Certificate validation is enforced; no API to disable it.
+  - **`plaintext-only` feature** for TLS-offload / test environments (clearly
+    marked as not for production).
+  - **9 native-host tests** via `MockTransport` + rustls unit checks; no WASI
+    runtime required to run `cargo test -p wasm-smtp-wasi`.
+
+- Added `crates/wasm-smtp-wasi` to the workspace.
+
+### Notes
+
+Building for the actual WASM target requires:
+
+```sh
+rustup target add wasm32-wasip2   # or equivalent apt package
+cargo build --target wasm32-wasip2 -p wasm-smtp-wasi
+```
+
+Tests run on any platform without a WASI runtime:
+
+```sh
+cargo test -p wasm-smtp-wasi
+```
+
+## [0.10.0] — 2026-05-10
+
+This is the first release of the `wasm-smtp` extension development plan.
+It introduces RFC-based design governance, extracts the test transport into
+a dedicated crate, and adds two new core features: a pre-send policy hook
+and an audit event model.
+
+### Breaking
+
+- **`SmtpError::Policy` variant added.** Code that matches exhaustively on
+  `SmtpError` must add a `Policy(PolicyError)` arm. The enum is not marked
+  `#[non_exhaustive]`; this is an intentional breaking change.
+- **`SmtpClientOptions` required for policy/audit.** The new
+  `SmtpClient::connect_with` entry point takes a `SmtpClientOptions`
+  argument. `SmtpClient::connect` is unchanged and uses the defaults
+  (allow-all policy, no-op audit sink).
+
+### Added
+
+- **`wasm-smtp-test` crate.** Extracts `MockTransport`, `block_on`, and
+  `flatten` from the core's test-only harness into a standalone
+  dev-dependency crate. Downstream crates can now use `MockTransport`
+  for their own tests without copying code.
+
+- **`SendPolicy` trait** (`crate::policy`). Application-defined pre-send
+  validation: `check_sender`, `check_recipients`, `check_message_size`.
+  Runs before any SMTP command is sent; rejection returns
+  `SmtpError::Policy`. Ships with `DefaultPolicy` (allow all) and
+  `BoundedPolicy` (configurable recipient count and message size caps).
+
+- **`AuditSink` trait and `SmtpAuditEvent` enum** (`crate::audit`). Observe
+  SMTP session milestones without credentials or message body exposure.
+  Events: `Connected`, `GreetingReceived`, `EhloCompleted`, `TlsUpgraded`,
+  `AuthCompleted { mechanism }`, `MailFromAccepted`, `RecipientAccepted`,
+  `RecipientRejected`, `MessageAccepted`, `QuitCompleted`, `SessionAborted`.
+  Ships with `NoopAuditSink` (default, zero overhead) and `VecAuditSink`
+  (collects events for tests).
+
+- **`SmtpClientOptions`** (`crate::SmtpClientOptions`). Builder for
+  policy and audit sink configuration. Use with `SmtpClient::connect_with`.
+
+- **`PolicyError`** (`crate::PolicyError`). New error type for policy
+  rejections; wraps a caller-supplied message string.
+
+- **`rfcs/` directory.** 24 RFC documents under a 5-folder lifecycle
+  structure. RFC 000 (lifecycle policy) and RFC 003–015 are `Implemented`;
+  RFC 001–002 are `Accepted` (v0.10.0 plan); RFC 011–012 are `Implemented`
+  by this release; RFC 016–019 are `Proposed`; RFC 020–023 are `Draft`.
+
+### Fixed
+
+- `quit` now emits `SmtpAuditEvent::QuitCompleted` on clean close and
+  `SessionAborted` on failure.
+
 ## [0.9.4] — 2026-05-02
 
 This release introduces a single breaking change: the

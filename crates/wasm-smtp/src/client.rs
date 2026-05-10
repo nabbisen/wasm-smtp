@@ -30,8 +30,8 @@ use crate::error::{AuthError, InvalidInputError, ProtocolError, SmtpError, SmtpO
 use crate::outcome::SendOutcome;
 use crate::protocol::{
     self, AuthMechanism, MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply,
-    build_auth_plain_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth,
-    ehlo_advertises_enhanced_status_codes, ehlo_advertises_starttls, format_command,
+    build_auth_plain_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth, ehlo_advertises_enhanced_status_codes,
+    ehlo_advertises_starttls, format_command,
     format_command_arg, format_mail_from, format_rcpt_to, parse_reply_line, select_auth_mechanism,
 };
 use crate::session::SessionState;
@@ -56,11 +56,15 @@ pub struct SmtpClient<T: Transport> {
     /// RFC 3207 §4.2 without forcing the caller to pass the domain again.
     ehlo_domain: String,
     /// Whether the most recent EHLO advertised `ENHANCEDSTATUSCODES`
-    /// (RFC 2034). When set, every reply parsed by [`Self::read_reply`]
+    /// (RFC 2034). When set, every reply parsed by [`Self::read_reply`]\
     /// is annotated with an [`crate::protocol::EnhancedStatus`] (when
     /// the leading reply line carries one), and that code is propagated
     /// into [`crate::ProtocolError::UnexpectedCode`] on failure.
     enhanced_status_enabled: bool,
+    /// Pre-send policy hook. Checked before each `send_mail` call.
+    policy: Box<dyn crate::policy::SendPolicy>,
+    /// Audit event sink. Receives events for each session milestone.
+    audit: Box<dyn crate::audit::AuditSink>,
 }
 
 // Manual `Debug` implementation. We do not require `T: Debug` because typical
@@ -90,9 +94,32 @@ impl<T: Transport> SmtpClient<T> {
     ///
     /// On success the client is in a state where [`Self::login`] or
     /// [`Self::send_mail`] may be called.
+    ///
+    /// Uses [`DefaultPolicy`][crate::policy::DefaultPolicy] (allow all) and
+    /// [`NoopAuditSink`][crate::audit::NoopAuditSink] (no events). To attach
+    /// a policy or audit sink, use [`SmtpClientOptions`] with
+    /// [`Self::connect_with`].
     pub async fn connect(transport: T, ehlo_domain: &str) -> Result<Self, SmtpError> {
+        Self::connect_with(transport, ehlo_domain, SmtpClientOptions::default()).await
+    }
+
+    /// Connect with explicit policy and audit options.
+    ///
+    /// ```rust
+    /// # use wasm_smtp::policy::BoundedPolicy;
+    /// # use wasm_smtp::SmtpClientOptions;
+    /// let opts = SmtpClientOptions::new()
+    ///     .with_policy(Box::new(BoundedPolicy::new().max_recipients(50)));
+    /// // let client = SmtpClient::connect_with(transport, "client.example.com", opts).await?;
+    /// ```
+    pub async fn connect_with(
+        transport: T,
+        ehlo_domain: &str,
+        options: SmtpClientOptions,
+    ) -> Result<Self, SmtpError> {
         protocol::validate_ehlo_domain(ehlo_domain)?;
         smtp_debug!(ehlo_domain = %ehlo_domain, "SMTP session: connect");
+        options.audit.on_event(&crate::audit::SmtpAuditEvent::Connected);
         let mut client = Self {
             transport,
             state: SessionState::Greeting,
@@ -101,6 +128,8 @@ impl<T: Transport> SmtpClient<T> {
             capabilities: Vec::new(),
             ehlo_domain: ehlo_domain.to_owned(),
             enhanced_status_enabled: false,
+            policy: options.policy,
+            audit: options.audit,
         };
         client.read_greeting().await?;
         client.send_ehlo(ehlo_domain).await?;
@@ -268,6 +297,9 @@ impl<T: Transport> SmtpClient<T> {
 
         self.transition(SessionState::MailFrom)?;
         smtp_debug!(mechanism = mechanism.name(), "AUTH: succeeded");
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::AuthCompleted {
+            mechanism: mechanism.name(),
+        });
         Ok(())
     }
 
@@ -608,6 +640,13 @@ impl<T: Transport> SmtpClient<T> {
         }
         self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
 
+        // Policy checks — run before any SMTP command is sent.
+        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
+        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_message_size(body.len())
+            .map_err(crate::error::SmtpError::Policy)?;
+
         smtp_debug!(
             from = %from,
             recipient_count = to.len(),
@@ -618,7 +657,10 @@ impl<T: Transport> SmtpClient<T> {
         // Issue MAIL FROM.
         self.transition(SessionState::MailFrom)?;
         self.write_all(&format_mail_from(from)).await?;
-        self.expect_class(2, SmtpOp::MailFrom).await?;
+        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+            code: mail_reply.code,
+        });
         smtp_debug!(from = %from, "MAIL FROM accepted");
 
         // Issue RCPT TO for every recipient. 250 (OK) and 251 (forwarded)
@@ -626,7 +668,10 @@ impl<T: Transport> SmtpClient<T> {
         self.transition(SessionState::RcptTo)?;
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
-            self.expect_class(2, SmtpOp::RcptTo).await?;
+            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
+            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                code: rcpt_reply.code,
+            });
             smtp_debug!(rcpt = %addr, "RCPT TO accepted");
         }
 
@@ -642,6 +687,9 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&payload).await?;
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
+            code: outcome.code,
+        });
         smtp_debug!(
             body_bytes = body.len(),
             code = outcome.code,
@@ -789,20 +837,30 @@ impl<T: Transport> SmtpClient<T> {
             return Err(ProtocolError::ExtensionUnavailable { name: "SMTPUTF8" }.into());
         }
 
+        // Policy checks — run before any SMTP command.
+        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
+        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_message_size(body.len())
+            .map_err(crate::error::SmtpError::Policy)?;
+
         // Issue MAIL FROM:<from> SMTPUTF8.
         self.transition(SessionState::MailFrom)?;
         self.write_all(&protocol::format_mail_from_smtputf8(from))
             .await?;
-        self.expect_class(2, SmtpOp::MailFrom).await?;
+        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+            code: mail_reply.code,
+        });
 
-        // RCPT TO is identical to the ASCII path: SMTPUTF8 does not
-        // add a parameter to RCPT, only to MAIL FROM. Recipients can
-        // be UTF-8 because the validator we ran above already
-        // accepted them.
+        // RCPT TO is identical to the ASCII path.
         self.transition(SessionState::RcptTo)?;
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
-            self.expect_class(2, SmtpOp::RcptTo).await?;
+            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
+            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                code: rcpt_reply.code,
+            });
         }
 
         // DATA + body identical to the ASCII path.
@@ -814,6 +872,9 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&payload).await?;
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
+            code: outcome.code,
+        });
 
         self.transition(SessionState::MailFrom)?;
         Ok(outcome)
@@ -844,6 +905,12 @@ impl<T: Transport> SmtpClient<T> {
         let close_result = self.transport.close().await;
         self.state = SessionState::Closed;
 
+        if send_result.is_ok() && close_result.is_ok() {
+            self.audit.on_event(&crate::audit::SmtpAuditEvent::QuitCompleted);
+        } else {
+            self.audit.on_event(&crate::audit::SmtpAuditEvent::SessionAborted);
+        }
+
         send_result?;
         close_result.map_err(SmtpError::from)?;
         Ok(())
@@ -866,6 +933,7 @@ impl<T: Transport> SmtpClient<T> {
             }
             .into());
         }
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::GreetingReceived { code: reply.code });
         self.transition(SessionState::Ehlo)?;
         Ok(())
     }
@@ -896,6 +964,7 @@ impl<T: Transport> SmtpClient<T> {
         // capability is dropped on a re-EHLO (e.g. after STARTTLS).
         self.enhanced_status_enabled = ehlo_advertises_enhanced_status_codes(&lines);
         self.capabilities = lines;
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::EhloCompleted);
         self.transition(SessionState::Authentication)?;
         Ok(())
     }
@@ -1198,6 +1267,7 @@ impl<T: StartTlsCapable> SmtpClient<T> {
             self.mark_closed_on_logical_failure();
             SmtpError::Io(e)
         })?;
+        self.audit.on_event(&crate::audit::SmtpAuditEvent::TlsUpgraded);
 
         // RFC 3207 §4.2: re-issue EHLO on the now-secure channel. We
         // reuse send_ehlo, which writes the command, parses the reply,
@@ -1213,6 +1283,73 @@ impl<T: StartTlsCapable> SmtpClient<T> {
             "STARTTLS: upgrade complete; re-EHLO done"
         );
         Ok(())
+    }
+}
+
+// -----------------------------------------------------------------------------
+// SmtpClientOptions
+// -----------------------------------------------------------------------------
+
+/// Options for configuring an [`SmtpClient`] before connecting.
+///
+/// Provides a send-policy hook (RFC 011) and an audit-event sink (RFC 012).
+/// All settings are optional; the defaults are permissive and silent.
+///
+/// ## Example
+///
+/// ```rust
+/// use wasm_smtp::policy::BoundedPolicy;
+/// use wasm_smtp::audit::VecAuditSink;
+/// use wasm_smtp::SmtpClientOptions;
+/// use std::sync::Arc;
+///
+/// let sink = Arc::new(VecAuditSink::default());
+/// let opts = SmtpClientOptions::new()
+///     .with_policy(Box::new(BoundedPolicy::new().max_recipients(25)))
+///     .with_audit(Box::new(Arc::clone(&sink)));
+/// ```
+pub struct SmtpClientOptions {
+    /// Pre-send validation hook.
+    pub(crate) policy: Box<dyn crate::policy::SendPolicy>,
+    /// Audit event observer.
+    pub(crate) audit: Box<dyn crate::audit::AuditSink>,
+}
+
+impl SmtpClientOptions {
+    /// Create options with the default policy (allow all) and no-op audit sink.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            policy: Box::new(crate::policy::DefaultPolicy),
+            audit: Box::new(crate::audit::NoopAuditSink),
+        }
+    }
+
+    /// Attach a [`SendPolicy`][crate::policy::SendPolicy].
+    #[must_use]
+    pub fn with_policy(mut self, policy: Box<dyn crate::policy::SendPolicy>) -> Self {
+        self.policy = policy;
+        self
+    }
+
+    /// Attach an [`AuditSink`][crate::audit::AuditSink].
+    #[must_use]
+    pub fn with_audit(mut self, audit: Box<dyn crate::audit::AuditSink>) -> Self {
+        self.audit = audit;
+        self
+    }
+}
+
+impl Default for SmtpClientOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl core::fmt::Debug for SmtpClientOptions {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("SmtpClientOptions")
+            .finish_non_exhaustive()
     }
 }
 

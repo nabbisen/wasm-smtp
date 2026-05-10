@@ -1,9 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["crates/wasm-smtp", "crates/wasm-smtp-cloudflare", "crates/wasm-smtp-tokio"]
+members = [
+    "crates/wasm-smtp",
+    "crates/wasm-smtp-cloudflare",
+    "crates/wasm-smtp-tokio",
+    "crates/wasm-smtp-test",
+]
 
 [workspace.package]
-version = "0.9.4"
+version = "0.10.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"

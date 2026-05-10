@@ -56,6 +56,9 @@ pub enum SmtpError {
     /// Caller-supplied input violated SMTP constraints before any byte was
     /// sent on the wire.
     InvalidInput(InvalidInputError),
+    /// A [`crate::policy::SendPolicy`] rejected the send before any SMTP
+    /// command was issued.
+    Policy(PolicyError),
 }
 
 impl fmt::Display for SmtpError {
@@ -65,6 +68,7 @@ impl fmt::Display for SmtpError {
             Self::Protocol(e) => write!(f, "smtp protocol error: {e}"),
             Self::Auth(e) => write!(f, "smtp auth error: {e}"),
             Self::InvalidInput(e) => write!(f, "smtp invalid input: {e}"),
+            Self::Policy(e) => write!(f, "smtp policy rejected: {e}"),
         }
     }
 }
@@ -76,6 +80,7 @@ impl StdError for SmtpError {
             Self::Protocol(e) => Some(e),
             Self::Auth(e) => Some(e),
             Self::InvalidInput(e) => Some(e),
+            Self::Policy(e) => Some(e),
         }
     }
 }
@@ -103,6 +108,51 @@ impl From<InvalidInputError> for SmtpError {
         Self::InvalidInput(value)
     }
 }
+
+impl From<PolicyError> for SmtpError {
+    fn from(value: PolicyError) -> Self {
+        Self::Policy(value)
+    }
+}
+
+// -----------------------------------------------------------------------------
+// PolicyError
+// -----------------------------------------------------------------------------
+
+/// A [`crate::policy::SendPolicy`] rejected the send operation.
+///
+/// Unlike [`InvalidInputError`] (which enforces SMTP grammar constraints),
+/// `PolicyError` represents application-defined business-logic constraints:
+/// sender allowlists, recipient limits, message size caps, rate limits, etc.
+///
+/// The `message` field contains a human-readable explanation supplied by the
+/// policy implementation. It must not include credential or message-body data.
+#[derive(Debug)]
+pub struct PolicyError {
+    message: String,
+}
+
+impl PolicyError {
+    /// Construct from any `Display`-able message.
+    pub fn new(message: impl Into<String>) -> Self {
+        Self {
+            message: message.into(),
+        }
+    }
+
+    /// The human-readable rejection reason.
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl fmt::Display for PolicyError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl StdError for PolicyError {}
 
 // -----------------------------------------------------------------------------
 // IoError
