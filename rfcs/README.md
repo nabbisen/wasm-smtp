@@ -10,7 +10,7 @@ lifecycle policy is defined in
 |---|---|---|
 | `draft/` | Draft | Being written |
 | `proposed/` | Proposed | Open for review |
-| `accepted/` | Accepted | Design approved; implementation may begin |
+| `accepted/` | Accepted | Design approved |
 | `done/` | Implemented | Shipped; permanent record |
 | `archive/` | Withdrawn / Superseded | Will not be pursued |
 
@@ -20,9 +20,7 @@ _(empty)_
 
 ## Proposed
 
-| ID | Title | Priority | Target |
-|----|-------|----------|--------|
-| [018](./proposed/018-component-model-wit-interface.md) | Component Model and WIT interface | P2 | v0.14.0 |
+_(empty)_
 
 ## Draft
 
@@ -53,6 +51,7 @@ _(empty)_
 | [015](./done/015-cloudflare-integration-example-limitations.md) | Cloudflare integration example and runtime limitations | v0.3.0 |
 | [016](./done/016-wasi-adapter-design.md) | WASI adapter design | v0.12.0 |
 | [017](./done/017-wasi-tls-strategy.md) | WASI TLS strategy | v0.12.0 |
+| [018](./done/018-component-model-wit-interface.md) | Component Model and WIT interface | v0.14.0 |
 | [019](./done/019-streaming-data-bounded-memory.md) | Streaming DATA and bounded memory | v0.13.0 |
 | [020](./done/020-large-message-handling-memory-tests.md) | Large message handling and memory behavior tests | v0.11.0 |
 | [021](./done/021-no-std-alloc-feasibility.md) | no_std / alloc feasibility | v0.11.0 |
@@ -63,4 +62,4 @@ _(empty)_
 
 ---
 
-Next RFC: **024**
+RFC 000–023 are complete. The next RFC is **024**.

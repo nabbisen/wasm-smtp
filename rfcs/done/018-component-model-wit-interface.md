@@ -1,6 +1,6 @@
 # RFC 018 — Component Model and WIT interface
 
-**Status.** Proposed
+**Status.** Implemented (v0.14.0)
 **Priority.** P2
 **Tracks.** Component Model / WIT
 **Touches.** `wit/` (new), `docs/src/component-model.md`

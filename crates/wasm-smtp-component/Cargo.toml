@@ -1,0 +1,40 @@
+[package]
+name = "wasm-smtp-component"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "WASM Component Model interface for wasm-smtp (wasm32-wasip2 target)."
+readme = "README.md"
+keywords = ["smtp", "email", "wasm", "component-model", "wit"]
+categories = ["email", "network-programming", "wasm"]
+
+[lib]
+# `cdylib` produces the `.wasm` binary consumed by Component Model runtimes.
+# `rlib` allows the crate to be tested on native hosts.
+crate-type = ["cdylib", "rlib"]
+path = "src/lib.rs"
+
+[features]
+default = ["webpki-roots"]
+webpki-roots  = ["wasm-smtp-wasi/webpki-roots"]
+native-roots  = ["wasm-smtp-wasi/native-roots"]
+
+[dependencies]
+wasm-smtp      = { path = "../wasm-smtp",      version = "0.14.0", default-features = false }
+wasm-smtp-wasi = { path = "../wasm-smtp-wasi", version = "0.14.0", default-features = false }
+
+# wit-bindgen generates the WIT bindings at compile time via a proc macro.
+# The generated Guest trait is implemented in src/lib.rs.
+# Only needed on WASM targets; on native the bindings module is stubbed out.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wit-bindgen = { version = "0.57", default-features = false, features = ["macros"] }
+
+[dev-dependencies]
+wasm-smtp-test = { path = "../wasm-smtp-test" }
+
+[lints]
+workspace = true

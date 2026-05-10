@@ -376,7 +376,16 @@ development plan.
   chunks. Full policy + audit integration. Wire output identical to
   `send_mail` / `send_mail_bytes` for the same content.
 
-## Phase 17 — Component Model WIT interface *(planned)*
+## Phase 17 — Component Model WIT interface *(complete)*
+
+- ✅ **`wit/smtp.wit`** (v0.14.0). Language-neutral WIT interface.
+  Defines `smtp-config`, `smtp-credentials`, `smtp-message`,
+  `send-result`, `send-error`, and the `send` function. Compatible
+  with jco (TypeScript), wit-bindgen-go (Go), componentize-py (Python).
+- ✅ **`wasm-smtp-component` crate** (v0.14.0). Rust WIT implementation
+  wrapping `wasm-smtp-wasi`. Uses `wit-bindgen 0.57` on `wasm32-wasip2`.
+  5 native-host tests (no WASM runtime required for `cargo test`).
+- Build: `cargo component build --target wasm32-wasip2 -p wasm-smtp-component`
 
 ## Out of scope (for now)
 
@@ -386,11 +395,3 @@ revisited later, but are not implied commitments.
 - MIME composition or attachment building (use `mail-builder`; see
   `docs/src/composing-messages.md`).
 - Bulk delivery, retry queues, rate limiting.
-
-Design and ship the WASM Component Model WIT interface for `wasm-smtp`
-(RFC 018), enabling language-neutral SMTP send components.
-
-- [ ] Finalise `wit/smtp.wit` WIT interface.
-- [ ] Implement the Rust WIT shim layer.
-- [ ] Build and test the component with `cargo component`.
-- [ ] Publish `docs/src/component-model.md`.

@@ -1,0 +1,175 @@
+/// wasm-smtp SMTP submission component interface.
+///
+/// This WIT world exposes a single `smtp-send` interface for sending one
+/// email message per call. The component is implemented in Rust on top of
+/// `wasm-smtp` + `wasm-smtp-wasi` and targets `wasm32-wasip2`.
+///
+/// ## Building
+///
+/// ```sh
+/// cargo component build --target wasm32-wasip2 -p wasm-smtp-component
+/// # Produces: target/wasm32-wasip2/debug/wasm_smtp_component.wasm
+/// ```
+///
+/// ## Language bindings
+///
+/// Generate bindings for any language that supports WIT:
+///
+/// ```sh
+/// # TypeScript / JavaScript (via jco)
+/// jco types wit/smtp.wit -o ./types
+///
+/// # Go (via wit-bindgen go)
+/// wit-bindgen go wit/smtp.wit --out-dir ./smtp
+///
+/// # Python (via componentize-py)
+/// componentize-py --wit-path wit/smtp.wit
+/// ```
+///
+/// ## Security note
+///
+/// Credentials (`smtp-credentials`) are passed as plain WIT strings and
+/// cross the host-component boundary in each call. They are not retained
+/// by the component between calls. See docs/src/component-model.md for
+/// the credential handling threat model.
+
+package wasm-smtp:smtp@0.1.0;
+
+/// SMTP send interface — one function, one message, one connection.
+interface smtp-send {
+
+    // ── Connection configuration ───────────────────────────────────────────
+
+    /// How to establish TLS for the SMTP connection.
+    enum tls-mode {
+        /// Implicit TLS (port 465). Recommended. The TLS handshake occurs
+        /// before any SMTP bytes are exchanged.
+        implicit,
+        /// STARTTLS upgrade (port 587). Plain TCP connect followed by an
+        /// in-place TLS handshake after the SMTP STARTTLS command.
+        starttls,
+    }
+
+    /// SMTP server connection parameters.
+    record smtp-config {
+        /// Hostname or IP address of the SMTP submission server.
+        host: string,
+        /// TCP port number. Common values: 465 (implicit TLS), 587 (STARTTLS).
+        port: u16,
+        /// FQDN or address literal to use in the EHLO command, identifying
+        /// this client to the server.
+        ehlo-domain: string,
+        /// TLS mode.
+        tls-mode: tls-mode,
+    }
+
+    // ── Authentication ─────────────────────────────────────────────────────
+
+    /// SMTP authentication credentials.
+    ///
+    /// Passed as function arguments on each `send` call. Not retained by
+    /// the component between calls. The component selects the best
+    /// available AUTH mechanism (SCRAM-SHA-256 > PLAIN > LOGIN).
+    record smtp-credentials {
+        /// Account username (typically an email address).
+        username: string,
+        /// Account password or app-specific password.
+        password: string,
+    }
+
+    // ── Message ────────────────────────────────────────────────────────────
+
+    /// A single SMTP message: envelope + body.
+    record smtp-message {
+        /// Envelope sender address (used in MAIL FROM).
+        from: string,
+        /// Envelope recipient addresses (used in RCPT TO, one per entry).
+        to: list<string>,
+        /// Fully composed RFC 5322 message body: headers, a blank line,
+        /// and content, with CRLF line endings.
+        ///
+        /// The component applies dot-stuffing and the end-of-data terminator
+        /// automatically. Do not include them in this field.
+        raw-message: string,
+    }
+
+    // ── Result ─────────────────────────────────────────────────────────────
+
+    /// Successful send result.
+    record send-result {
+        /// SMTP reply code from the server's DATA acceptance response
+        /// (typically 250).
+        reply-code: u16,
+    }
+
+    /// Error returned when the send operation fails.
+    variant send-error {
+        /// Transport-level failure: DNS lookup, TCP connect, or TLS
+        /// handshake error. The string is a human-readable description.
+        io(string),
+        /// SMTP protocol error: unexpected reply code, malformed server
+        /// reply, or unsupported extension. The string identifies the
+        /// failed SMTP operation.
+        protocol(string),
+        /// Authentication rejected by the server (535 or equivalent).
+        auth-rejected,
+        /// Caller-supplied input is invalid: empty from address, empty
+        /// recipient list, or address containing forbidden characters.
+        invalid-input(string),
+        /// A send policy rejected the message before any SMTP command
+        /// was sent.
+        policy-rejected(string),
+    }
+
+    // ── Primary entry point ────────────────────────────────────────────────
+
+    /// Connect to the SMTP server, authenticate, send one message, and quit.
+    ///
+    /// A new TCP connection is created for each call. Connection reuse is
+    /// not exposed through this interface; use the Rust API directly for
+    /// high-throughput scenarios that benefit from connection reuse.
+    ///
+    /// The component applies CRLF-normalised dot-stuffing to `raw-message`
+    /// automatically.
+    ///
+    /// # Example (pseudocode)
+    ///
+    /// ```
+    /// let result = smtp-send.send(
+    ///   smtp-config { host: "smtp.example.com", port: 465,
+    ///                 ehlo-domain: "client.example.com",
+    ///                 tls-mode: implicit },
+    ///   smtp-credentials { username: "user@example.com",
+    ///                      password: "secret" },
+    ///   smtp-message {
+    ///     from: "user@example.com",
+    ///     to: ["recipient@example.org"],
+    ///     raw-message: "From: user@example.com\r\n\
+    ///                   To: recipient@example.org\r\n\
+    ///                   Subject: Hello\r\n\r\nBody.\r\n",
+    ///   },
+    /// );
+    /// ```
+    send: func(
+        config: smtp-config,
+        credentials: smtp-credentials,
+        message: smtp-message,
+    ) -> result<send-result, send-error>;
+}
+
+/// The SMTP client world.
+///
+/// A component implementing this world imports WASI networking interfaces
+/// and exports the `smtp-send` interface.
+world smtp-client {
+    /// DNS lookup, TCP sockets, and byte streams.
+    import wasi:sockets/instance-network@0.2.0;
+    import wasi:sockets/network@0.2.0;
+    import wasi:sockets/tcp@0.2.0;
+    import wasi:sockets/tcp-create-socket@0.2.0;
+    import wasi:sockets/ip-name-lookup@0.2.0;
+    import wasi:io/streams@0.2.0;
+    import wasi:io/poll@0.2.0;
+
+    export smtp-send;
+}
