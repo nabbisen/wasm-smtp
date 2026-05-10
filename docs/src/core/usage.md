@@ -348,7 +348,7 @@ match client.send_mail(from, recipients, body).await {
 }
 ```
 
-See [Errors](./errors.md) for the full taxonomy and which states the
+See [Errors](../concepts/errors.md) for the full taxonomy and which states the
 client moves to after each kind of failure.
 
 ## Testing your code

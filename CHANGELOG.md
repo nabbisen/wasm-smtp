@@ -1,11 +1,52 @@
-# Changelog
-
-All notable changes to this project are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [Unreleased]
+
+## [0.15.1] — 2026-05-11
+
+### Added
+
+- **`crates/wasm-smtp/src/client/` — モジュール分割。**
+  `client.rs`（1743行）を責務ごとに 5 ファイルへ分割:
+
+  | ファイル | 内容 |
+  |---|---|
+  | `client/mod.rs` | `SmtpClient` 構造体・`SmtpClientOptions`・`connect`/`quit`・セッション状態ヘルパー |
+  | `client/auth.rs` | `login`・`login_with`・`login_oauthbearer`・`login_xoauth2`・`run_auth_*` |
+  | `client/send.rs` | `send_mail`・`send_mail_bytes`・`send_mail_stream`・`send_mail_smtputf8`・`send_message` |
+  | `client/io.rs` | `read_greeting`・`send_ehlo`・`write_all`・`flush`・`read_reply`・I/O バッファ（全 `pub(super)`） |
+  | `client/starttls.rs` | `connect_starttls`・`starttls` |
+
+- **Integration tests** (`crates/wasm-smtp/tests/public_api.rs`)。
+  public API のみを使う 9 テスト。自己完結型 `TestTransport` を直接定義し、
+  `wasm-smtp-test` への dev-dependency を持たない（循環参照を回避）。
+
+- **`docs/src/` サブフォルダ構成。**
+  16 ファイルの平坦構成を 4 サブフォルダに再編:
+
+  | フォルダ | 内容 |
+  |---|---|
+  | `concepts/` | architecture・protocol・errors・security |
+  | `core/` | core・usage・composing-messages・connection-reuse・policy-audit・streaming |
+  | `adapters/` | cloudflare・tokio・wasi・component-model（`-adapter` サフィックス除去） |
+  | `reference/` | examples |
+
+- **`.gitignore`** — `target/`・`*.rs.bk`・`*.pdb`・`docs/book/` を除外。
+- **`.vscode/settings.json`** — `editor.formatOnSave: true`。
+- **`.vscode/extensions.json`** — `rust-lang.rust-analyzer` を推奨。
+
+### Fixed
+
+- **`cargo publish` 失敗の解消。**
+  `wasm-smtp-test` は `wasm-smtp` を regular dependency として使用しており、
+  `wasm-smtp` が `wasm-smtp-test` を dev-dependency として参照していたため
+  循環参照が生じていた。`wasm-smtp` の `[dev-dependencies]` から
+  `wasm-smtp-test` を削除し、integration test を自己完結型に書き直した。
+
+- **コンパイル警告をすべて解消。** 分割後の各ファイルに残っていた
+  unused import・unused variable・dead_code 警告を修正:
+  - `client/mod.rs`・`auth.rs`・`io.rs`・`send.rs`・`starttls.rs`: 移動後に不要となった import を整理
+  - `wasm-smtp-wasi/src/tls.rs`・`error.rs`: non-wasm32 ビルドの dead_code に `#[cfg_attr]` を追加
+  - `wasm-smtp-wasi/Cargo.toml`: `rustls-pki-types` の冗長 `version` キーを除去
+  - `wasm-smtp-component/src/lib.rs`: non-wasm32 パスの unused variable を抑制
 
 ## [0.15.0] — 2026-05-11
 

@@ -12,6 +12,7 @@ pub struct WasiSmtpError {
 }
 
 impl WasiSmtpError {
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
     pub(crate) fn new(message: impl Into<String>) -> Self {
         Self {
             message: message.into(),

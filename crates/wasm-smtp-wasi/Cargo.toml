@@ -30,9 +30,9 @@ native-roots = ["dep:rustls-native-certs"]
 plaintext-only = []
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.15.0", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.15.1", default-features = false }
 rustls = { version = "0.23", features = ["ring", "tls12", "logging"] }
-rustls-pki-types = { version = "1.14", workspace = true }
+rustls-pki-types = { workspace = true }
 
 # Trust anchor sources (feature-gated; at most one should be enabled).
 webpki-roots  = { version = "1.0", optional = true }

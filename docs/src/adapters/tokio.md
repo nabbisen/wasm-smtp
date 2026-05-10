@@ -125,7 +125,7 @@ the plaintext channel, then asks the transport to upgrade in place.
 After the upgrade the client re-issues EHLO over the encrypted
 channel, replacing its capability cache. The `wasm-smtp` core
 includes a CVE-2011-1575-class injection defence at the upgrade
-boundary; see the [Errors](./errors.md) chapter for details.
+boundary; see the [Errors](../concepts/errors.md) chapter for details.
 
 ## Custom configuration
 

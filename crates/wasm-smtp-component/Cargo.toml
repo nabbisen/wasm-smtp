@@ -24,8 +24,8 @@ webpki-roots  = ["wasm-smtp-wasi/webpki-roots"]
 native-roots  = ["wasm-smtp-wasi/native-roots"]
 
 [dependencies]
-wasm-smtp      = { path = "../wasm-smtp",      version = "0.15.0", default-features = false }
-wasm-smtp-wasi = { path = "../wasm-smtp-wasi", version = "0.15.0", default-features = false }
+wasm-smtp      = { path = "../wasm-smtp",      version = "0.15.1", default-features = false }
+wasm-smtp-wasi = { path = "../wasm-smtp-wasi", version = "0.15.1", default-features = false }
 
 # wit-bindgen generates the WIT bindings at compile time via a proc macro.
 # The generated Guest trait is implemented in src/lib.rs.

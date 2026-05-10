@@ -85,6 +85,7 @@ mod tests;
 pub use error::WasiSmtpError;
 pub use tls::ConnectOptions;
 
+#[cfg(target_arch = "wasm32")]
 use wasm_smtp::SmtpClient;
 
 #[cfg(target_arch = "wasm32")]

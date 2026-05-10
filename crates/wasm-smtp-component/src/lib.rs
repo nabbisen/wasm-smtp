@@ -24,7 +24,7 @@
 //!
 //! Credentials cross the host-component boundary as plain WIT strings on
 //! every `send` call. They are not retained by the component between calls.
-//! See `docs/src/component-model.md` for the full threat model.
+//! See `docs/src/adapters/component-model.md` for the full threat model.
 //!
 //! [`wasm-smtp`]: https://docs.rs/wasm-smtp
 
@@ -55,7 +55,7 @@ use bindings::exports::wasm_smtp::smtp::smtp_send::{
 mod stubs;
 
 #[cfg(not(target_arch = "wasm32"))]
-use stubs::{SendError, SendResult, SmtpConfig, SmtpCredentials, SmtpMessage, TlsMode};
+use stubs::{SendError, SendResult, SmtpConfig, SmtpCredentials, SmtpMessage};
 
 // ── Core implementation ───────────────────────────────────────────────────
 
@@ -64,13 +64,13 @@ pub struct SmtpSendImpl;
 
 impl SmtpSendImpl {
     /// Core send logic, shared between the WIT export and native tests.
+    #[allow(unused_variables)]
     pub fn send_impl(
         config: SmtpConfig,
         credentials: SmtpCredentials,
         message: SmtpMessage,
     ) -> Result<SendResult, SendError> {
         use wasm_smtp::SmtpError;
-        use wasm_smtp_wasi::ConnectOptions;
 
         // Build the transport and SmtpClient using wasm-smtp-wasi.
         #[cfg(target_arch = "wasm32")]
@@ -100,7 +100,7 @@ impl SmtpSendImpl {
                  use cargo test for native unit tests",
             )));
 
-        let mut client = client_result.map_err(smtp_error_to_wit)?;
+        let mut _client = client_result.map_err(smtp_error_to_wit)?;
 
         // Authenticate.
         #[cfg(target_arch = "wasm32")]
@@ -121,18 +121,21 @@ impl SmtpSendImpl {
         .map_err(smtp_error_to_wit)?;
 
         #[cfg(not(target_arch = "wasm32"))]
-        let outcome: wasm_smtp::SendOutcome = {
+        #[allow(unreachable_code)]
+        let _outcome: wasm_smtp::SendOutcome = {
             let _ = (&message.from, &to_refs, &message.raw_message);
-            unreachable!("native path short-circuits at client_result above")
+            return Err(SendError::Io("unreachable on native host".into()));
+            unreachable!()
         };
 
         // QUIT (best-effort; ignore errors to not mask a successful send).
         #[cfg(target_arch = "wasm32")]
         { wasm_smtp_component_rt::block_on(client.quit()).ok(); }
 
-        Ok(SendResult {
-            reply_code: outcome.code,
-        })
+        #[cfg(target_arch = "wasm32")]
+        return Ok(SendResult { reply_code: outcome.code });
+        #[cfg(not(target_arch = "wasm32"))]
+        Ok(SendResult { reply_code: _outcome.code })
     }
 }
 

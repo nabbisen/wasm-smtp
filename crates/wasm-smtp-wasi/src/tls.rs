@@ -68,6 +68,7 @@ impl ConnectOptions {
 // ---------------------------------------------------------------------------
 
 /// Construct a [`ClientConfig`] from [`ConnectOptions`].
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn make_tls_config(opts: &ConnectOptions) -> Result<Arc<ClientConfig>, WasiSmtpError> {
     let root_store = if let Some(store) = opts.root_store.clone() {
         store
@@ -87,6 +88,7 @@ pub(crate) fn make_tls_config(opts: &ConnectOptions) -> Result<Arc<ClientConfig>
 }
 
 /// Build the default trust-anchor set from the active cargo feature.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 fn default_root_store() -> Result<RootCertStore, WasiSmtpError> {
     let mut store = RootCertStore::empty();
 
@@ -122,6 +124,7 @@ fn default_root_store() -> Result<RootCertStore, WasiSmtpError> {
 }
 
 /// Build a rustls [`ServerName`] from a hostname string.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 pub(crate) fn server_name(host: &str) -> Result<ServerName<'static>, WasiSmtpError> {
     ServerName::try_from(host.to_owned())
         .map_err(|e| WasiSmtpError::new(format!("invalid server name '{host}': {e}")))

@@ -110,7 +110,7 @@ async fn emit_alert(metric: &str, value: f64, threshold: f64) -> Result<(), Smtp
 This example shows the simplest happy-path code. Production callers
 will want to wrap the whole sequence in a retry loop keyed on
 `SmtpError::Io` and 4xx `ProtocolError::UnexpectedCode` — see
-[Errors](./errors.md) for the recommended pattern.
+[Errors](../concepts/errors.md) for the recommended pattern.
 
 ## Multiple recipients on one connection
 

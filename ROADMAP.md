@@ -65,7 +65,7 @@ Production-quality polish on top of a working stack.
   programmatically-readable field.
 - ✅ Documentation expansion: protocol reference covers both AUTH
   mechanisms, usage guide explains mechanism selection.
-- ✅ Worked end-to-end usage examples (`docs/src/examples.md`):
+- ✅ Worked end-to-end usage examples (`docs/src/reference/examples.md`):
   contact-form delivery, transactional alert, multiple recipients,
   multiple messages on one connection.
 
@@ -232,7 +232,7 @@ message body?" question.
     (default) and `webpki-roots`. Mutually exclusive.
   - **No public API to disable certificate verification.**
     Test/dev convenience is supplied via custom root stores.
-- ✅ **Composition guidance (`docs/src/composing-messages.md`).**
+- ✅ **Composition guidance (`docs/src/core/composing-messages.md`).**
   After evaluating the request to ship a `wasm-smtp-message`
   sibling crate, the decision was to **not build it** —
   `mail-builder` (Stalwart Labs, no required deps, RFC 5322 +
@@ -266,7 +266,7 @@ delivered; the rest are not commitments.
   `mail-builder` is not pulled into the dependency graph unless
   the feature is enabled.
 - ✅ **Connection reuse documentation** (v0.8.0). New chapter
-  `docs/src/connection-reuse.md` documents the existing
+  `docs/src/core/connection-reuse.md` documents the existing
   multi-message-per-connection pattern (state persistence, idle
   timeouts, retry semantics, intentional absence of a built-in
   connection pool). Code changes: none — the support has been
@@ -393,5 +393,5 @@ The following are deliberately omitted from the roadmap. They may be
 revisited later, but are not implied commitments.
 
 - MIME composition or attachment building (use `mail-builder`; see
-  `docs/src/composing-messages.md`).
+  `docs/src/core/composing-messages.md`).
 - Bulk delivery, retry queues, rate limiting.
