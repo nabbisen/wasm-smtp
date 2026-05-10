@@ -38,14 +38,10 @@ must_use_candidate = "allow"
 # any patched advisory range. They are not pinned to exact versions —
 # patch updates inside a minor still flow through `cargo update`.
 [workspace.dependencies]
-# tokio: floor = 1.38, the first 1.x LTS release with the named-pipe
-# patches (RUSTSEC-2023-0001 fixed in >= 1.23.1) and the current set of
-# `io-util` ergonomics this crate relies on. We do not enable
-# `tokio/net` so the named-pipe issue is also out of reach by feature
-# selection alone.
-tokio = { version = "1.38", default-features = false }
-# tokio-test: dev-only. floor = 0.4.3 (current MSRV-clean release).
-tokio-test = "0.4.3"
+# tokio: floor = 1.51, the 1.x LTS release.
+tokio = { version = "1.51", default-features = false }
+# tokio-test: dev-only. floor = 0.4.5 (current MSRV-clean release).
+tokio-test = "0.4.5"
 # worker: Cloudflare Workers Rust SDK. The 0.8.x line is the current
 # stable series; minor 0.x bumps are explicit decisions, not silent
 # floor relaxations.
@@ -63,7 +59,7 @@ worker = "0.8"
 # crate-level pass-through because a few real submission servers still
 # require TLS 1.2.
 tokio-rustls = { version = "0.26", default-features = false, features = ["logging", "tls12"] }
-rustls-pki-types = "1.7"
+rustls-pki-types = "1.14"
 # Trust-anchor sources. Both are optional and gated by feature flags
 # in `wasm-smtp-tokio`.
 rustls-native-certs = "0.8"
@@ -92,7 +88,7 @@ pbkdf2 = { version = "0.13", default-features = false, features = ["hmac"] }
 getrandom = { version = "0.4", default-features = false }
 # constant-time comparison for the server signature verification
 # step. Tiny crate (~50 LOC), no_std-compatible, no transitive deps.
-subtle = { version = "2.5", default-features = false }
+subtle = { version = "2.6", default-features = false }
 
 # Optional structured logging for the `tracing` feature on the main
 # crate. We keep this at the crate root because adapters might one
