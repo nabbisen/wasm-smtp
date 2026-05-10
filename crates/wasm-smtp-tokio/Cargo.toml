@@ -58,7 +58,7 @@ scram-sha-256 = ["wasm-smtp/scram-sha-256"]
 tracing = ["wasm-smtp/tracing"]
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.14.0", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.15.0", default-features = false }
 tokio = { workspace = true, features = ["net", "io-util"] }
 tokio-rustls = { workspace = true }
 rustls-pki-types = { workspace = true }

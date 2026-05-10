@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-05-11
+
+### Added
+
+- **`AUTH OAUTHBEARER` (RFC 7628)** — IETF-standard OAuth 2.0 SASL
+  mechanism (`oauthbearer` feature, default-on).
+  - `SmtpClient::login_oauthbearer(user, token)` convenience method.
+  - `login_with(AuthMechanism::OAuthBearer, …)` explicit variant.
+  - Wire format: `n,a={user},\x01auth=Bearer {token}\x01\x01` (GS2
+    header + key-value pairs, per RFC 7628 §3).
+  - Error-challenge path: server `334` → client sends `\x01` → final
+    `535` is captured in `AuthError::Rejected`.
+  - Shares `validate_oauth2_token` with `XOAUTH2`; `user` (authzid)
+    may be empty.
+
+- **SMTP PIPELINING (RFC 2920)** — `pipelining` feature, default-on.
+  - `send_mail` detects `PIPELINING` in the server's EHLO capabilities
+    and batches `MAIL FROM` + all `RCPT TO` + `DATA` into a single
+    write followed by one flush, then reads all responses. Reduces RTTs
+    from `3 + N` to `2` per transaction.
+  - Falls back to the original sequential path for servers that do not
+    advertise `PIPELINING`.
+  - `Transport::flush()` default-implementation (no-op) added to the
+    trait; adapters that buffer writes can override.
+  - `protocol::ehlo_advertises_pipelining(caps)` helper exposed.
+
+- **docs/ mdBook** — `docs/book.toml` in place; `SUMMARY.md` updated
+  with new chapter structure. New pages:
+  - `security.md` — threat model, credential handling, STARTTLS
+    injection defence, dot-stuffing.
+  - `policy-audit.md` — `SendPolicy`, `AuditSink`, `VecAuditSink`.
+  - `streaming.md` — `send_mail_stream`, `MessageBody`, `DotStufferState`.
+  - `wasi-adapter.md` — `wasm-smtp-wasi` usage, build, TLS roots.
+  - `component-model.md` — `wasm-smtp-component`, WIT bindings for
+    TypeScript / Go / Python.
+
+- **README.md** updated: new Crates table (wasm-smtp-wasi,
+  wasm-smtp-component rows), updated adapter description, updated
+  Cargo features table (`oauthbearer`, `pipelining`), fixed badge
+  label (`wasi-adapter`).
+
+### Changed
+
+- `Transport` trait gains `flush() -> Result<(), IoError>` with a
+  default no-op implementation. This is a **non-breaking** change for
+  existing `Transport` implementors.
+
+### Tests
+
+- 269 passing (core), 9 (wasi), 5 (component). +16 new tests:
+  - `oauthbearer_tests.rs` (7 tests): protocol helpers, mechanism name,
+    login success and failure paths.
+  - `pipelining_tests.rs` (9 tests): capability detection, single/multi-
+    recipient pipelining, sequential fallback, wire-order assertion.
+
 ## [0.14.0] — 2026-05-10
 
 ### Added

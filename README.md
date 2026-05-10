@@ -7,7 +7,7 @@
 [![crates.io](https://img.shields.io/crates/v/wasm-smtp-tokio?label=tokio-adapter)](https://crates.io/crates/wasm-smtp-tokio)
 [![Rust Documentation](https://docs.rs/wasm-smtp-tokio/badge.svg?version=latest)](https://docs.rs/wasm-smtp-tokio)
 [![Dependency Status](https://deps.rs/crate/wasm-smtp-tokio/latest/status.svg)](https://deps.rs/crate/wasm-smtp-tokio)
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp-wasi?label=tokio-wasi)](https://crates.io/crates/wasm-smtp-wasi)
+[![crates.io](https://img.shields.io/crates/v/wasm-smtp-wasi?label=wasi-adapter)](https://crates.io/crates/wasm-smtp-wasi)
 [![Rust Documentation](https://docs.rs/wasm-smtp-wasi/badge.svg?version=latest)](https://docs.rs/wasm-smtp-wasi)
 [![Dependency Status](https://deps.rs/crate/wasm-smtp-wasi/latest/status.svg)](https://deps.rs/crate/wasm-smtp-wasi)
 [![crates.io](https://img.shields.io/crates/v/wasm-smtp-component?label=component)](https://crates.io/crates/wasm-smtp-component)
@@ -28,14 +28,21 @@ socket code so that the same SMTP engine can be reused on every host.
 | `wasm-smtp`             | Environment-independent SMTP state machine and parser.     | Implemented    |
 | `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp`.         | Implemented    |
 | `wasm-smtp-tokio`       | Tokio + rustls socket adapter for `wasm-smtp`.             | Implemented    |
+| `wasm-smtp-wasi`        | WASI 0.2 sockets adapter (`wasm32-wasip2`).                | Implemented    |
+| `wasm-smtp-component`   | WASM Component Model WIT interface (`wit/smtp.wit`).       | Implemented    |
 
 `wasm-smtp` is the foundation: it implements the SMTP state
 machine, response parsing, command formatting, dot-stuffing, and error
 classification, but does no I/O of its own. Each runtime gets its own
-adapter crate that provides a [`Transport`] implementation. Two
-adapters ship today: `wasm-smtp-cloudflare` for Cloudflare Workers
-(WASM target) and `wasm-smtp-tokio` for tokio-based servers (axum,
-actix, warp, hyper, plain tokio, …).
+adapter crate that provides a [`Transport`] implementation.
+
+Four adapters ship today:
+
+- `wasm-smtp-cloudflare` — Cloudflare Workers (WASM target).
+- `wasm-smtp-tokio` — tokio-based servers (axum, actix, warp, hyper, plain tokio, …).
+- `wasm-smtp-wasi` — WASI 0.2 runtimes (wasmtime, WAMR) targeting `wasm32-wasip2`.
+- `wasm-smtp-component` — WASM Component Model WIT interface (`wit/smtp.wit`),
+  enabling language-neutral bindings (TypeScript, Go, Python, C, …).
 
 ## Minimum usage
 
@@ -108,10 +115,12 @@ stream and (for STARTTLS) a single `upgrade_to_tls()` signal.
 deployments (Cloudflare Workers' 3 MiB cap, in particular) to opt out
 of functionality they will not use:
 
-| Feature    | Default | What it adds                                                                                              |
-|------------|---------|-----------------------------------------------------------------------------------------------------------|
-| `xoauth2`  | **on**  | `SmtpClient::login_xoauth2`, `AuthMechanism::XOAuth2` code paths, OAuth 2.0 token validation helpers      |
-| `smtputf8` | off     | `SmtpClient::send_mail_smtputf8`, `validate_address_utf8`, `format_mail_from_smtputf8`, capability check |
+| Feature        | Default | What it adds                                                                                              |
+|----------------|---------|-----------------------------------------------------------------------------------------------------------|
+| `xoauth2`      | **on**  | `SmtpClient::login_xoauth2`, `AuthMechanism::XOAuth2` code paths, OAuth 2.0 token validation helpers      |
+| `oauthbearer`  | **on**  | `SmtpClient::login_oauthbearer`, `AuthMechanism::OAuthBearer` (RFC 7628 IETF-standard OAuth 2.0 SASL)    |
+| `pipelining`   | **on**  | Batch `MAIL FROM` + `RCPT TO` + `DATA` when server advertises `PIPELINING` (RFC 2920)                     |
+| `smtputf8`     | off     | `SmtpClient::send_mail_smtputf8`, `validate_address_utf8`, `format_mail_from_smtputf8`, capability check |
 
 Defaults are chosen so that v0.3.x users see no behavior change on
 upgrade. To strip OAuth 2.0 support entirely (typical for transactional

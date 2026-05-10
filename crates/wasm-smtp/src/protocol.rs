@@ -874,6 +874,16 @@ pub enum AuthMechanism {
     /// token, not a static password — auto-selection by `login()`
     /// deliberately does NOT pick this mechanism for that reason.
     XOAuth2,
+    /// SASL `OAUTHBEARER` (RFC 7628). The IETF-standard OAuth 2.0 SASL
+    /// mechanism. Sends `n,a={user},\x01auth=Bearer {token}\x01\x01`
+    /// (GS2 header + Bearer token) base64-encoded as the initial
+    /// response. More interoperable than `XOAUTH2` and defined by an
+    /// IETF RFC. Like `XOAUTH2`, auto-selection by `login()` does NOT
+    /// pick this mechanism because the credential is a token, not a
+    /// password.
+    ///
+    /// Available only with the `oauthbearer` cargo feature (default-on).
+    OAuthBearer,
     /// SASL `SCRAM-SHA-256` (RFC 5802 / RFC 7677). Challenge-response
     /// authentication: the client never transmits the password, and
     /// the server proves possession of the salted hash through a
@@ -887,15 +897,14 @@ pub enum AuthMechanism {
 }
 
 impl AuthMechanism {
-    /// SMTP-on-the-wire keyword for this mechanism, as it appears after
-    /// `AUTH` in an `EHLO` advertisement (`"PLAIN"`, `"LOGIN"`,
-    /// `"XOAUTH2"`, `"SCRAM-SHA-256"`).
+    /// SMTP-on-the-wire keyword for this mechanism.
     #[must_use]
     pub const fn name(self) -> &'static str {
         match self {
             Self::Plain => "PLAIN",
             Self::Login => "LOGIN",
             Self::XOAuth2 => "XOAUTH2",
+            Self::OAuthBearer => "OAUTHBEARER",
             Self::ScramSha256 => "SCRAM-SHA-256",
         }
     }
@@ -1101,6 +1110,55 @@ pub fn validate_oauth2_token(token: &str) -> Result<(), InvalidInputError> {
         }
     }
     Ok(())
+}
+
+// -----------------------------------------------------------------------------
+// OAUTHBEARER (RFC 7628) — feature-gated
+// -----------------------------------------------------------------------------
+
+/// Build the base64-encoded initial response for `AUTH OAUTHBEARER` (RFC 7628).
+///
+/// RFC 7628 format: `n,a={user},\x01auth=Bearer {token}\x01\x01`
+///
+/// - `n` — GS2 header: no channel binding.
+/// - `a={user}` — optional authorization identity (authzid). May be empty
+///   (`n,,`) when the server should use the identity implied by the token.
+/// - `\x01auth=Bearer {token}\x01\x01` — SASL key=value attributes.
+///
+/// The difference from `XOAUTH2`:
+/// - `XOAUTH2` (Google proprietary): `user={email}\x01auth=Bearer {token}\x01\x01`
+/// - `OAUTHBEARER` (RFC 7628): `n,a={email},\x01auth=Bearer {token}\x01\x01`
+///
+/// Available only with the `oauthbearer` cargo feature (default-on).
+#[cfg(feature = "oauthbearer")]
+#[must_use]
+pub fn build_oauthbearer_initial_response(user: &str, token: &str) -> String {
+    // "n,a=" + user + ",\x01auth=Bearer " + token + "\x01\x01"
+    let mut payload = Vec::with_capacity(16 + user.len() + token.len());
+    payload.extend_from_slice(b"n,a=");
+    payload.extend_from_slice(user.as_bytes());
+    payload.push(b',');
+    payload.push(0x01);
+    payload.extend_from_slice(b"auth=Bearer ");
+    payload.extend_from_slice(token.as_bytes());
+    payload.push(0x01);
+    payload.push(0x01);
+    base64_encode(&payload)
+}
+
+// -----------------------------------------------------------------------------
+// PIPELINING (RFC 2920) — feature-gated
+// -----------------------------------------------------------------------------
+
+/// Return `true` if the EHLO capability lines advertise `PIPELINING` (RFC 2920).
+///
+/// When pipelining is available, `send_mail` batches `MAIL FROM`, all
+/// `RCPT TO` commands, and `DATA` into a single write, reducing the
+/// number of network round-trips.
+#[cfg(feature = "pipelining")]
+#[must_use]
+pub fn ehlo_advertises_pipelining(caps: &[String]) -> bool {
+    caps.iter().any(|c| c.eq_ignore_ascii_case("PIPELINING"))
 }
 
 // -----------------------------------------------------------------------------

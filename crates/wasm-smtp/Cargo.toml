@@ -16,11 +16,12 @@ categories = ["email", "network-programming", "wasm"]
 path = "src/lib.rs"
 
 [features]
-# Default features. `xoauth2` and `scram-sha-256` are enabled by default
-# because they represent the modern, secure authentication mechanisms;
-# callers that do not need them can disable with `default-features = false`
-# to shave protocol logic and crypto dependencies from their build.
-default = ["xoauth2", "scram-sha-256"]
+# Default features. `xoauth2`, `scram-sha-256`, and `oauthbearer` are
+# enabled by default because they represent modern, secure authentication
+# mechanisms; callers that do not need them can disable with
+# `default-features = false` to shave protocol logic and crypto
+# dependencies from their build.
+default = ["xoauth2", "scram-sha-256", "oauthbearer", "pipelining"]
 
 # SMTPUTF8 (RFC 6531) — international (UTF-8) addresses in MAIL FROM /
 # RCPT TO. Off by default: the feature is a niche opt-in, and disabling
@@ -46,6 +47,21 @@ smtputf8 = []
 # breaking change for code that pattern-matches with a wildcard
 # arm.
 xoauth2 = []
+
+# AUTH OAUTHBEARER (RFC 7628) — the IETF-standard OAuth 2.0 SASL
+# mechanism. On by default. When disabled, removes
+# `SmtpClient::login_oauthbearer`, the `OAuthBearer` arm of
+# `login_with`, and the `protocol::build_oauthbearer_initial_response`
+# helper. The `AuthMechanism::OAuthBearer` and `SmtpOp::AuthOAuthBearer`
+# enum variants remain present regardless.
+oauthbearer = []
+
+# SMTP PIPELINING (RFC 2920) — batch MAIL FROM + RCPT TO + DATA into
+# a single write followed by a single flush. Reduces RTTs from
+# 3 + N (N recipients) to 2 per message when the server advertises
+# the PIPELINING capability. On by default; disable to save a small
+# amount of code size.
+pipelining = []
 
 # AUTH SCRAM-SHA-256 (RFC 5802) — challenge-response SASL mechanism
 # that does not transmit the password in plaintext. Default-on

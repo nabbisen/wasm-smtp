@@ -86,6 +86,16 @@ pub trait Transport {
     /// after a fatal error.
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError>;
 
+    /// Flush any buffered write data to the underlying stream.
+    ///
+    /// Called by the pipelining path after writing all batched commands, to
+    /// ensure every byte has been submitted to the network before reading
+    /// responses. Implementations that do not buffer writes may return
+    /// `Ok(())` immediately.
+    async fn flush(&mut self) -> Result<(), IoError> {
+        Ok(())
+    }
+
     /// Close the transport.
     ///
     /// After this call returns (whether `Ok` or `Err`), the transport must

@@ -32,6 +32,8 @@
 
 mod bytes_tests;
 mod stream_tests;
+mod oauthbearer_tests;
+mod pipelining_tests;
 mod client_tests;
 mod error_tests;
 mod harness;

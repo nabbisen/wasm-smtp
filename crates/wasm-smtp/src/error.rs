@@ -377,6 +377,9 @@ pub enum SmtpOp {
     /// `AUTH XOAUTH2` exchange (Google / Microsoft OAuth 2.0 SASL
     /// profile).
     AuthXOAuth2,
+    /// `AUTH OAUTHBEARER` exchange (RFC 7628, IETF-standard OAuth 2.0
+    /// SASL mechanism).
+    AuthOAuthBearer,
     /// `AUTH SCRAM-SHA-256` exchange (RFC 5802 / RFC 7677). Available
     /// only with the `scram-sha-256` cargo feature; the variant
     /// itself is always present for source-compatibility stability.
@@ -406,6 +409,7 @@ impl SmtpOp {
             Self::AuthPlain => "AUTH PLAIN",
             Self::AuthLogin => "AUTH LOGIN",
             Self::AuthXOAuth2 => "AUTH XOAUTH2",
+            Self::AuthOAuthBearer => "AUTH OAUTHBEARER",
             Self::AuthScramSha256 => "AUTH SCRAM-SHA-256",
             Self::MailFrom => "MAIL FROM",
             Self::RcptTo => "RCPT TO",

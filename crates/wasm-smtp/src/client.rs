@@ -249,32 +249,27 @@ impl<T: Transport> SmtpClient<T> {
                 protocol::validate_xoauth2_user(user)?;
                 protocol::validate_oauth2_token(credential)?;
             }
+            #[cfg(feature = "oauthbearer")]
+            AuthMechanism::OAuthBearer => {
+                // user is the authzid (may be empty); credential is the Bearer token.
+                protocol::validate_oauth2_token(credential)?;
+            }
             #[cfg(feature = "scram-sha-256")]
             AuthMechanism::ScramSha256 => {
-                // Same validators as PLAIN/LOGIN: NUL bytes break SASL
-                // framing on the post-base64 server side regardless of
-                // the mechanism.
                 protocol::validate_plain_username(user)?;
                 protocol::validate_plain_password(credential)?;
             }
-            #[cfg(not(any(feature = "xoauth2", feature = "scram-sha-256")))]
+            #[cfg(not(any(feature = "xoauth2", feature = "oauthbearer", feature = "scram-sha-256")))]
             _ => {
                 return Err(InvalidInputError::new(
                     "the requested AUTH mechanism is not compiled in",
                 )
                 .into());
             }
-            #[cfg(all(feature = "xoauth2", not(feature = "scram-sha-256")))]
+            #[allow(unreachable_patterns)]
             _ => {
                 return Err(InvalidInputError::new(
-                    "SCRAM-SHA-256 is not compiled in (enable the `scram-sha-256` feature)",
-                )
-                .into());
-            }
-            #[cfg(all(not(feature = "xoauth2"), feature = "scram-sha-256"))]
-            _ => {
-                return Err(InvalidInputError::new(
-                    "XOAUTH2 is not compiled in (enable the `xoauth2` feature)",
+                    "the requested AUTH mechanism is not compiled in",
                 )
                 .into());
             }
@@ -291,9 +286,11 @@ impl<T: Transport> SmtpClient<T> {
             AuthMechanism::Login => self.run_auth_login(user, credential).await?,
             #[cfg(feature = "xoauth2")]
             AuthMechanism::XOAuth2 => self.run_auth_xoauth2(user, credential).await?,
+            #[cfg(feature = "oauthbearer")]
+            AuthMechanism::OAuthBearer => self.run_auth_oauthbearer(user, credential).await?,
             #[cfg(feature = "scram-sha-256")]
             AuthMechanism::ScramSha256 => self.run_auth_scram_sha256(user, credential).await?,
-            #[cfg(not(all(feature = "xoauth2", feature = "scram-sha-256")))]
+            #[allow(unreachable_patterns)]
             _ => unreachable!("variants screened out above when feature is disabled"),
         }
 
@@ -335,6 +332,36 @@ impl<T: Transport> SmtpClient<T> {
     #[cfg(feature = "xoauth2")]
     pub async fn login_xoauth2(&mut self, user: &str, access_token: &str) -> Result<(), SmtpError> {
         self.login_with(AuthMechanism::XOAuth2, user, access_token)
+            .await
+    }
+
+    /// Authenticate with `OAUTHBEARER` (RFC 7628), the IETF-standard
+    /// OAuth 2.0 SASL mechanism.
+    ///
+    /// `user` is the authorization identity (typically the account email
+    /// address); `access_token` is a short-lived OAuth 2.0 bearer token.
+    ///
+    /// Unlike `XOAUTH2`, `OAUTHBEARER` follows the GS2 framing from RFC
+    /// 5801, making it interoperable with any compliant SASL library.
+    ///
+    /// Convenience wrapper for
+    /// `login_with(AuthMechanism::OAuthBearer, user, access_token)`.
+    ///
+    /// # Errors
+    ///
+    /// - [`AuthError::UnsupportedMechanism`] if the server did not
+    ///   advertise `AUTH OAUTHBEARER`.
+    /// - [`AuthError::Rejected`] if the server rejected the token with a
+    ///   `334` error challenge followed by a `535`.
+    ///
+    /// Available only with the `oauthbearer` cargo feature (default-on).
+    #[cfg(feature = "oauthbearer")]
+    pub async fn login_oauthbearer(
+        &mut self,
+        user: &str,
+        access_token: &str,
+    ) -> Result<(), SmtpError> {
+        self.login_with(AuthMechanism::OAuthBearer, user, access_token)
             .await
     }
 
@@ -430,6 +457,66 @@ impl<T: Transport> SmtpClient<T> {
                 } else {
                     SmtpError::Protocol(ProtocolError::UnexpectedCode {
                         during: SmtpOp::AuthXOAuth2,
+                        expected_class: 2,
+                        actual: other,
+                        enhanced: reply.enhanced(),
+                        message: reply.joined_text(),
+                    })
+                })
+            }
+        }
+    }
+
+    /// `AUTH OAUTHBEARER` exchange (RFC 7628).
+    ///
+    /// Wire form:
+    /// `C: AUTH OAUTHBEARER <b64("n,a="user","SOH"auth=Bearer "token SOH SOH)>`
+    /// → `S: 235` on success.
+    ///
+    /// On failure, the server sends `334 <b64(json-error)>`, and the
+    /// client must reply `\x01` to abort. The server then responds with
+    /// a final `535`. The JSON error detail is preserved in
+    /// [`AuthError::Rejected`].
+    #[cfg(feature = "oauthbearer")]
+    async fn run_auth_oauthbearer(
+        &mut self,
+        user: &str,
+        token: &str,
+    ) -> Result<(), SmtpError> {
+        let response = protocol::build_oauthbearer_initial_response(user, token);
+        let mut cmd = String::with_capacity(17 + response.len() + 2);
+        cmd.push_str("AUTH OAUTHBEARER ");
+        cmd.push_str(&response);
+        cmd.push_str("\r\n");
+        self.write_all(cmd.as_bytes()).await?;
+
+        let reply = self.read_reply().await?;
+        match reply.code {
+            235 => Ok(()),
+            334 => {
+                // Server sent a JSON error challenge (RFC 7628 §3.2.2).
+                // Client must reply with a single \x01 to abort; the
+                // server then closes with a 5xx.
+                self.write_all(b"\x01\r\n").await?;
+                let final_reply = self.read_reply().await?;
+                self.mark_closed_on_logical_failure();
+                Err(SmtpError::Auth(AuthError::Rejected {
+                    code: final_reply.code,
+                    enhanced: final_reply.enhanced(),
+                    message: final_reply.joined_text(),
+                }))
+            }
+            other => {
+                self.mark_closed_on_logical_failure();
+                Err(if (500..600).contains(&other) {
+                    SmtpError::Auth(AuthError::Rejected {
+                        code: other,
+                        enhanced: reply.enhanced(),
+                        message: reply.joined_text(),
+                    })
+                } else {
+                    SmtpError::Protocol(ProtocolError::UnexpectedCode {
+                        during: SmtpOp::AuthOAuthBearer,
                         expected_class: 2,
                         actual: other,
                         enhanced: reply.enhanced(),
@@ -656,31 +743,76 @@ impl<T: Transport> SmtpClient<T> {
             "send_mail: starting transaction"
         );
 
-        // Issue MAIL FROM.
+        // Issue MAIL FROM, RCPT TO, and DATA — with pipelining if the
+        // server advertised it (RFC 2920). Pipelining sends all three
+        // command types in a single write, then reads all responses,
+        // reducing RTTs from 3+N (one per command) to 2 (one flush + one
+        // DATA-body exchange) regardless of recipient count.
         self.transition(SessionState::MailFrom)?;
-        self.write_all(&format_mail_from(from)).await?;
-        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-            code: mail_reply.code,
-        });
-        smtp_debug!(from = %from, "MAIL FROM accepted");
 
-        // Issue RCPT TO for every recipient. 250 (OK) and 251 (forwarded)
-        // are both acceptances; treat any 2xx as success.
-        self.transition(SessionState::RcptTo)?;
-        for &addr in to {
-            self.write_all(&format_rcpt_to(addr)).await?;
-            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                code: rcpt_reply.code,
+        #[cfg(feature = "pipelining")]
+        let pipelining = protocol::ehlo_advertises_pipelining(&self.capabilities);
+        #[cfg(not(feature = "pipelining"))]
+        let pipelining = false;
+
+        if pipelining {
+            // ── Pipelined path ────────────────────────────────────────
+            // Collect MAIL FROM + all RCPT TO + DATA into one buffer,
+            // write once, flush, then read all responses in order.
+            let mut pipeline: Vec<u8> = Vec::with_capacity(
+                64 + to.iter().map(|a| 12 + a.len()).sum::<usize>(),
+            );
+            pipeline.extend_from_slice(&format_mail_from(from));
+            self.transition(SessionState::RcptTo)?;
+            for &addr in to {
+                pipeline.extend_from_slice(&format_rcpt_to(addr));
+            }
+            self.transition(SessionState::Data)?;
+            pipeline.extend_from_slice(&format_command("DATA"));
+            self.write_all(&pipeline).await?;
+            self.flush().await?;
+
+            // Read MAIL FROM response.
+            let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+            self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
             });
-            smtp_debug!(rcpt = %addr, "RCPT TO accepted");
-        }
+            smtp_debug!(from = %from, pipelining = true, "MAIL FROM accepted");
 
-        // Issue DATA, expect 354.
-        self.transition(SessionState::Data)?;
-        self.write_all(&format_command("DATA")).await?;
-        self.expect_code(354, SmtpOp::Data).await?;
+            // Read one RCPT TO response per recipient.
+            for &addr in to {
+                let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
+                self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
+                smtp_debug!(rcpt = %addr, "RCPT TO accepted");
+            }
+
+            // Read DATA 354 response.
+            self.expect_code(354, SmtpOp::Data).await?;
+        } else {
+            // ── Sequential path (original) ────────────────────────────
+            self.write_all(&format_mail_from(from)).await?;
+            let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+            self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
+            smtp_debug!(from = %from, pipelining = false, "MAIL FROM accepted");
+
+            self.transition(SessionState::RcptTo)?;
+            for &addr in to {
+                self.write_all(&format_rcpt_to(addr)).await?;
+                let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
+                self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
+                smtp_debug!(rcpt = %addr, "RCPT TO accepted");
+            }
+
+            self.transition(SessionState::Data)?;
+            self.write_all(&format_command("DATA")).await?;
+            self.expect_code(354, SmtpOp::Data).await?;
+        }
 
         // Send the body with dot-stuffing and terminator. The
         // post-terminator reply carries the queue id (if the server
@@ -1190,6 +1322,18 @@ impl<T: Transport> SmtpClient<T> {
 
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), SmtpError> {
         match self.transport.write_all(buf).await {
+            Ok(()) => Ok(()),
+            Err(e) => {
+                self.mark_closed_on_logical_failure();
+                Err(SmtpError::Io(e))
+            }
+        }
+    }
+
+    /// Flush the transport's write buffer. Used by the pipelining path to
+    /// ensure all buffered commands are sent before reading responses.
+    async fn flush(&mut self) -> Result<(), SmtpError> {
+        match self.transport.flush().await {
             Ok(()) => Ok(()),
             Err(e) => {
                 self.mark_closed_on_logical_failure();
