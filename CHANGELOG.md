@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-05-10
+
+### Added
+
+- **`SmtpClient::send_mail_stream`** (RFC 019 Phase 3). Streaming DATA
+  transmission: the message body is read from a [`MessageBody`] source in
+  8 KB chunks, dot-stuffed incrementally, and written to the transport.
+  Peak memory is O(chunk size) rather than O(body size).
+
+- **`MessageBody` trait** (`wasm_smtp::message_body`). Project-defined async
+  read abstraction (runtime-independent, no tokio dependency). Built-in
+  implementations:
+  - `SliceBody<'a>`: wraps `&[u8]`.
+  - `StrBody<'a>`: wraps `&str`.
+
+- **`DotStufferState`** (`wasm_smtp::DotStufferState`). Streaming dot-stuffer
+  state machine. Correctly handles `.` at line starts across chunk boundaries.
+  `process_chunk(&[u8]) -> Vec<u8>` + `finish() -> Vec<u8>` API.
+
+### Notes
+
+`send_mail_stream` passes `usize::MAX` to `SendPolicy::check_message_size`
+because total body size is unknown. Callers that need precise size enforcement
+should use `send_mail_bytes` instead.
+
 ## [0.12.0] — 2026-05-10
 
 ### Added

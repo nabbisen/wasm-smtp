@@ -31,6 +31,7 @@
 )]
 
 mod bytes_tests;
+mod stream_tests;
 mod client_tests;
 mod error_tests;
 mod harness;

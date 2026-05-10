@@ -57,6 +57,7 @@
 pub mod audit;
 pub mod client;
 pub mod error;
+pub mod message_body;
 pub mod outcome;
 pub mod policy;
 pub mod protocol;
@@ -70,8 +71,9 @@ mod tracing_helpers;
 
 pub use client::{SmtpClient, SmtpClientOptions};
 pub use error::{AuthError, InvalidInputError, IoError, PolicyError, ProtocolError, SmtpError, SmtpOp};
+pub use message_body::MessageBody;
 pub use outcome::SendOutcome;
-pub use protocol::{AuthMechanism, EnhancedStatus};
+pub use protocol::{AuthMechanism, DotStufferState, EnhancedStatus};
 pub use session::SessionState;
 pub use transport::{StartTlsCapable, Transport};
 

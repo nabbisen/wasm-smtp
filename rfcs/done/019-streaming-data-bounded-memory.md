@@ -1,6 +1,6 @@
 # RFC 019 — Streaming DATA and bounded memory
 
-**Status.** Proposed
+**Status.** Implemented (v0.13.0)
 **Priority.** P2
 **Tracks.** Performance / Memory / Core
 **Touches.** `crates/wasm-smtp/src/session.rs`, `crates/wasm-smtp/src/transport.rs`, `docs/src/memory.md`
