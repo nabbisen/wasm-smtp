@@ -32,44 +32,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 because total body size is unknown. Callers that need precise size enforcement
 should use `send_mail_bytes` instead.
 
-## [0.12.0] — 2026-05-10
+## [0.11.0] — 2026-05-10
 
 ### Added
 
-- **`wasm-smtp-wasi` crate** (RFC 016 + RFC 017). New adapter crate for
-  `wasm32-wasip2` (WASI 0.2 Component Model) runtimes.
+- **`SmtpClient::send_mail_bytes`**. Sends a message body supplied as
+  `&[u8]` rather than `&str`. Identical semantics to `send_mail` —
+  same dot-stuffing, same policy checks, same audit events — but skips
+  the UTF-8 validity check on the input slice. Useful for payloads
+  serialised by `mail-builder` and for binary-encoded content.
 
-  - **`connect_smtps(host, port, ehlo_domain)`** — Implicit TLS (port 465):
-    DNS lookup via `wasi:sockets/ip-name-lookup`, TCP connect via
-    `wasi:sockets/tcp`, TLS handshake via rustls + ring + webpki-roots.
-    Returns a ready-to-use `SmtpClient<WasiTlsTransport>`.
-  - **`connect_smtp_starttls(host, port, ehlo_domain)`** — STARTTLS (port 587):
-    plaintext TCP connect followed by in-place rustls upgrade after the SMTP
-    `STARTTLS` handshake. Implements `StartTlsCapable`.
-  - **`ConnectOptions`** — optional SNI override, custom root store, ALPN.
-  - **TLS strategy** (RFC 017 Strategy A): rustls 0.23 + ring + webpki-roots.
-    Certificate validation is enforced; no API to disable it.
-  - **`plaintext-only` feature** for TLS-offload / test environments (clearly
-    marked as not for production).
-  - **9 native-host tests** via `MockTransport` + rustls unit checks; no WASI
-    runtime required to run `cargo test -p wasm-smtp-wasi`.
+### Changed
 
-- Added `crates/wasm-smtp-wasi` to the workspace.
+- All large-message / dot-stuffing / many-recipient / max-line-length
+  tests ported to use `send_mail_bytes` (previously tested only through
+  `send_mail`). 239 tests total; 1 `#[ignore]` (10 MB body).
 
-### Notes
+### Internals
 
-Building for the actual WASM target requires:
-
-```sh
-rustup target add wasm32-wasip2   # or equivalent apt package
-cargo build --target wasm32-wasip2 -p wasm-smtp-wasi
-```
-
-Tests run on any platform without a WASI runtime:
-
-```sh
-cargo test -p wasm-smtp-wasi
-```
+- RFC 020 (large-message tests) and RFC 021 (no_std feasibility study)
+  moved to `rfcs/done/`. RFC 021 conclusion: **defer** no_std support —
+  no concrete IoT use case; WASI adapter (RFC 016) is the better path.
 
 ## [0.10.0] — 2026-05-10
 

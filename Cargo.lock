@@ -1194,7 +1194,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "getrandom 0.4.2",
  "hmac",
@@ -1207,7 +1207,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-cloudflare"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "getrandom 0.4.2",
  "tokio",
@@ -1218,14 +1218,14 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-test"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "wasm-smtp",
 ]
 
 [[package]]
 name = "wasm-smtp-tokio"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",

@@ -1,6 +1,6 @@
 # RFC 020 — Large message handling and memory behavior tests
 
-**Status.** Draft
+**Status.** Implemented (v0.11.0)
 **Priority.** P3
 **Tracks.** Testing / Performance
 **Touches.** `crates/wasm-smtp/src/tests/bytes_tests.rs`

@@ -30,6 +30,7 @@
     clippy::missing_panics_doc
 )]
 
+mod bytes_tests;
 mod client_tests;
 mod error_tests;
 mod harness;

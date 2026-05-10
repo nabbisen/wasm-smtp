@@ -24,14 +24,15 @@
 //! `send_mail` before `connect`, or any operation after `quit`) return
 //! [`InvalidInputError`] without touching the wire.
 
+use crate::IoError;
 #[cfg(feature = "mail-builder")]
 use crate::error::IoError;
 use crate::error::{AuthError, InvalidInputError, ProtocolError, SmtpError, SmtpOp};
 use crate::outcome::SendOutcome;
 use crate::protocol::{
-    self, AuthMechanism, MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply,
-    build_auth_plain_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth, ehlo_advertises_enhanced_status_codes,
-    ehlo_advertises_starttls, format_command,
+    self, AuthMechanism, DotStufferState, MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply,
+    build_auth_plain_initial_response, dot_stuff_and_terminate, ehlo_advertises_auth,
+    ehlo_advertises_enhanced_status_codes, ehlo_advertises_starttls, format_command,
     format_command_arg, format_mail_from, format_rcpt_to, parse_reply_line, select_auth_mechanism,
 };
 use crate::session::SessionState;
@@ -41,6 +42,10 @@ use crate::transport::{StartTlsCapable, Transport};
 const READ_CHUNK: usize = 1024;
 const RX_BUF_COMPACT_THRESHOLD: usize = 4096;
 const RX_BUF_HARD_LIMIT: usize = MAX_REPLY_LINE_LEN * 2;
+
+pub trait MessageBody {
+    async fn read_chunk(&mut self, buf: &mut [u8]) -> Result<usize, IoError>;
+}
 
 /// SMTP client driving a single connection.
 ///
@@ -119,7 +124,9 @@ impl<T: Transport> SmtpClient<T> {
     ) -> Result<Self, SmtpError> {
         protocol::validate_ehlo_domain(ehlo_domain)?;
         smtp_debug!(ehlo_domain = %ehlo_domain, "SMTP session: connect");
-        options.audit.on_event(&crate::audit::SmtpAuditEvent::Connected);
+        options
+            .audit
+            .on_event(&crate::audit::SmtpAuditEvent::Connected);
         let mut client = Self {
             transport,
             state: SessionState::Greeting,
@@ -297,9 +304,10 @@ impl<T: Transport> SmtpClient<T> {
 
         self.transition(SessionState::MailFrom)?;
         smtp_debug!(mechanism = mechanism.name(), "AUTH: succeeded");
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::AuthCompleted {
-            mechanism: mechanism.name(),
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::AuthCompleted {
+                mechanism: mechanism.name(),
+            });
         Ok(())
     }
 
@@ -641,8 +649,12 @@ impl<T: Transport> SmtpClient<T> {
         self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
 
         // Policy checks — run before any SMTP command is sent.
-        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
-        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
         self.policy
             .check_message_size(body.len())
             .map_err(crate::error::SmtpError::Policy)?;
@@ -658,9 +670,10 @@ impl<T: Transport> SmtpClient<T> {
         self.transition(SessionState::MailFrom)?;
         self.write_all(&format_mail_from(from)).await?;
         let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-            code: mail_reply.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
         smtp_debug!(from = %from, "MAIL FROM accepted");
 
         // Issue RCPT TO for every recipient. 250 (OK) and 251 (forwarded)
@@ -669,9 +682,10 @@ impl<T: Transport> SmtpClient<T> {
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
             let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                code: rcpt_reply.code,
-            });
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
             smtp_debug!(rcpt = %addr, "RCPT TO accepted");
         }
 
@@ -687,9 +701,8 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&payload).await?;
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
-            code: outcome.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
         smtp_debug!(
             body_bytes = body.len(),
             code = outcome.code,
@@ -785,6 +798,233 @@ impl<T: Transport> SmtpClient<T> {
         self.send_mail(from, to, &body).await
     }
 
+    /// Send a single message supplied as a raw byte slice.
+    ///
+    /// Identical to [`Self::send_mail`] except that `body` is `&[u8]`
+    /// rather than `&str`. Use this when the message has already been
+    /// serialised to bytes by a builder such as `mail-builder` or when
+    /// the body may contain non-UTF-8 octets (e.g. binary attachments
+    /// encoded as base64 within a MIME part that uses a legacy charset).
+    ///
+    /// # Body requirements
+    ///
+    /// `body` must be a fully composed RFC 5322 message — headers, a blank
+    /// line, and content — **with CRLF line endings**. [`Self::send_mail`]
+    /// has the same requirement; the difference is that `send_mail_bytes`
+    /// skips the UTF-8 validity check on the input slice.
+    ///
+    /// Dot-stuffing and the end-of-data terminator (`\r\n.\r\n`) are applied
+    /// automatically, exactly as in `send_mail`.
+    ///
+    /// # Policy and audit
+    ///
+    /// The pre-send policy checks and audit events are identical to those
+    /// fired by `send_mail`. `check_message_size` receives
+    /// `body.len()` (the raw byte length before dot-stuffing).
+    ///
+    /// # Errors
+    ///
+    /// Same categories as [`Self::send_mail`].
+    pub async fn send_mail_bytes(
+        &mut self,
+        from: &str,
+        to: &[&str],
+        body: &[u8],
+    ) -> Result<SendOutcome, SmtpError> {
+        protocol::validate_address(from)?;
+        if to.is_empty() {
+            return Err(InvalidInputError::new("at least one recipient is required").into());
+        }
+        for &addr in to {
+            protocol::validate_address(addr)?;
+        }
+        self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
+
+        // Policy checks — run before any SMTP command.
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_message_size(body.len())
+            .map_err(crate::error::SmtpError::Policy)?;
+
+        smtp_debug!(
+            from = %from,
+            recipient_count = to.len(),
+            body_bytes = body.len(),
+            "send_mail_bytes: starting transaction"
+        );
+
+        // Issue MAIL FROM.
+        self.transition(SessionState::MailFrom)?;
+        self.write_all(&format_mail_from(from)).await?;
+        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
+
+        // Issue RCPT TO for every recipient.
+        self.transition(SessionState::RcptTo)?;
+        for &addr in to {
+            self.write_all(&format_rcpt_to(addr)).await?;
+            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
+        }
+
+        // Issue DATA, expect 354.
+        self.transition(SessionState::Data)?;
+        self.write_all(&format_command("DATA")).await?;
+        self.expect_code(354, SmtpOp::Data).await?;
+
+        // Send the body with dot-stuffing and terminator.
+        let payload = dot_stuff_and_terminate(body);
+        self.write_all(&payload).await?;
+        let final_reply = self.expect_class(2, SmtpOp::Data).await?;
+        let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
+        smtp_debug!(
+            body_bytes = body.len(),
+            code = outcome.code,
+            queue_id = outcome.queue_id.as_deref().unwrap_or("<none>"),
+            "DATA accepted; transaction complete"
+        );
+
+        self.transition(SessionState::MailFrom)?;
+        Ok(outcome)
+    }
+
+    /// Send a message supplied as a [`MessageBody`] stream.
+    ///
+    /// This is the streaming variant of [`Self::send_mail_bytes`]. The body
+    /// is read in chunks of `chunk_size` bytes (default: 8 KB), dot-stuffed,
+    /// and written to the transport incrementally. Peak memory usage is
+    /// O(`chunk_size`) rather than O(body size), making this suitable for
+    /// large messages and memory-constrained runtimes.
+    ///
+    /// # Body requirements
+    ///
+    /// The body must be a fully composed RFC 5322 message (headers + blank
+    /// line + content) with **CRLF line endings**. Dot-stuffing and the
+    /// end-of-data terminator are applied automatically.
+    ///
+    /// # Policy and audit
+    ///
+    /// `check_sender` and `check_recipients` run before any SMTP command.
+    /// `check_message_size` is called with `usize::MAX` because the total
+    /// body size is unknown in advance; callers that need accurate size
+    /// enforcement should use [`Self::send_mail_bytes`] instead.
+    ///
+    /// Audit events are identical to [`Self::send_mail`].
+    ///
+    /// # Errors
+    ///
+    /// Same as [`Self::send_mail`], plus:
+    ///
+    /// - [`SmtpError::Io`] if `body.read_chunk` returns an error. The
+    ///   session is moved to `Closed`.
+    pub async fn send_mail_stream<B>(
+        &mut self,
+        from: &str,
+        to: &[&str],
+        body: &mut B,
+    ) -> Result<SendOutcome, SmtpError>
+    where
+        B: MessageBody,
+    {
+        protocol::validate_address(from)?;
+        if to.is_empty() {
+            return Err(InvalidInputError::new("at least one recipient is required").into());
+        }
+        for &addr in to {
+            protocol::validate_address(addr)?;
+        }
+        self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
+
+        // Policy checks. check_message_size receives usize::MAX because the
+        // total size is unknown; callers needing precise limits should use
+        // send_mail_bytes instead.
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_message_size(usize::MAX)
+            .map_err(crate::error::SmtpError::Policy)?;
+
+        smtp_debug!(
+            from = %from,
+            recipient_count = to.len(),
+            "send_mail_stream: starting transaction"
+        );
+
+        // MAIL FROM.
+        self.transition(SessionState::MailFrom)?;
+        self.write_all(&format_mail_from(from)).await?;
+        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
+
+        // RCPT TO.
+        self.transition(SessionState::RcptTo)?;
+        for &addr in to {
+            self.write_all(&format_rcpt_to(addr)).await?;
+            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
+        }
+
+        // DATA.
+        self.transition(SessionState::Data)?;
+        self.write_all(&format_command("DATA")).await?;
+        self.expect_code(354, SmtpOp::Data).await?;
+
+        // Stream the body through the dot-stuffer in 8 KB chunks.
+        let mut stuffer = DotStufferState::new();
+        let mut buf = [0u8; 8192];
+        loop {
+            let n = match body.read_chunk(&mut buf).await {
+                Ok(0) => break,
+                Ok(n) => n,
+                Err(e) => {
+                    self.mark_closed_on_logical_failure();
+                    return Err(SmtpError::Io(e));
+                }
+            };
+            let stuffed = stuffer.process_chunk(&buf[..n]);
+            self.write_all(&stuffed).await?;
+        }
+        // Terminator: ensures the body ends with \r\n then appends .\r\n
+        let terminator = stuffer.finish();
+        self.write_all(&terminator).await?;
+
+        let final_reply = self.expect_class(2, SmtpOp::Data).await?;
+        let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
+        smtp_debug!(
+            code = outcome.code,
+            queue_id = outcome.queue_id.as_deref().unwrap_or("<none>"),
+            "send_mail_stream: DATA accepted"
+        );
+
+        self.transition(SessionState::MailFrom)?;
+        Ok(outcome)
+    }
+
     /// Submit a UTF-8 (RFC 6531) message and recipient set.
     ///
     /// Identical to [`Self::send_mail`] except:
@@ -838,8 +1078,12 @@ impl<T: Transport> SmtpClient<T> {
         }
 
         // Policy checks — run before any SMTP command.
-        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
-        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
         self.policy
             .check_message_size(body.len())
             .map_err(crate::error::SmtpError::Policy)?;
@@ -849,18 +1093,20 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&protocol::format_mail_from_smtputf8(from))
             .await?;
         let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-            code: mail_reply.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
 
         // RCPT TO is identical to the ASCII path.
         self.transition(SessionState::RcptTo)?;
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
             let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                code: rcpt_reply.code,
-            });
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
         }
 
         // DATA + body identical to the ASCII path.
@@ -872,9 +1118,8 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&payload).await?;
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
-            code: outcome.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
 
         self.transition(SessionState::MailFrom)?;
         Ok(outcome)
@@ -906,9 +1151,11 @@ impl<T: Transport> SmtpClient<T> {
         self.state = SessionState::Closed;
 
         if send_result.is_ok() && close_result.is_ok() {
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::QuitCompleted);
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::QuitCompleted);
         } else {
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::SessionAborted);
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::SessionAborted);
         }
 
         send_result?;
@@ -933,7 +1180,8 @@ impl<T: Transport> SmtpClient<T> {
             }
             .into());
         }
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::GreetingReceived { code: reply.code });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::GreetingReceived { code: reply.code });
         self.transition(SessionState::Ehlo)?;
         Ok(())
     }
@@ -964,7 +1212,8 @@ impl<T: Transport> SmtpClient<T> {
         // capability is dropped on a re-EHLO (e.g. after STARTTLS).
         self.enhanced_status_enabled = ehlo_advertises_enhanced_status_codes(&lines);
         self.capabilities = lines;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::EhloCompleted);
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::EhloCompleted);
         self.transition(SessionState::Authentication)?;
         Ok(())
     }
@@ -1267,7 +1516,8 @@ impl<T: StartTlsCapable> SmtpClient<T> {
             self.mark_closed_on_logical_failure();
             SmtpError::Io(e)
         })?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::TlsUpgraded);
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::TlsUpgraded);
 
         // RFC 3207 §4.2: re-issue EHLO on the now-secure channel. We
         // reuse send_ehlo, which writes the command, parses the reply,
@@ -1348,8 +1598,7 @@ impl Default for SmtpClientOptions {
 
 impl core::fmt::Debug for SmtpClientOptions {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("SmtpClientOptions")
-            .finish_non_exhaustive()
+        f.debug_struct("SmtpClientOptions").finish_non_exhaustive()
     }
 }
 
