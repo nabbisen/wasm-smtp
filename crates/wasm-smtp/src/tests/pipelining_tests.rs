@@ -36,9 +36,11 @@ fn pipelining_exchange(num_recipients: usize) -> Vec<u8> {
         b"235 2.7.0 OK\r\n", // AUTH
         b"250 2.1.0 OK\r\n", // MAIL FROM
     ];
-    for _ in 0..num_recipients {
-        parts.push(b"250 2.1.5 OK\r\n"); // RCPT TO
-    }
+    // One RCPT TO acceptance per recipient.
+    parts.extend(std::iter::repeat_n(
+        b"250 2.1.5 OK\r\n".as_slice(),
+        num_recipients,
+    ));
     parts.extend_from_slice(&[
         b"354 Start mail\r\n",                 // DATA
         b"250 2.0.0 OK: queued as A1B2C3\r\n", // DATA body
@@ -55,9 +57,10 @@ fn no_pipelining_exchange(num_recipients: usize) -> Vec<u8> {
         b"235 2.7.0 OK\r\n",
         b"250 2.1.0 OK\r\n",
     ];
-    for _ in 0..num_recipients {
-        parts.push(b"250 2.1.5 OK\r\n");
-    }
+    parts.extend(std::iter::repeat_n(
+        b"250 2.1.5 OK\r\n".as_slice(),
+        num_recipients,
+    ));
     parts.extend_from_slice(&[
         b"354 Start mail\r\n",
         b"250 2.0.0 OK queued\r\n",
@@ -71,7 +74,7 @@ fn extract_pre_data_commands(wire: &[u8]) -> Vec<String> {
     let s = String::from_utf8_lossy(wire);
     s.lines()
         .filter(|l| l.starts_with("MAIL FROM:") || l.starts_with("RCPT TO:") || *l == "DATA")
-        .map(|l| l.to_string())
+        .map(std::string::ToString::to_string)
         .collect()
 }
 

@@ -16,9 +16,10 @@ fn standard_exchange(extra_rcpt_replies: usize) -> Vec<u8> {
         b"250 2.1.0 OK\r\n",
         b"250 2.1.5 OK\r\n",
     ];
-    for _ in 0..extra_rcpt_replies {
-        parts.push(b"250 2.1.5 OK\r\n");
-    }
+    parts.extend(std::iter::repeat_n(
+        b"250 2.1.5 OK\r\n".as_slice(),
+        extra_rcpt_replies,
+    ));
     parts.extend_from_slice(&[
         b"354 Start mail input\r\n",
         b"250 2.0.0 OK: queued\r\n",
@@ -215,7 +216,7 @@ fn large_body_1mb_sends_correctly() {
 /// 10 MB body — gated with `#[ignore]` to keep CI fast.
 /// Run with: `cargo test large_body_10mb -- --include-ignored`
 #[test]
-#[ignore]
+#[ignore = "10 MB body; run explicitly with --include-ignored"]
 fn large_body_10mb_sends_correctly() {
     run_large_send(large_body(10_000_000));
 }
@@ -290,7 +291,7 @@ fn many_recipients_sends_one_rcpt_per_address() {
 fn body_with_max_length_lines_sends_correctly() {
     // 998 bytes of 'A' + CRLF = 1000 bytes per line (RFC 5321 limit is
     // 1000 bytes including CRLF).
-    let line: Vec<u8> = std::iter::repeat(b'A').take(998).chain(*b"\r\n").collect();
+    let line: Vec<u8> = std::iter::repeat_n(b'A', 998).chain(*b"\r\n").collect();
     let body: Vec<u8> = line.repeat(5);
     run_large_send(body);
 }

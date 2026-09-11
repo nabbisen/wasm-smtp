@@ -161,16 +161,29 @@ impl VecAuditSink {
     ///
     /// Returns a `Vec<String>` where each entry is the `Debug` label of the
     /// event variant (e.g. `"Connected"`, `"GreetingReceived { code: 220 }"`).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned, which happens only if a
+    /// previous caller panicked while holding it.
     pub fn events(&self) -> Vec<String> {
         self.events.lock().unwrap().clone()
     }
 
     /// Return the number of events collected.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn len(&self) -> usize {
         self.events.lock().unwrap().len()
     }
 
     /// Return `true` if no events have been collected.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the internal mutex is poisoned.
     pub fn is_empty(&self) -> bool {
         self.events.lock().unwrap().is_empty()
     }

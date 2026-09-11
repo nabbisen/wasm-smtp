@@ -459,8 +459,8 @@ impl<T: Transport> SmtpClient<T> {
                     return Err(SmtpError::Io(e));
                 }
             };
-            let stuffed = stuffer.process_chunk(&buf[..n]);
-            self.write_all(&stuffed).await?;
+            let wire_chunk = stuffer.process_chunk(&buf[..n]);
+            self.write_all(&wire_chunk).await?;
         }
         // Terminator: ensures the body ends with \r\n then appends .\r\n
         let terminator = stuffer.finish();

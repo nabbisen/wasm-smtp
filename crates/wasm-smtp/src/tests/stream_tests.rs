@@ -25,7 +25,7 @@ fn stuff_byte_by_byte(body: &[u8]) -> Vec<u8> {
 /// Helper: feed the whole body in one chunk (equivalent to the batch path).
 fn stuff_single_chunk(body: &[u8]) -> Vec<u8> {
     let mut stuffer = DotStufferState::new();
-    let mut out = stuffer.process_chunk(body).to_vec();
+    let mut out = stuffer.process_chunk(body).clone();
     out.extend_from_slice(&stuffer.finish());
     out
 }

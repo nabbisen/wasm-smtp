@@ -149,6 +149,9 @@ impl SmtpSendImpl {
     ///
     /// The component's socket layer exists only on `wasm32-wasip2`, so on a
     /// native host every call reports that instead of attempting a send.
+    // Takes its arguments by value to match the wasm32 signature, which the
+    // generated `Guest` trait fixes.
+    #[allow(clippy::needless_pass_by_value)]
     #[cfg(not(target_arch = "wasm32"))]
     pub fn send_impl(
         config: SmtpConfig,

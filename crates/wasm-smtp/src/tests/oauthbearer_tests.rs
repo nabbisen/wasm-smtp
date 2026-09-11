@@ -186,7 +186,8 @@ fn base64_decode(s: &str) -> String {
     let bytes: Vec<u8> = s
         .chars()
         .filter(|&c| c != '=')
-        .map(|c| alphabet.find(c).unwrap() as u8)
+        // The alphabet is 64 chars, so every index fits in a u8.
+        .map(|c| u8::try_from(alphabet.find(c).unwrap()).unwrap())
         .collect();
     for chunk in bytes.chunks(4) {
         if chunk.len() >= 2 {

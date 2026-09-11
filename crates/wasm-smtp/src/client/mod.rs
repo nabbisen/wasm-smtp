@@ -153,41 +153,6 @@ impl<T: Transport> SmtpClient<T> {
         self.state
     }
 
-    /// Authenticate using the best `AUTH` mechanism the server advertised.
-    ///
-    /// `PLAIN` is preferred over `LOGIN` when both are advertised, because
-    /// it completes in a single round-trip and is the IETF-standard SASL
-    /// mechanism. `LOGIN` is used as a fallback for older servers that
-    /// only advertise it. Callers that need to lock in a specific
-    /// mechanism (for testing, or for known-broken servers) should call
-    /// [`Self::login_with`] instead.
-    ///
-    /// Returns [`AuthError::UnsupportedMechanism`] if the server's `EHLO`
-    /// reply did not advertise either `PLAIN` or `LOGIN`. Returns
-    /// [`AuthError::Rejected`] if the server rejects the credentials.
-    ///
-    /// May only be called immediately after [`Self::connect`]. Calling it
-    /// a second time, or after [`Self::send_mail`], returns
-    /// [`InvalidInputError`].
-    ///
-    /// # Credential lifetime and zeroization
-    ///
-    /// `wasm-smtp` does not retain copies of `user` or `pass` after
-    /// this call returns: the credentials are passed by reference, used
-    /// once to build a base64-encoded SASL payload, and dropped together
-    /// with that payload at the end of the call. The crate also never
-    /// includes credentials in [`Debug`](core::fmt::Debug) output, error
-    /// messages, or [`Display`](core::fmt::Display) text.
-    ///
-    /// What the crate cannot do is securely erase the bytes the caller
-    /// supplied — that storage belongs to the caller. If your threat
-    /// model includes memory disclosure (a process dump, a debugger
-    /// attached to the running Worker, etc.), wrap the password in a
-    /// type that zeroes its backing memory on drop (the `zeroize` crate
-    /// is the conventional choice) and pass `&z.expose_secret()` only at
-    /// the call site. Concretely, avoid pulling the password out of an
-    /// environment variable into a long-lived `String`.
-
     /// Send `QUIT` and close the transport.
     ///
     /// Consumes `self` so the client cannot be reused after a clean

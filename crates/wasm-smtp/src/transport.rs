@@ -92,6 +92,9 @@ pub trait Transport {
     /// ensure every byte has been submitted to the network before reading
     /// responses. Implementations that do not buffer writes may return
     /// `Ok(())` immediately.
+    // The default body has nothing to await, but the method is part of an
+    // async trait contract that buffering implementors do await on.
+    #[allow(clippy::unused_async)]
     async fn flush(&mut self) -> Result<(), IoError> {
         Ok(())
     }
