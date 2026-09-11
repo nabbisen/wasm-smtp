@@ -5,7 +5,9 @@
 //!
 //! ## Quick start
 //!
-//! ```rust,no_run
+//! ```ignore
+//! // `ignore`: the connect helpers exist only on `wasm32-wasip2`, so this
+//! // example cannot compile on the host that runs the doctests.
 //! use wasm_smtp_wasi::connect_smtps;
 //!
 //! # async fn run() -> Result<(), wasm_smtp::SmtpError> {
@@ -79,6 +81,7 @@ mod tls;
 #[cfg(target_arch = "wasm32")]
 mod wasi_impl;
 
+#[cfg(test)]
 mod tests;
 
 // Public re-exports.

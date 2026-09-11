@@ -6,7 +6,7 @@
 
 use crate::error::WasiSmtpError;
 use wasi::sockets::ip_name_lookup::{IpAddress, resolve_addresses};
-use wasi::sockets::network::{IpAddressFamily, Network};
+use wasi::sockets::network::Network;
 use wasi::sockets::instance_network::instance_network;
 use wasi::io::poll::poll;
 

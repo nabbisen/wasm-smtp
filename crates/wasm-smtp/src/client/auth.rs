@@ -4,7 +4,14 @@
 //! child module of `client`; child modules may access private fields of
 //! the parent's types (Rust visibility rules for descendant modules).
 
-use crate::error::{AuthError, InvalidInputError, ProtocolError, SmtpError, SmtpOp};
+use crate::error::{AuthError, InvalidInputError, SmtpError, SmtpOp};
+// Only the challenge-response mechanisms raise a protocol error of their own.
+#[cfg(any(
+    feature = "xoauth2",
+    feature = "oauthbearer",
+    feature = "scram-sha-256"
+))]
+use crate::error::ProtocolError;
 use crate::protocol::{
     self, AuthMechanism,
     build_auth_plain_initial_response,

@@ -35,13 +35,15 @@ mod bindings {
     wit_bindgen::generate!({
         path: "../../wit",
         world: "smtp-client",
-        // Disable the default std export so the component doesn't pull in
-        // the standard library's panic handler unconditionally.
-        exports: {
-            "wasm-smtp:smtp/smtp-send": super::SmtpSendImpl,
-        },
+        generate_all,
     });
 }
+
+// wit-bindgen 0.57 wires the export through the `export!` macro that
+// `generate!` emits, rather than through an `exports:` key. `with_types_in`
+// names the module the bindings were generated in.
+#[cfg(target_arch = "wasm32")]
+bindings::export!(SmtpSendImpl with_types_in bindings);
 
 // ── Type aliases (shared between wasm32 and native stubs) ─────────────────
 
@@ -57,6 +59,42 @@ mod stubs;
 #[cfg(not(target_arch = "wasm32"))]
 use stubs::{SendError, SendResult, SmtpConfig, SmtpCredentials, SmtpMessage};
 
+// `TlsMode` is referenced by the native unit tests only; on `wasm32` it comes
+// from the generated bindings above.
+#[cfg(all(not(target_arch = "wasm32"), test))]
+use stubs::TlsMode;
+
+// ── Synchronous driver for the async client (wasm32 only) ─────────────────
+
+/// Drive a future to completion using a no-op waker.
+///
+/// The WIT `send` export is synchronous while [`wasm_smtp::SmtpClient`] is
+/// async, so the component needs a way to run one future to completion. A
+/// full executor would be dead weight here: every future this crate awaits
+/// comes from `wasm-smtp-wasi`, whose transport polls WASI pollables inline
+/// and therefore resolves on the first poll.
+///
+/// # Panics
+///
+/// Panics if the future returns `Poll::Pending`, which would mean the
+/// transport started yielding and this assumption no longer holds.
+#[cfg(target_arch = "wasm32")]
+fn block_on<F: core::future::Future>(fut: F) -> F::Output {
+    use core::pin::pin;
+    use core::task::{Context, Poll, Waker};
+
+    let waker = Waker::noop();
+    let mut cx = Context::from_waker(waker);
+    let mut fut = pin!(fut);
+    match fut.as_mut().poll(&mut cx) {
+        Poll::Ready(value) => value,
+        Poll::Pending => panic!(
+            "block_on: future returned Pending — the WASI transport is \
+             expected to resolve on the first poll"
+        ),
+    }
+}
+
 // ── Core implementation ───────────────────────────────────────────────────
 
 /// The struct that implements the `smtp-send` WIT interface.
@@ -64,78 +102,70 @@ pub struct SmtpSendImpl;
 
 impl SmtpSendImpl {
     /// Core send logic, shared between the WIT export and native tests.
-    #[allow(unused_variables)]
+    ///
+    /// Connects, authenticates, sends one message, and quits. A fresh TCP
+    /// connection is used for every call; nothing is retained afterwards.
+    #[cfg(target_arch = "wasm32")]
     pub fn send_impl(
         config: SmtpConfig,
         credentials: SmtpCredentials,
         message: SmtpMessage,
     ) -> Result<SendResult, SendError> {
-        use wasm_smtp::SmtpError;
-
-        // Build the transport and SmtpClient using wasm-smtp-wasi.
-        #[cfg(target_arch = "wasm32")]
-        let client_result = {
-            let opts = ConnectOptions::default();
-            let fut = match config.tls_mode {
-                TlsMode::Implicit => wasm_smtp_wasi::connect_smtps(
-                    &config.host,
-                    config.port,
-                    &config.ehlo_domain,
-                ),
-                TlsMode::Starttls => wasm_smtp_wasi::connect_smtp_starttls(
-                    &config.host,
-                    config.port,
-                    &config.ehlo_domain,
-                ),
-            };
-            // Drive the async future synchronously via WASI blocking poll.
-            // On wasm32-wasip2, the executor is provided by the runtime.
-            wasm_smtp_component_rt::block_on(fut)
+        // The two connect helpers are distinct async fns, so each one is
+        // driven inside its own match arm rather than through a shared
+        // future binding.
+        let client_result = match config.tls_mode {
+            TlsMode::Implicit => block_on(wasm_smtp_wasi::connect_smtps(
+                &config.host,
+                config.port,
+                &config.ehlo_domain,
+            )),
+            TlsMode::Starttls => block_on(wasm_smtp_wasi::connect_smtp_starttls(
+                &config.host,
+                config.port,
+                &config.ehlo_domain,
+            )),
         };
-
-        #[cfg(not(target_arch = "wasm32"))]
-        let client_result: Result<_, SmtpError> =
-            Err(SmtpError::Io(wasm_smtp::IoError::new(
-                "wasm-smtp-component only runs on wasm32-wasip2; \
-                 use cargo test for native unit tests",
-            )));
-
-        let mut _client = client_result.map_err(smtp_error_to_wit)?;
+        let mut client = client_result.map_err(smtp_error_to_wit)?;
 
         // Authenticate.
-        #[cfg(target_arch = "wasm32")]
-        wasm_smtp_component_rt::block_on(
-            client.login(&credentials.username, &credentials.password),
-        )
-        .map_err(smtp_error_to_wit)?;
+        block_on(client.login(&credentials.username, &credentials.password))
+            .map_err(smtp_error_to_wit)?;
 
         // Send the message.
         let to_refs: Vec<&str> = message.to.iter().map(String::as_str).collect();
-
-        #[cfg(target_arch = "wasm32")]
-        let outcome = wasm_smtp_component_rt::block_on(client.send_mail(
+        let outcome = block_on(client.send_mail(
             &message.from,
             &to_refs,
             &message.raw_message,
         ))
         .map_err(smtp_error_to_wit)?;
 
-        #[cfg(not(target_arch = "wasm32"))]
-        #[allow(unreachable_code)]
-        let _outcome: wasm_smtp::SendOutcome = {
-            let _ = (&message.from, &to_refs, &message.raw_message);
-            return Err(SendError::Io("unreachable on native host".into()));
-            unreachable!()
-        };
-
         // QUIT (best-effort; ignore errors to not mask a successful send).
-        #[cfg(target_arch = "wasm32")]
-        { wasm_smtp_component_rt::block_on(client.quit()).ok(); }
+        block_on(client.quit()).ok();
 
-        #[cfg(target_arch = "wasm32")]
-        return Ok(SendResult { reply_code: outcome.code });
-        #[cfg(not(target_arch = "wasm32"))]
-        Ok(SendResult { reply_code: _outcome.code })
+        Ok(SendResult {
+            reply_code: outcome.code,
+        })
+    }
+
+    /// Native-host stand-in for [`Self::send_impl`].
+    ///
+    /// The component's socket layer exists only on `wasm32-wasip2`, so on a
+    /// native host every call reports that instead of attempting a send.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn send_impl(
+        config: SmtpConfig,
+        credentials: SmtpCredentials,
+        message: SmtpMessage,
+    ) -> Result<SendResult, SendError> {
+        let _ = (&config, &credentials, &message);
+        Err(smtp_error_to_wit(wasm_smtp::SmtpError::Io(
+            wasm_smtp::IoError::new(
+                "wasm-smtp-component only runs on wasm32-wasip2; \
+                 use cargo test for native unit tests",
+            ),
+        )))
     }
 }
 

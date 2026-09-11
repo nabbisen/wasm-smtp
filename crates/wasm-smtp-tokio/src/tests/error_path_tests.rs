@@ -59,6 +59,8 @@ async fn implicit_tls_to_plaintext_endpoint_fails() {
     use tokio::io::AsyncWriteExt;
     use tokio::net::TcpListener;
 
+    super::install_test_crypto_provider();
+
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
 
@@ -90,6 +92,8 @@ async fn invalid_sni_string_rejected() {
     // names or IP literals. An empty server_name triggers that
     // path before any TCP I/O.
     use tokio::net::TcpListener;
+    super::install_test_crypto_provider();
+
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(async move {

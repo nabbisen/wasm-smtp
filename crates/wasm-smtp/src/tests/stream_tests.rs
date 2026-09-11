@@ -272,7 +272,7 @@ fn send_mail_stream_with_policy_rejection_sends_no_smtp_commands() {
 
 #[test]
 fn send_mail_stream_audit_events_are_emitted() {
-    use crate::audit::{AuditSink, SmtpAuditEvent, VecAuditSink};
+    use crate::audit::VecAuditSink;
     use std::sync::Arc;
 
     let sink = Arc::new(VecAuditSink::default());

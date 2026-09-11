@@ -31,7 +31,11 @@ plaintext-only = []
 
 [dependencies]
 wasm-smtp = { path = "../wasm-smtp", version = "0.15.1", default-features = false }
-rustls = { version = "0.23", features = ["ring", "tls12", "logging"] }
+# RFC 017 Strategy A: rustls over WASI streams with the `ring` provider.
+# `default-features = false` matters here: rustls's defaults enable the
+# aws-lc-rs provider, whose `aws-lc-sys` C sources cannot cross-compile to
+# `wasm32-wasip2`. Only `ring` is wanted on this target.
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-pki-types = { workspace = true }
 
 # Trust anchor sources (feature-gated; at most one should be enabled).

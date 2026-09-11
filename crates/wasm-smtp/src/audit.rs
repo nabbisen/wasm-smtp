@@ -134,19 +134,22 @@ impl AuditSink for NoopAuditSink {
 /// Useful in tests to verify the exact event sequence emitted by a session.
 ///
 /// ```rust
-/// use wasm_smtp::audit::{VecAuditSink, SmtpAuditEvent};
+/// use wasm_smtp::audit::VecAuditSink;
 /// use wasm_smtp::SmtpClientOptions;
-/// use std::sync::{Arc, Mutex};
+/// use std::sync::Arc;
+/// # use wasm_smtp::audit::{AuditSink, SmtpAuditEvent};
 ///
 /// let sink = Arc::new(VecAuditSink::default());
 /// let opts = SmtpClientOptions::new()
 ///     .with_audit(Box::new(Arc::clone(&sink)));
 ///
 /// // ... run the session ...
+/// # sink.on_event(&SmtpAuditEvent::Connected);
 ///
-/// // After the session:
+/// // After the session. `events()` yields each event's `Debug` label,
+/// // not the enum itself.
 /// let events = sink.events();
-/// assert!(matches!(events[0], SmtpAuditEvent::Connected));
+/// assert!(events[0].starts_with("Connected"));
 /// ```
 #[derive(Debug, Default)]
 pub struct VecAuditSink {

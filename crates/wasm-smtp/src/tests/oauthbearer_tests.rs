@@ -1,7 +1,7 @@
 //! Tests for AUTH OAUTHBEARER (RFC 7628).
 
 use super::harness::{MockTransport, block_on, flatten};
-use crate::client::{SmtpClient, SmtpClientOptions};
+use crate::client::SmtpClient;
 use crate::error::SmtpError;
 use crate::protocol::{AuthMechanism, build_oauthbearer_initial_response};
 

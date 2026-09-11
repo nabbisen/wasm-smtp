@@ -13,8 +13,8 @@
 //! Pass a boxed policy to [`SmtpClientOptions`][crate::SmtpClientOptions]:
 //!
 //! ```rust
-//! # use wasm_smtp::policy::{SendPolicy, PolicyError, DefaultPolicy};
-//! # use wasm_smtp::SmtpClientOptions;
+//! # use wasm_smtp::policy::SendPolicy;
+//! # use wasm_smtp::{PolicyError, SmtpClientOptions};
 //! struct DomainPolicy { allowed: &'static str }
 //!
 //! impl SendPolicy for DomainPolicy {

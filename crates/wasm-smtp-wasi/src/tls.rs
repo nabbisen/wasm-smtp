@@ -100,19 +100,26 @@ fn default_root_store() -> Result<RootCertStore, WasiSmtpError> {
 
     #[cfg(feature = "native-roots")]
     {
-        match rustls_native_certs::load_native_certs() {
-            Ok(certs) => {
-                for cert in certs {
-                    store.add(cert).ok();
-                }
-                return Ok(store);
-            }
-            Err(e) => {
-                return Err(WasiSmtpError::new(format!(
-                    "failed to load native certificates: {e}"
-                )));
-            }
+        // rustls-native-certs 0.8 returns a `CertificateResult` struct
+        // carrying both the certs that decoded and any per-source errors,
+        // leaving the partial-failure policy to the caller. We adopt the
+        // same policy as `wasm-smtp-tokio`: keep every cert that decoded,
+        // fail only if the resulting trust store is empty.
+        let result = rustls_native_certs::load_native_certs();
+        for cert in result.certs {
+            let _ = store.add(cert);
         }
+        if store.is_empty() {
+            return Err(WasiSmtpError::new(if result.errors.is_empty() {
+                "rustls-native-certs returned an empty trust store; the OS \
+                 trust store may be missing or unreadable"
+            } else {
+                "rustls-native-certs returned an empty trust store; the OS \
+                 trust store may be missing or unreadable, and one or more \
+                 sources reported errors"
+            }));
+        }
+        return Ok(store);
     }
 
     // Neither feature is enabled — this is a configuration error.

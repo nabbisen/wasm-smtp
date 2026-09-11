@@ -13,9 +13,7 @@ use crate::protocol::{
     format_mail_from, format_rcpt_to,
 };
 #[cfg(feature = "smtputf8")]
-use crate::protocol::{
-    ehlo_advertises_smtputf8, format_mail_from_smtputf8, validate_address_utf8,
-};
+use crate::error::ProtocolError;
 use crate::session::SessionState;
 use crate::tracing_helpers::smtp_debug;
 use crate::transport::Transport;
