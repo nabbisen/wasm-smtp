@@ -7,14 +7,21 @@ that shaped it.
 ## Public surface
 
 ```rust
-pub use client::SmtpClient;
+pub use client::{SmtpClient, SmtpClientOptions};
 pub use error::{
-    AuthError, InvalidInputError, IoError, ProtocolError, SmtpError, SmtpOp,
+    AuthError, InvalidInputError, IoError, PolicyError, ProtocolError, SmtpError, SmtpOp,
 };
-pub use protocol::{AuthMechanism, EnhancedStatus};
+pub use message_body::MessageBody;
+pub use outcome::SendOutcome;
+pub use protocol::{AuthMechanism, DotStufferState, EnhancedStatus};
 pub use session::SessionState;
 pub use transport::{StartTlsCapable, Transport};
 ```
+
+The hooks live in their own modules: `policy` (`SendPolicy`,
+`DefaultPolicy`, `BoundedPolicy`) and `audit` (`AuditSink`,
+`SmtpAuditEvent`, `NoopAuditSink`, `VecAuditSink`); both are attached
+through `SmtpClientOptions`.
 
 These types together constitute the entire public API of the crate.
 There is no separate "builder", no separate "config", no separate
@@ -24,7 +31,10 @@ hold the entire surface in their head.
 `EnhancedStatus` (RFC 3463) is the parsed `class.subject.detail`
 code that the crate populates on replies and errors when the server
 has advertised `ENHANCEDSTATUSCODES`. `AuthMechanism` enumerates the
-SASL mechanisms this client knows: `Plain`, `Login`, `XOAuth2`.
+SASL mechanisms this client knows: `ScramSha256`, `Plain`, `Login`,
+`XOAuth2`, `OAuthBearer`. `SendOutcome` carries the accepted reply code
+and the server's queue id when it supplied one; `MessageBody` and
+`DotStufferState` are the streaming-send building blocks.
 
 ## `Transport` and `StartTlsCapable`
 
@@ -32,6 +42,7 @@ SASL mechanisms this client knows: `Plain`, `Login`, `XOAuth2`.
 pub trait Transport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError>;
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError>;
+    async fn flush(&mut self) -> Result<(), IoError> { Ok(()) }  // default
     async fn close(&mut self) -> Result<(), IoError>;
 }
 
@@ -45,7 +56,9 @@ runtime. `read` returning `Ok(0)` means the peer cleanly closed the
 connection; the state machine treats this as
 `ProtocolError::UnexpectedClose` if a reply was still being assembled.
 `write_all` must perform any short-write retries internally — the core
-calls it once per command. `close` is independent of the SMTP-level
+calls it once per command. `flush` is called by the pipelining path
+after a batch of commands has been written; its default body returns
+`Ok(())`, so only transports that buffer writes need to implement it. `close` is independent of the SMTP-level
 `QUIT`: `QUIT` says "I'm done with the SMTP session"; `close` says "I'm
 done with the underlying socket".
 
@@ -58,7 +71,7 @@ compile time. Implicit-TLS-only transports need not implement it.
 
 ```rust
 SmtpClient::connect(transport, ehlo_domain).await?;          // greeting + EHLO
-client.login(user, pass).await?;                             // optional, AUTH LOGIN
+client.login(user, pass).await?;                             // optional, best mechanism
 client.send_mail(from, &[to_a, to_b], body).await?;          // 0..N times
 client.quit().await?;                                        // consumes self
 ```
@@ -67,10 +80,15 @@ client.quit().await?;                                        // consumes self
 and immediately issues `EHLO`. The capability lines from the EHLO reply
 are stored on the client and exposed via `capabilities()`.
 
-`login` requires that the server advertised `AUTH LOGIN`. If it did not,
-the call fails with `AuthError::UnsupportedMechanism` without sending
-any bytes. Credentials are base64-encoded with the crate's own small
-encoder; there is no `base64` dependency.
+`login` picks the strongest static-password mechanism the server
+advertised: SCRAM-SHA-256 first (the password never crosses the wire),
+then PLAIN, then LOGIN. If the server advertised none of them, the call
+fails with `AuthError::UnsupportedMechanism` without sending any bytes.
+Use `login_with` to pin a mechanism, and `login_xoauth2` /
+`login_oauthbearer` for bearer tokens — those are never auto-selected,
+because their credential semantics differ from a password. Credentials
+are base64-encoded with the crate's own small encoder; there is no
+`base64` dependency.
 
 `send_mail` runs the full transaction: `MAIL FROM`, one `RCPT TO` per
 recipient (where 250 and 251 are both treated as success), `DATA`, the
@@ -108,9 +126,13 @@ they should never trip on conforming servers.
 ## What is intentionally absent
 
 - **No global state.** The client owns everything it needs.
-- **No external dependencies.** The crate has no `[dependencies]`
-  outside `core` and `std`.
+- **No required dependencies.** Nothing outside `core` and `std` is
+  needed for the base feature set. The optional crypto crates behind
+  `scram-sha-256` (RustCrypto `hmac`, `sha2`, `pbkdf2`, plus `getrandom`
+  and `subtle`) are the one exception, and that feature can be turned
+  off.
 - **No `unsafe`.** The workspace lints set `unsafe_code = "forbid"`.
-- **No `mod.rs`.** Each module is a single `.rs` file.
+- **No `mod.rs`-only modules.** A module with submodules is a `foo.rs`
+  next to a `foo/` directory, in the Rust 2018 style.
 - **No executor dependency.** The crate calls only `await`; choosing an
   executor is the adapter's and the application's job.

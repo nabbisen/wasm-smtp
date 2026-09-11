@@ -122,10 +122,16 @@ directly.
 
 `SmtpClient::login(user, pass)` consults the server's `EHLO`
 capabilities and picks the best supported **static-password**
-mechanism: `AUTH PLAIN` when advertised (preferred — one round-trip
-and the IETF-standard SASL mechanism), falling back to `AUTH LOGIN`
-otherwise. This is the right behavior for almost every static-
-password caller.
+mechanism, in this order:
+
+1. `AUTH SCRAM-SHA-256` (RFC 5802 / 7677) when advertised and the
+   default-on `scram-sha-256` feature is compiled in. Preferred because
+   the password never crosses the wire, even inside TLS.
+2. `AUTH PLAIN` — one round-trip, and the IETF-standard SASL mechanism.
+3. `AUTH LOGIN` — the fallback for older servers that advertise nothing
+   else.
+
+This is the right behavior for almost every static-password caller.
 
 If you need to lock in a specific mechanism — to reproduce a
 production failure that is tied to one of them, or to test against a
@@ -135,14 +141,18 @@ server whose advertisement is known to be inaccurate — call
 ```rust
 use wasm_smtp::AuthMechanism;
 
+client.login_with(AuthMechanism::ScramSha256, "user", "secret").await?;
+// or:
 client.login_with(AuthMechanism::Plain, "user", "secret").await?;
 // or:
 client.login_with(AuthMechanism::Login, "user", "secret").await?;
 ```
 
 `login_with` returns `AuthError::UnsupportedMechanism` if the chosen
-mechanism is not in the server's advertisement, just like `login`
-does when neither mechanism is advertised.
+mechanism is not in the server's advertisement, just like `login` does
+when none of the three is advertised. The error message names the
+mechanisms your build was compiled with, which is the quickest way to
+tell a missing server capability from a disabled cargo feature.
 
 ## OAuth 2.0 (XOAUTH2) for Gmail and Microsoft 365
 
@@ -354,8 +364,16 @@ client moves to after each kind of failure.
 ## Testing your code
 
 Because `SmtpClient` is generic over `Transport`, you can drive it
-against any synchronous mock you like. The crate's own
-`tests::harness::MockTransport` is private, but the *pattern* is
-straightforward to reproduce: a struct with a `VecDeque<Vec<u8>>` of
-scripted server replies and a `Vec<u8>` for captured outgoing bytes.
-This lets you write SMTP-flow tests with no executor at all.
+against any synchronous mock you like — no executor required.
+
+The workspace ships that mock as `wasm-smtp-test`: `MockTransport`
+replays scripted server replies and captures the bytes your code wrote,
+and `block_on` polls a future that never yields to completion. It is a
+dev-only crate inside this repository (`publish = false`), so reach for
+it by path if you are working in a checkout.
+
+Otherwise the pattern reproduces in a few lines: a struct holding a
+`VecDeque<Vec<u8>>` of scripted replies and a `Vec<u8>` of captured
+outgoing bytes, implementing `read`, `write_all`, and `close`.
+`crates/wasm-smtp/tests/public_api.rs` contains a self-contained
+example that uses nothing but the public API.

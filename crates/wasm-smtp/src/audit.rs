@@ -38,7 +38,7 @@
 //! Connected
 //! GreetingReceived { code: 220 }
 //! EhloCompleted
-//! AuthCompleted { mechanism: "AUTH SCRAM-SHA-256" }
+//! AuthCompleted { mechanism: "SCRAM-SHA-256" }
 //! MailFromAccepted { code: 250 }
 //! RecipientAccepted { code: 250 }   (once per recipient)
 //! MessageAccepted { code: 250 }

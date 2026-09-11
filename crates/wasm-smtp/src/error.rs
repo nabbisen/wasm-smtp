@@ -607,6 +607,28 @@ pub enum AuthError {
     Other(&'static str),
 }
 
+/// The AUTH mechanisms this build understands, in preference order.
+///
+/// PLAIN and LOGIN are always compiled in; the others follow their cargo
+/// features, so the message names what this particular build can actually
+/// negotiate rather than what the crate supports in principle.
+const fn compiled_in_mechanisms() -> &'static str {
+    match (
+        cfg!(feature = "scram-sha-256"),
+        cfg!(feature = "xoauth2"),
+        cfg!(feature = "oauthbearer"),
+    ) {
+        (true, true, true) => "SCRAM-SHA-256, PLAIN, LOGIN, XOAUTH2, and OAUTHBEARER",
+        (true, true, false) => "SCRAM-SHA-256, PLAIN, LOGIN, and XOAUTH2",
+        (true, false, true) => "SCRAM-SHA-256, PLAIN, LOGIN, and OAUTHBEARER",
+        (true, false, false) => "SCRAM-SHA-256, PLAIN, and LOGIN",
+        (false, true, true) => "PLAIN, LOGIN, XOAUTH2, and OAUTHBEARER",
+        (false, true, false) => "PLAIN, LOGIN, and XOAUTH2",
+        (false, false, true) => "PLAIN, LOGIN, and OAUTHBEARER",
+        (false, false, false) => "PLAIN and LOGIN",
+    }
+}
+
 impl fmt::Display for AuthError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -625,20 +647,12 @@ impl fmt::Display for AuthError {
                 }
             }
             Self::UnsupportedMechanism => {
-                #[cfg(feature = "xoauth2")]
-                {
-                    f.write_str(
-                        "server did not advertise an AUTH mechanism supported by this client \
-                         (this client knows PLAIN, LOGIN, and XOAUTH2)",
-                    )
-                }
-                #[cfg(not(feature = "xoauth2"))]
-                {
-                    f.write_str(
-                        "server did not advertise an AUTH mechanism supported by this client \
-                         (this client knows PLAIN and LOGIN; XOAUTH2 was not compiled in)",
-                    )
-                }
+                write!(
+                    f,
+                    "server did not advertise an AUTH mechanism supported by this client \
+                     (this client knows {})",
+                    compiled_in_mechanisms()
+                )
             }
             Self::MalformedChallenge(s) => {
                 write!(f, "server sent a malformed AUTH challenge: {s}")

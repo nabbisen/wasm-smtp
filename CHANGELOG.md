@@ -1,52 +1,160 @@
 ## [Unreleased]
 
+## [0.15.2] — 2026-09-12
+
+A maintenance release. RFC 024: make the release gate trustworthy. No
+public API changes; no protocol behavior changes.
+
+### Fixed
+
+- **`wasm-smtp` did not compile with the `smtputf8` feature.**
+  `client/send.rs` used `ProtocolError` without importing it, so
+  `cargo check -p wasm-smtp --features smtputf8` — and the `smtputf8`
+  pass-throughs on the Cloudflare and tokio adapters — failed.
+- **`wasm-smtp-wasi` did not compile with `native-roots`.**
+  `rustls-native-certs` 0.8 returns a `CertificateResult` struct rather
+  than a `Result`. The adapter now follows the same policy as
+  `wasm-smtp-tokio`: keep every certificate that decoded, and fail only
+  if the resulting trust store is empty.
+- **`wasm-smtp-wasi` could not build for `wasm32-wasip2`.** Its `rustls`
+  dependency did not disable default features, which pulled in the
+  aws-lc-rs provider; the `aws-lc-sys` C sources cannot cross-compile to
+  that target. The dependency now selects `ring` explicitly, as RFC 017
+  Strategy A specifies.
+- **Three doctests were broken.** `VecAuditSink::events` returns the
+  `Debug` label of each event rather than the enum, `PolicyError` lives
+  at the crate root rather than in `policy`, and the `wasm-smtp-wasi`
+  crate-level example uses helpers that exist only on `wasm32`.
+- **`wasm-smtp-component` failed to build.** It referenced a
+  non-existent `wasm_smtp_component_rt` crate, used an `exports:` key
+  that wit-bindgen 0.57 does not accept, and dropped `TlsMode` from the
+  native stub imports. The crate now drives its futures with a private
+  no-op-waker `block_on` — sound because the WASI transport polls
+  inline and resolves on first poll — and uses the `export!` macro form.
+- **`wasm-smtp-wasi` compiled its test module unconditionally**, rather
+  than under `cfg(test)`.
+- **`cargo test --workspace` panicked in the tokio adapter's tests.**
+  Feature unification across the workspace leaves rustls with both the
+  `ring` and `aws-lc-rs` providers compiled in, so rustls could not pick
+  one automatically. The affected tests now install a provider
+  explicitly.
+- **A stale doc comment** describing `login` sat orphaned in
+  `client/mod.rs`, attached to no item, and the `send_message` doc block
+  began with a copy of the SMTPUTF8 text.
+
+### Changed
+
+- **MSRV is now 1.88** (`rust-version` in `[workspace.package]`). The
+  previously declared 1.85 was not honored: the core uses `let` chains,
+  stable since 1.88 in edition 2024. This is a compatibility-relevant
+  change, recorded here as such.
+- **`rust-toolchain.toml` pins the toolchain** to 1.88 with `rustfmt`,
+  `clippy`, and the `wasm32-unknown-unknown` / `wasm32-wasip2` targets,
+  so formatting, linting, building, and testing are reproducible for
+  every contributor and in CI.
+- **The release gate is an explicit command list** (RFC 024 §D3) and is
+  now enforced by CI (`.github/workflows/ci.yml`): a blocking `gate` job
+  on the pinned toolchain and an advisory `stable` job. Clippy runs with
+  `-D warnings`; every warning is fixed or carries a targeted `#[allow]`
+  with a one-line reason. `--all-features` is never used, since the
+  tokio adapter's `compile_error!` on conflicting crypto providers is
+  deliberate.
+- **`AuthError::UnsupportedMechanism` now names the mechanisms actually
+  compiled into the build** (PLAIN and LOGIN always, plus SCRAM-SHA-256,
+  XOAUTH2, and OAUTHBEARER per feature), instead of mentioning only
+  XOAUTH2. A unit test asserts the text follows the features.
+
+### Documentation
+
+- The Cloudflare adapter is no longer described as planned: four
+  adapters ship, and `intro.md`, `architecture.md`, and the crate map
+  say so.
+- Authentication docs now state the real preference order —
+  SCRAM-SHA-256 over PLAIN over LOGIN — with the bearer-token
+  mechanisms opt-in per call. PIPELINING is documented alongside the
+  other extensions.
+- `errors.md` covers five `SmtpError` variants including `Policy`, the
+  full `SmtpOp` list, and all four `AuthError` variants.
+- `core.md` matches the real public surface, documents `Transport`'s
+  four methods including `flush`, and no longer claims the crate has no
+  external dependencies (the optional SCRAM crypto crates are the
+  exception).
+- `usage.md` points at the `wasm-smtp-test` mock and the self-contained
+  example in `tests/public_api.rs`.
+- The WASI adapter no longer claims its helpers "return a compile-time
+  error" on non-WASM targets; they are simply absent there.
+- `README.md` documents every cargo feature, uses `"0.15"` in dependency
+  snippets, and states the MSRV once. `NOTICE`, `CONTRIBUTING.md`, and
+  the bug-report template list the current crate set.
+- `CHANGELOG.md`: the 0.15.1 entry is translated to English, the two
+  duplicated `[0.9.4]` headings are merged into one section with a note
+  about the version offset, and the comparison links use the project's
+  tag format (no `v` prefix) and cover 0.10.0 onward.
+
+### Known limitation
+
+`wasm-smtp-component` still does not build for `wasm32-wasip2`, and the
+corresponding CI step is red on purpose. Two blockers remain in the
+frozen WIT contract: `wit/smtp.wit` uses the reserved WIT keyword `from`
+as a record field, and the world's `wasi:sockets` / `wasi:io` imports
+have no packages vendored under `wit/deps`. Both require a decision
+about `wit/smtp.wit` itself. Everything else in this release is
+unaffected; the crate's native build and tests pass.
+
 ## [0.15.1] — 2026-05-11
 
 ### Added
 
-- **`crates/wasm-smtp/src/client/` — モジュール分割。**
-  `client.rs`（1743行）を責務ごとに 5 ファイルへ分割:
+- **`crates/wasm-smtp/src/client/` — module split.**
+  `client.rs` (1743 lines) split into 5 files by responsibility:
 
-  | ファイル | 内容 |
+  | File | Contents |
   |---|---|
-  | `client/mod.rs` | `SmtpClient` 構造体・`SmtpClientOptions`・`connect`/`quit`・セッション状態ヘルパー |
-  | `client/auth.rs` | `login`・`login_with`・`login_oauthbearer`・`login_xoauth2`・`run_auth_*` |
-  | `client/send.rs` | `send_mail`・`send_mail_bytes`・`send_mail_stream`・`send_mail_smtputf8`・`send_message` |
-  | `client/io.rs` | `read_greeting`・`send_ehlo`・`write_all`・`flush`・`read_reply`・I/O バッファ（全 `pub(super)`） |
-  | `client/starttls.rs` | `connect_starttls`・`starttls` |
+  | `client/mod.rs` | The `SmtpClient` struct, `SmtpClientOptions`, `connect` / `quit`, session-state helpers |
+  | `client/auth.rs` | `login`, `login_with`, `login_oauthbearer`, `login_xoauth2`, `run_auth_*` |
+  | `client/send.rs` | `send_mail`, `send_mail_bytes`, `send_mail_stream`, `send_mail_smtputf8`, `send_message` |
+  | `client/io.rs` | `read_greeting`, `send_ehlo`, `write_all`, `flush`, `read_reply`, the I/O buffer (all `pub(super)`) |
+  | `client/starttls.rs` | `connect_starttls`, `starttls` |
 
-- **Integration tests** (`crates/wasm-smtp/tests/public_api.rs`)。
-  public API のみを使う 9 テスト。自己完結型 `TestTransport` を直接定義し、
-  `wasm-smtp-test` への dev-dependency を持たない（循環参照を回避）。
+- **Integration tests** (`crates/wasm-smtp/tests/public_api.rs`).
+  9 tests that use the public API only. They define a self-contained
+  `TestTransport` directly and carry no dev-dependency on
+  `wasm-smtp-test`, which avoids a circular reference.
 
-- **`docs/src/` サブフォルダ構成。**
-  16 ファイルの平坦構成を 4 サブフォルダに再編:
+- **`docs/src/` subfolder layout.**
+  The flat 16-file layout reorganised into 4 subfolders:
 
-  | フォルダ | 内容 |
+  | Folder | Contents |
   |---|---|
-  | `concepts/` | architecture・protocol・errors・security |
-  | `core/` | core・usage・composing-messages・connection-reuse・policy-audit・streaming |
-  | `adapters/` | cloudflare・tokio・wasi・component-model（`-adapter` サフィックス除去） |
+  | `concepts/` | architecture, protocol, errors, security |
+  | `core/` | core, usage, composing-messages, connection-reuse, policy-audit, streaming |
+  | `adapters/` | cloudflare, tokio, wasi, component-model (the `-adapter` suffix dropped) |
   | `reference/` | examples |
 
-- **`.gitignore`** — `target/`・`*.rs.bk`・`*.pdb`・`docs/book/` を除外。
-- **`.vscode/settings.json`** — `editor.formatOnSave: true`。
-- **`.vscode/extensions.json`** — `rust-lang.rust-analyzer` を推奨。
+- **`.gitignore`** — excludes `target/`, `*.rs.bk`, `*.pdb`, `docs/book/`.
+- **`.vscode/settings.json`** — `editor.formatOnSave: true`.
+- **`.vscode/extensions.json`** — recommends `rust-lang.rust-analyzer`.
 
 ### Fixed
 
-- **`cargo publish` 失敗の解消。**
-  `wasm-smtp-test` は `wasm-smtp` を regular dependency として使用しており、
-  `wasm-smtp` が `wasm-smtp-test` を dev-dependency として参照していたため
-  循環参照が生じていた。`wasm-smtp` の `[dev-dependencies]` から
-  `wasm-smtp-test` を削除し、integration test を自己完結型に書き直した。
+- **`cargo publish` failure resolved.**
+  `wasm-smtp-test` uses `wasm-smtp` as a regular dependency while
+  `wasm-smtp` referenced `wasm-smtp-test` as a dev-dependency, which
+  created a circular reference. `wasm-smtp-test` was removed from
+  `wasm-smtp`'s `[dev-dependencies]` and the integration tests were
+  rewritten to be self-contained.
 
-- **コンパイル警告をすべて解消。** 分割後の各ファイルに残っていた
-  unused import・unused variable・dead_code 警告を修正:
-  - `client/mod.rs`・`auth.rs`・`io.rs`・`send.rs`・`starttls.rs`: 移動後に不要となった import を整理
-  - `wasm-smtp-wasi/src/tls.rs`・`error.rs`: non-wasm32 ビルドの dead_code に `#[cfg_attr]` を追加
-  - `wasm-smtp-wasi/Cargo.toml`: `rustls-pki-types` の冗長 `version` キーを除去
-  - `wasm-smtp-component/src/lib.rs`: non-wasm32 パスの unused variable を抑制
+- **All compiler warnings resolved.** Fixed the unused-import,
+  unused-variable, and dead_code warnings left in each file after the
+  split:
+  - `client/mod.rs`, `auth.rs`, `io.rs`, `send.rs`, `starttls.rs`:
+    tidied up imports that became unnecessary after the move.
+  - `wasm-smtp-wasi/src/tls.rs`, `error.rs`: added `#[cfg_attr]` for
+    dead_code on non-wasm32 builds.
+  - `wasm-smtp-wasi/Cargo.toml`: removed the redundant `version` key on
+    `rustls-pki-types`.
+  - `wasm-smtp-component/src/lib.rs`: suppressed an unused variable on
+    the non-wasm32 path.
 
 ## [0.15.0] — 2026-05-11
 
@@ -281,6 +389,10 @@ and an audit event model.
 
 ## [0.9.4] — 2026-05-02
 
+Both blocks below shipped under tag `0.9.4`: the workspace content
+planned as v0.10.0 was released externally as v0.9.4, so internal
+milestone numbers and published tags are offset from here on.
+
 This release introduces a single breaking change: the
 `send_mail` family of methods now return [`SendOutcome`] instead
 of `()`. Most callers will not need code changes; see "Migration
@@ -397,7 +509,6 @@ feedback documented in v0.9.4's acknowledgements section.
 [`SendOutcome`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SendOutcome.html
 [`SmtpClient::send_mail`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.send_mail
 
-## [0.9.4] — 2026-05-02
 
 This release adds three observability and ergonomics improvements
 based on production-deployment feedback. All changes are
@@ -1285,19 +1396,27 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.4...HEAD
-[0.9.4]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.3...v0.9.4
-[0.9.3]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.2...v0.9.3
-[0.9.2]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.1...v0.9.2
-[0.9.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.9.0...v0.9.1
-[0.9.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.8.0...v0.9.0
-[0.8.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.1...v0.8.0
-[0.7.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.7.0...v0.7.1
-[0.7.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.6.0...v0.7.0
-[0.6.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.1...v0.6.0
-[0.5.1]: https://github.com/nabbisen/wasm-smtp/compare/v0.5.0...v0.5.1
-[0.5.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.4.0...v0.5.0
-[0.4.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.3.0...v0.4.0
-[0.3.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/nabbisen/wasm-smtp/compare/v0.1.0...v0.2.0
-[0.1.0]: https://github.com/nabbisen/wasm-smtp/releases/tag/v0.1.0
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.15.2...HEAD
+[0.15.2]: https://github.com/nabbisen/wasm-smtp/compare/0.15.1...0.15.2
+[0.15.1]: https://github.com/nabbisen/wasm-smtp/compare/0.15.0...0.15.1
+[0.15.0]: https://github.com/nabbisen/wasm-smtp/compare/0.14.0...0.15.0
+[0.14.0]: https://github.com/nabbisen/wasm-smtp/compare/0.13.0...0.14.0
+[0.13.0]: https://github.com/nabbisen/wasm-smtp/compare/0.12.0...0.13.0
+[0.12.0]: https://github.com/nabbisen/wasm-smtp/compare/0.11.0...0.12.0
+[0.11.0]: https://github.com/nabbisen/wasm-smtp/compare/0.10.0...0.11.0
+[0.10.0]: https://github.com/nabbisen/wasm-smtp/compare/0.9.4...0.10.0
+[0.9.4]: https://github.com/nabbisen/wasm-smtp/compare/0.9.3...0.9.4
+[0.9.3]: https://github.com/nabbisen/wasm-smtp/compare/0.9.2...0.9.3
+[0.9.2]: https://github.com/nabbisen/wasm-smtp/compare/0.9.1...0.9.2
+[0.9.1]: https://github.com/nabbisen/wasm-smtp/compare/0.9.0...0.9.1
+[0.9.0]: https://github.com/nabbisen/wasm-smtp/compare/0.8.0...0.9.0
+[0.8.0]: https://github.com/nabbisen/wasm-smtp/compare/0.7.1...0.8.0
+[0.7.1]: https://github.com/nabbisen/wasm-smtp/compare/0.7.0...0.7.1
+[0.7.0]: https://github.com/nabbisen/wasm-smtp/compare/0.6.0...0.7.0
+[0.6.0]: https://github.com/nabbisen/wasm-smtp/compare/0.5.1...0.6.0
+[0.5.1]: https://github.com/nabbisen/wasm-smtp/compare/0.5.0...0.5.1
+[0.5.0]: https://github.com/nabbisen/wasm-smtp/compare/0.4.0...0.5.0
+[0.4.0]: https://github.com/nabbisen/wasm-smtp/compare/0.3.0...0.4.0
+[0.3.0]: https://github.com/nabbisen/wasm-smtp/compare/0.2.0...0.3.0
+[0.2.0]: https://github.com/nabbisen/wasm-smtp/compare/0.1.0...0.2.0
+[0.1.0]: https://github.com/nabbisen/wasm-smtp/releases/tag/0.1.0

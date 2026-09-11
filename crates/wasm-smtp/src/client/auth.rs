@@ -24,15 +24,18 @@ use crate::transport::Transport;
 impl<T: Transport> SmtpClient<T> {
     /// Authenticate using the best `AUTH` mechanism the server advertised.
     ///
-    /// `PLAIN` is preferred over `LOGIN` when both are advertised, because
-    /// it completes in a single round-trip and is the IETF-standard SASL
-    /// mechanism. `LOGIN` is used as a fallback for older servers that
-    /// only advertise it. Callers that need to lock in a specific
-    /// mechanism (for testing, or for known-broken servers) should call
-    /// [`Self::login_with`] instead.
+    /// Mechanisms are preferred in this order: `SCRAM-SHA-256` (the
+    /// password never crosses the wire; requires the `scram-sha-256`
+    /// feature, default-on), then `PLAIN` (one round-trip, IETF-standard
+    /// SASL), then `LOGIN` for older servers that advertise nothing else.
+    /// Bearer-token mechanisms are never auto-selected, because their
+    /// credential is a token rather than a password; use
+    /// [`Self::login_xoauth2`] or [`Self::login_oauthbearer`]. Callers
+    /// that need to lock in a specific mechanism (for testing, or for
+    /// known-broken servers) should call [`Self::login_with`] instead.
     ///
     /// Returns [`AuthError::UnsupportedMechanism`] if the server's `EHLO`
-    /// reply did not advertise either `PLAIN` or `LOGIN`. Returns
+    /// reply advertised none of those three. Returns
     /// [`AuthError::Rejected`] if the server rejects the credentials.
     ///
     /// May only be called immediately after [`Self::connect`]. Calling it

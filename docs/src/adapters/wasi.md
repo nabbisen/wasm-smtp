@@ -71,7 +71,16 @@ used:
 
 `webpki-roots` is preferred for reproducible builds and Wasm components.
 `native-roots` is useful in environments where the platform store is
-managed by the operator.
+managed by the operator; certificates that fail to decode are skipped,
+and the connection fails only if the resulting trust store is empty.
+
+## Building for other targets
+
+The crate compiles on a native host so that `cargo test` can run its
+unit tests without a WASI runtime. The connection helpers
+(`connect_smtps`, `connect_smtps_with`, `connect_smtp_starttls`) and the
+`WasiTlsTransport` they return are compiled only for `wasm32`: on a
+native host they are simply absent, not stubs that fail at call time.
 
 ## DNS and sockets
 

@@ -848,15 +848,15 @@ pub fn ehlo_advertises_enhanced_status_codes<S: AsRef<str>>(capability_lines: &[
 
 /// SASL authentication mechanisms supported by this client.
 ///
-/// Today the crate implements `PLAIN` (RFC 4616) and `LOGIN` (the
-/// historical mechanism used by many submission servers). The enum is
-/// `non_exhaustive` so that future additions (e.g. `XOAUTH2`,
-/// `SCRAM-SHA-256`) do not require a major version bump.
+/// The crate implements `SCRAM-SHA-256` (RFC 5802 / 7677), `PLAIN`
+/// (RFC 4616), `LOGIN` (the historical mechanism used by many submission
+/// servers), `XOAUTH2`, and `OAUTHBEARER` (RFC 7628). Each of the four
+/// beyond `PLAIN`/`LOGIN` is feature-gated. The enum is `non_exhaustive`
+/// so that future additions do not require a major version bump.
 ///
-/// `PLAIN` is preferred when both are advertised: it is one network
-/// round-trip rather than two, and is an IETF-standard SASL mechanism.
-/// `LOGIN` is retained for compatibility with older submission servers
-/// that advertise only it.
+/// Auto-selection in `login()` covers the static-password mechanisms
+/// only, preferring `SCRAM-SHA-256` over `PLAIN` over `LOGIN`. The two
+/// bearer-token mechanisms are opt-in per call.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum AuthMechanism {

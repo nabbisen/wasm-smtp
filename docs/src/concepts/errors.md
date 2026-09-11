@@ -1,7 +1,7 @@
 # Errors
 
 `wasm-smtp` exposes a single top-level error type, `SmtpError`,
-with four variants. The taxonomy is intentionally coarse so that the
+with five variants. The taxonomy is intentionally coarse so that the
 match arms in caller code are stable.
 
 ```rust
@@ -10,6 +10,7 @@ pub enum SmtpError {
     Protocol(ProtocolError),
     Auth(AuthError),
     InvalidInput(InvalidInputError),
+    Policy(PolicyError),
 }
 ```
 
@@ -21,6 +22,7 @@ pub enum SmtpError {
 | `Protocol`      | The server replied in a way SMTP does not allow, or did not reply.     |
 | `Auth`          | Authentication did not succeed (rejection, no compatible mechanism).   |
 | `InvalidInput`  | The caller supplied input that violates SMTP grammar (CRLF, brackets). |
+| `Policy`        | The caller's own `SendPolicy` refused the message before any command went out. |
 
 The state machine sets the client to `SessionState::Closed` after any
 `Io` or `Protocol` failure, and after a `Auth::UnsupportedMechanism`
@@ -32,8 +34,10 @@ reuse of a poisoned connection.
 
 Every `ProtocolError::UnexpectedCode` records which SMTP operation was
 in progress when the error occurred. The `SmtpOp` enum has one variant
-per user-visible step: `Greeting`, `Ehlo`, `AuthPlain`, `AuthLogin`,
-`MailFrom`, `RcptTo`, `Data`, `Quit`. The Display output of an
+per user-visible step: `Greeting`, `Ehlo`, `StartTls`, `AuthPlain`,
+`AuthLogin`, `AuthXOAuth2`, `AuthOAuthBearer`, `AuthScramSha256`,
+`MailFrom`, `RcptTo`, `Data`, `Quit`. It is `non_exhaustive`, so new
+steps can be added without breaking callers. The Display output of an
 `SmtpError::Protocol(...)` reads, for example:
 
 ```text
@@ -128,9 +132,20 @@ Transport-level upgrade failures (e.g. the TLS handshake itself
 fails, or `worker::Socket::start_tls` returns an error) surface as
 `SmtpError::Io`, just like any other transport failure.
 
-## XOAUTH2-specific errors
+## Authentication errors
 
-`AuthError` is `non_exhaustive`. The `Rejected` variant carries the
+`AuthError` is `non_exhaustive` and has four variants:
+
+| Variant                | Cause                                                                |
+| ---------------------- | -------------------------------------------------------------------- |
+| `Rejected`             | The server refused the credentials. Carries the reply code, the optional enhanced status, and the server's message. |
+| `UnsupportedMechanism` | The server advertised no mechanism this build understands. Its message names the mechanisms compiled in, which depend on the cargo features. |
+| `MalformedChallenge`   | The server's SASL challenge did not parse.                           |
+| `Other`                | A mechanism-specific protocol failure, currently used by SCRAM-SHA-256 (bad server signature, out-of-policy iteration count, and similar). |
+
+### Bearer-token specifics
+
+The `Rejected` variant carries the
 final 5xx reply from the server, even when the provider used the
 RFC 7628 §3.2.3 two-step error flow (334 with base64 JSON, then
 final 5xx). The base64 JSON error detail is **not** decoded by the
@@ -151,6 +166,7 @@ match client.send_mail(from, &[to], body).await {
     Err(SmtpError::Protocol(_))                     => /* permanent: log + skip */,
     Err(SmtpError::Auth(_))                         => /* fix credentials */,
     Err(SmtpError::InvalidInput(_))                 => /* programmer error */,
+    Err(SmtpError::Policy(_))                       => /* your own policy refused it */,
 }
 ```
 

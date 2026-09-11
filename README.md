@@ -111,37 +111,44 @@ stream and (for STARTTLS) a single `upgrade_to_tls()` signal.
 
 ## Cargo features
 
-`wasm-smtp` exposes two cargo features that allow size-sensitive
-deployments (Cloudflare Workers' 3 MiB cap, in particular) to opt out
-of functionality they will not use:
+`wasm-smtp` exposes cargo features so that size-sensitive deployments
+(Cloudflare Workers' 3 MiB cap, in particular) can opt out of
+functionality they will not use, and opt in to what they need:
 
-| Feature        | Default | What it adds                                                                                              |
-|----------------|---------|-----------------------------------------------------------------------------------------------------------|
-| `xoauth2`      | **on**  | `SmtpClient::login_xoauth2`, `AuthMechanism::XOAuth2` code paths, OAuth 2.0 token validation helpers      |
-| `oauthbearer`  | **on**  | `SmtpClient::login_oauthbearer`, `AuthMechanism::OAuthBearer` (RFC 7628 IETF-standard OAuth 2.0 SASL)    |
-| `pipelining`   | **on**  | Batch `MAIL FROM` + `RCPT TO` + `DATA` when server advertises `PIPELINING` (RFC 2920)                     |
-| `smtputf8`     | off     | `SmtpClient::send_mail_smtputf8`, `validate_address_utf8`, `format_mail_from_smtputf8`, capability check |
+| Feature         | Default | What it adds                                                                                            |
+|-----------------|---------|---------------------------------------------------------------------------------------------------------|
+| `scram-sha-256` | **on**  | `AUTH SCRAM-SHA-256` (RFC 5802 / 7677), preferred by `login`; adds the RustCrypto hash/KDF crates       |
+| `xoauth2`       | **on**  | `SmtpClient::login_xoauth2`, `AuthMechanism::XOAuth2` code paths, OAuth 2.0 token validation helpers    |
+| `oauthbearer`   | **on**  | `SmtpClient::login_oauthbearer`, `AuthMechanism::OAuthBearer` (RFC 7628 IETF-standard OAuth 2.0 SASL)   |
+| `pipelining`    | **on**  | Batch `MAIL FROM` + `RCPT TO` + `DATA` when server advertises `PIPELINING` (RFC 2920)                   |
+| `smtputf8`      | off     | `SmtpClient::send_mail_smtputf8`, `validate_address_utf8`, `format_mail_from_smtputf8`, capability check |
+| `mail-builder`  | off     | `SmtpClient::send_message`, taking a `mail_builder::MessageBuilder` directly                            |
+| `tracing`       | off     | Structured `tracing` events for session transitions; never logs credentials or bodies                  |
 
-Defaults are chosen so that v0.3.x users see no behavior change on
-upgrade. To strip OAuth 2.0 support entirely (typical for transactional
-senders against a self-hosted Postfix or commercial relay using static
-passwords):
+Defaults favour the strongest authentication available. To strip OAuth
+2.0 support entirely (typical for transactional senders against a
+self-hosted Postfix or commercial relay using static passwords):
 
 ```toml
-wasm-smtp = { version = "0.9", default-features = false }
+wasm-smtp = { version = "0.15", default-features = false }
 ```
 
 To opt into international addresses while keeping the OAuth 2.0
 support:
 
 ```toml
-wasm-smtp = { version = "0.9", features = ["smtputf8"] }
+wasm-smtp = { version = "0.15", features = ["smtputf8"] }
 ```
 
 The `wasm-smtp-cloudflare` adapter exposes a matching `smtputf8`
 feature that pass-through-enables it on the core crate, so adapter-
 only callers do not need a direct dependency on `wasm-smtp` to
 opt in.
+
+## Minimum supported Rust version
+
+1.88 (Rust 2024 edition). The workspace pins that toolchain in
+`rust-toolchain.toml`, which is also what CI enforces.
 
 ## Acceptable use
 

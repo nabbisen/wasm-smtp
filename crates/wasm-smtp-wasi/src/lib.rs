@@ -46,8 +46,9 @@
 //! ## Build target
 //!
 //! This crate is designed for `wasm32-wasip2`. Building for other targets
-//! is only useful for running unit tests; the connection helpers will
-//! return a compile-time error on non-WASM targets in release builds.
+//! is only useful for running unit tests: the connection helpers are
+//! compiled only for `wasm32`, so on a native host they are absent rather
+//! than failing at call time.
 //!
 //! ```text
 //! cargo build --target wasm32-wasip2 -p wasm-smtp-wasi

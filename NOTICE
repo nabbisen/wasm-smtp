@@ -11,4 +11,9 @@ root of this distribution and is also available at:
 This product is composed of the following crates, all distributed under
 the same License and copyright:
 
-  - wasm-smtp-core
+  - wasm-smtp
+  - wasm-smtp-cloudflare
+  - wasm-smtp-tokio
+  - wasm-smtp-wasi
+  - wasm-smtp-component
+  - wasm-smtp-test

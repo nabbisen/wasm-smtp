@@ -295,3 +295,37 @@ fn is_helpers_all_false_when_no_source() {
     assert!(!wrapped.is_connection_reset());
     assert!(!wrapped.is_connection_aborted());
 }
+
+/// The `UnsupportedMechanism` message must name the mechanisms this build
+/// can actually negotiate, so an operator reading a log line knows whether
+/// a mechanism is missing from the server or from the build.
+#[test]
+fn unsupported_mechanism_lists_compiled_in_mechanisms() {
+    let text = AuthError::UnsupportedMechanism.to_string();
+    assert!(
+        text.contains("server did not advertise an AUTH mechanism supported by this client"),
+        "unexpected message: {text}"
+    );
+
+    // Always compiled in.
+    assert!(text.contains("PLAIN"), "PLAIN must be listed: {text}");
+    assert!(text.contains("LOGIN"), "LOGIN must be listed: {text}");
+
+    // Feature-gated: listed if and only if the feature is on. Under the
+    // default feature set, that means all three are present.
+    assert_eq!(
+        text.contains("SCRAM-SHA-256"),
+        cfg!(feature = "scram-sha-256"),
+        "SCRAM-SHA-256 listing must follow its feature: {text}"
+    );
+    assert_eq!(
+        text.contains("XOAUTH2"),
+        cfg!(feature = "xoauth2"),
+        "XOAUTH2 listing must follow its feature: {text}"
+    );
+    assert_eq!(
+        text.contains("OAUTHBEARER"),
+        cfg!(feature = "oauthbearer"),
+        "OAUTHBEARER listing must follow its feature: {text}"
+    );
+}

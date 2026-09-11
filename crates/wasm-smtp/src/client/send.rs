@@ -170,29 +170,7 @@ impl<T: Transport> SmtpClient<T> {
         Ok(outcome)
     }
 
-    /// Send a single message using the SMTPUTF8 extension (RFC 6531),
-    /// allowing UTF-8 characters in envelope addresses.
-    ///
-    /// Identical to [`Self::send_mail`] except:
-    ///
-    /// - Address validation uses [`protocol::validate_address_utf8`]
-    ///   instead of the strict ASCII validator, so codepoints outside
-    ///   the ASCII range are accepted in `from` and `to`.
-    /// - The `MAIL FROM` command is suffixed with the `SMTPUTF8`
-    ///   ESMTP parameter so the server knows to expect UTF-8.
-    /// - The server must have advertised `SMTPUTF8` in its `EHLO`
-    ///   response. If it did not, this method returns
-    ///   [`ProtocolError::ExtensionUnavailable`] without sending any
-    ///   bytes.
-    ///
-    /// The body must still be CRLF-normalized; any UTF-8 in headers
-    /// (e.g. `Subject:` containing non-ASCII characters) is the
-    /// caller's responsibility to format correctly. RFC 6531 §3.2
-    /// permits raw UTF-8 in headers when SMTPUTF8 is in effect, but
-    /// strict deployments may still expect MIME encoded-words; this
-    /// crate makes no claim either way.
-    ///
-    /// Convenience: serialize a `mail-builder` `MessageBuilder` to a
+    /// Serialize a `mail-builder` `MessageBuilder` to a
     /// CRLF-normalized string and submit it.
     ///
     /// Equivalent to:

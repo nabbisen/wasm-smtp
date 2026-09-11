@@ -387,6 +387,34 @@ development plan.
   5 native-host tests (no WASM runtime required for `cargo test`).
 - Build: `cargo component build --target wasm32-wasip2 -p wasm-smtp-component`
 
+## Phase 18 — Release gate integrity *(v0.15.2)*
+
+RFC 024. A maintenance release that makes the release gate trustworthy:
+the repository now passes the checks it claims to run, on a toolchain
+that is pinned rather than assumed.
+
+- ✅ **MSRV corrected to 1.88.** The declared 1.85 was false — the core
+  uses `let` chains, stable since 1.88 in edition 2024.
+- ✅ **`rust-toolchain.toml`.** One pinned toolchain answers every
+  question: what must compile, what rustfmt output is canonical, and
+  which clippy lint set is authoritative. It also carries the
+  `wasm32-unknown-unknown` and `wasm32-wasip2` targets.
+- ✅ **The gate is an explicit command list** (RFC 024 §D3): format,
+  clippy under `-D warnings`, the full test run including doctests,
+  five feature combinations, and the real targets. Never
+  `--all-features`.
+- ✅ **CI** (`.github/workflows/ci.yml`): a blocking `gate` job on the
+  pinned toolchain and an advisory `stable` job as early warning.
+- ✅ **Accumulated defect fixes.** The SMTPUTF8 path did not compile
+  with its feature on; the WASI adapter did not compile with
+  `native-roots`; three doctests and the component crate's native test
+  build were broken; the WASI adapter pulled in the aws-lc-rs provider,
+  which cannot cross-compile to `wasm32-wasip2`.
+- ✅ **Documentation brought back in line with the code**: four adapters
+  rather than one planned, SCRAM-preferred authentication, five
+  `SmtpError` variants, and the current crate set in NOTICE and
+  CONTRIBUTING.
+
 ## Out of scope (for now)
 
 The following are deliberately omitted from the roadmap. They may be
