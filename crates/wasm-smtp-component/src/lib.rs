@@ -134,12 +134,8 @@ impl SmtpSendImpl {
 
         // Send the message.
         let to_refs: Vec<&str> = message.to.iter().map(String::as_str).collect();
-        let outcome = block_on(client.send_mail(
-            &message.from,
-            &to_refs,
-            &message.raw_message,
-        ))
-        .map_err(smtp_error_to_wit)?;
+        let outcome = block_on(client.send_mail(&message.from, &to_refs, &message.raw_message))
+            .map_err(smtp_error_to_wit)?;
 
         // QUIT (best-effort; ignore errors to not mask a successful send).
         block_on(client.quit()).ok();
@@ -246,7 +242,9 @@ mod tests {
         assert_eq!(cred.username, "user@example.com");
         // password is accessible (it's a plain struct field) but must never
         // appear in any log, error, or debug output.
-        assert!(!format!("{cred:?}").contains("secret"),
-                "credentials must not appear in Debug output");
+        assert!(
+            !format!("{cred:?}").contains("secret"),
+            "credentials must not appear in Debug output"
+        );
     }
 }

@@ -5,14 +5,14 @@
 //! part of the public API but are called by sibling modules (`auth`,
 //! `send`, `starttls`) and by `mod.rs`.
 
+use super::{READ_CHUNK, RX_BUF_COMPACT_THRESHOLD, RX_BUF_HARD_LIMIT, SmtpClient, find_crlf};
 use crate::error::{ProtocolError, SmtpError, SmtpOp};
 use crate::protocol::{
-    MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply,
-    ehlo_advertises_enhanced_status_codes, format_command_arg, parse_reply_line,
+    MAX_REPLY_LINE_LEN, MAX_REPLY_LINES, Reply, ehlo_advertises_enhanced_status_codes,
+    format_command_arg, parse_reply_line,
 };
 use crate::session::SessionState;
 use crate::transport::Transport;
-use super::{SmtpClient, find_crlf, READ_CHUNK, RX_BUF_COMPACT_THRESHOLD, RX_BUF_HARD_LIMIT};
 
 impl<T: Transport> SmtpClient<T> {
     pub(super) async fn read_greeting(&mut self) -> Result<(), SmtpError> {
@@ -28,7 +28,8 @@ impl<T: Transport> SmtpClient<T> {
             }
             .into());
         }
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::GreetingReceived { code: reply.code });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::GreetingReceived { code: reply.code });
         self.transition(SessionState::Ehlo)?;
         Ok(())
     }
@@ -59,7 +60,8 @@ impl<T: Transport> SmtpClient<T> {
         // capability is dropped on a re-EHLO (e.g. after STARTTLS).
         self.enhanced_status_enabled = ehlo_advertises_enhanced_status_codes(&lines);
         self.capabilities = lines;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::EhloCompleted);
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::EhloCompleted);
         self.transition(SessionState::Authentication)?;
         Ok(())
     }
@@ -90,7 +92,11 @@ impl<T: Transport> SmtpClient<T> {
     /// exact code. Any deviation is reported as
     /// [`ProtocolError::UnexpectedCode`] tagged with `during` so the
     /// caller knows which SMTP step the failure refers to.
-    pub(super) async fn expect_code(&mut self, expected: u16, during: SmtpOp) -> Result<Reply, SmtpError> {
+    pub(super) async fn expect_code(
+        &mut self,
+        expected: u16,
+        during: SmtpOp,
+    ) -> Result<Reply, SmtpError> {
         let reply = self.read_reply().await?;
         if reply.code == expected {
             Ok(reply)
@@ -221,5 +227,4 @@ impl<T: Transport> SmtpClient<T> {
             self.rx_pos = 0;
         }
     }
-
 }

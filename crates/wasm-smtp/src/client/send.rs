@@ -4,23 +4,22 @@
 //! `send_mail_smtputf8`, and `send_message` (mail-builder integration)
 //! live here.
 
+use super::SmtpClient;
 #[cfg(feature = "mail-builder")]
 use crate::error::IoError;
+#[cfg(feature = "smtputf8")]
+use crate::error::ProtocolError;
 use crate::error::{InvalidInputError, SmtpError, SmtpOp};
 use crate::outcome::SendOutcome;
 use crate::protocol::{
-    self, DotStufferState, dot_stuff_and_terminate, format_command,
-    format_mail_from, format_rcpt_to,
+    self, DotStufferState, dot_stuff_and_terminate, format_command, format_mail_from,
+    format_rcpt_to,
 };
-#[cfg(feature = "smtputf8")]
-use crate::error::ProtocolError;
 use crate::session::SessionState;
 use crate::tracing_helpers::smtp_debug;
 use crate::transport::Transport;
-use super::SmtpClient;
 
 impl<T: Transport> SmtpClient<T> {
-
     /// Send a single message.
     ///
     /// `from` is the envelope sender (RFC 5321 reverse-path), used in the
@@ -60,8 +59,12 @@ impl<T: Transport> SmtpClient<T> {
         self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
 
         // Policy checks — run before any SMTP command is sent.
-        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
-        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
         self.policy
             .check_message_size(body.len())
             .map_err(crate::error::SmtpError::Policy)?;
@@ -89,9 +92,8 @@ impl<T: Transport> SmtpClient<T> {
             // ── Pipelined path ────────────────────────────────────────
             // Collect MAIL FROM + all RCPT TO + DATA into one buffer,
             // write once, flush, then read all responses in order.
-            let mut pipeline: Vec<u8> = Vec::with_capacity(
-                64 + to.iter().map(|a| 12 + a.len()).sum::<usize>(),
-            );
+            let mut pipeline: Vec<u8> =
+                Vec::with_capacity(64 + to.iter().map(|a| 12 + a.len()).sum::<usize>());
             pipeline.extend_from_slice(&format_mail_from(from));
             self.transition(SessionState::RcptTo)?;
             for &addr in to {
@@ -104,17 +106,19 @@ impl<T: Transport> SmtpClient<T> {
 
             // Read MAIL FROM response.
             let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-                code: mail_reply.code,
-            });
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                    code: mail_reply.code,
+                });
             smtp_debug!(from = %from, pipelining = true, "MAIL FROM accepted");
 
             // Read one RCPT TO response per recipient.
             for _ in to {
                 let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-                self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                    code: rcpt_reply.code,
-                });
+                self.audit
+                    .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                        code: rcpt_reply.code,
+                    });
             }
 
             // Read DATA 354 response.
@@ -123,18 +127,20 @@ impl<T: Transport> SmtpClient<T> {
             // ── Sequential path (original) ────────────────────────────
             self.write_all(&format_mail_from(from)).await?;
             let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-                code: mail_reply.code,
-            });
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                    code: mail_reply.code,
+                });
             smtp_debug!(from = %from, pipelining = false, "MAIL FROM accepted");
 
             self.transition(SessionState::RcptTo)?;
             for &addr in to {
                 self.write_all(&format_rcpt_to(addr)).await?;
                 let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-                self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                    code: rcpt_reply.code,
-                });
+                self.audit
+                    .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                        code: rcpt_reply.code,
+                    });
                 smtp_debug!(rcpt = %addr, "RCPT TO accepted");
             }
 
@@ -150,9 +156,8 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&payload).await?;
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
-            code: outcome.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
         smtp_debug!(
             body_bytes = body.len(),
             code = outcome.code,
@@ -291,8 +296,12 @@ impl<T: Transport> SmtpClient<T> {
         self.assert_state_in(&[SessionState::Authentication, SessionState::MailFrom])?;
 
         // Policy checks — run before any SMTP command.
-        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
-        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
         self.policy
             .check_message_size(body.len())
             .map_err(crate::error::SmtpError::Policy)?;
@@ -308,18 +317,20 @@ impl<T: Transport> SmtpClient<T> {
         self.transition(SessionState::MailFrom)?;
         self.write_all(&format_mail_from(from)).await?;
         let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-            code: mail_reply.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
 
         // Issue RCPT TO for every recipient.
         self.transition(SessionState::RcptTo)?;
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
             let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                code: rcpt_reply.code,
-            });
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
         }
 
         // Issue DATA, expect 354.
@@ -332,9 +343,8 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&payload).await?;
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
-            code: outcome.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
         smtp_debug!(
             body_bytes = body.len(),
             code = outcome.code,
@@ -396,8 +406,12 @@ impl<T: Transport> SmtpClient<T> {
         // Policy checks. check_message_size receives usize::MAX because the
         // total size is unknown; callers needing precise limits should use
         // send_mail_bytes instead.
-        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
-        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
         self.policy
             .check_message_size(usize::MAX)
             .map_err(crate::error::SmtpError::Policy)?;
@@ -412,18 +426,20 @@ impl<T: Transport> SmtpClient<T> {
         self.transition(SessionState::MailFrom)?;
         self.write_all(&format_mail_from(from)).await?;
         let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-            code: mail_reply.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
 
         // RCPT TO.
         self.transition(SessionState::RcptTo)?;
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
             let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                code: rcpt_reply.code,
-            });
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
         }
 
         // DATA.
@@ -452,9 +468,8 @@ impl<T: Transport> SmtpClient<T> {
 
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
-            code: outcome.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
         smtp_debug!(
             code = outcome.code,
             queue_id = outcome.queue_id.as_deref().unwrap_or("<none>"),
@@ -518,8 +533,12 @@ impl<T: Transport> SmtpClient<T> {
         }
 
         // Policy checks — run before any SMTP command.
-        self.policy.check_sender(from).map_err(crate::error::SmtpError::Policy)?;
-        self.policy.check_recipients(to).map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_sender(from)
+            .map_err(crate::error::SmtpError::Policy)?;
+        self.policy
+            .check_recipients(to)
+            .map_err(crate::error::SmtpError::Policy)?;
         self.policy
             .check_message_size(body.len())
             .map_err(crate::error::SmtpError::Policy)?;
@@ -529,18 +548,20 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&protocol::format_mail_from_smtputf8(from))
             .await?;
         let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-            code: mail_reply.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                code: mail_reply.code,
+            });
 
         // RCPT TO is identical to the ASCII path.
         self.transition(SessionState::RcptTo)?;
         for &addr in to {
             self.write_all(&format_rcpt_to(addr)).await?;
             let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                code: rcpt_reply.code,
-            });
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
+                    code: rcpt_reply.code,
+                });
         }
 
         // DATA + body identical to the ASCII path.
@@ -552,9 +573,8 @@ impl<T: Transport> SmtpClient<T> {
         self.write_all(&payload).await?;
         let final_reply = self.expect_class(2, SmtpOp::Data).await?;
         let outcome = SendOutcome::new(final_reply.code, final_reply.joined_text());
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::MessageAccepted {
-            code: outcome.code,
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::MessageAccepted { code: outcome.code });
 
         self.transition(SessionState::MailFrom)?;
         Ok(outcome)

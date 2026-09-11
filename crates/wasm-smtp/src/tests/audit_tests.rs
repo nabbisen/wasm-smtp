@@ -26,8 +26,12 @@ fn full_script() -> Vec<u8> {
 fn run_full_session(opts: SmtpClientOptions) {
     let script = full_script();
     let (transport, _written, _closed) = MockTransport::new(&[&script]);
-    let mut client =
-        block_on(SmtpClient::connect_with(transport, "client.example.com", opts)).expect("connect");
+    let mut client = block_on(SmtpClient::connect_with(
+        transport,
+        "client.example.com",
+        opts,
+    ))
+    .expect("connect");
     block_on(client.login("user@example.com", "pass")).expect("login");
     block_on(client.send_mail(
         "from@example.com",
@@ -65,11 +69,17 @@ fn full_session_emits_expected_event_sequence() {
 
     // Check milestone presence in order.
     let connected_pos = events.iter().position(|e| e.starts_with("Connected"));
-    let greeting_pos = events.iter().position(|e| e.starts_with("GreetingReceived"));
+    let greeting_pos = events
+        .iter()
+        .position(|e| e.starts_with("GreetingReceived"));
     let ehlo_pos = events.iter().position(|e| e.starts_with("EhloCompleted"));
     let auth_pos = events.iter().position(|e| e.starts_with("AuthCompleted"));
-    let mail_pos = events.iter().position(|e| e.starts_with("MailFromAccepted"));
-    let rcpt_pos = events.iter().position(|e| e.starts_with("RecipientAccepted"));
+    let mail_pos = events
+        .iter()
+        .position(|e| e.starts_with("MailFromAccepted"));
+    let rcpt_pos = events
+        .iter()
+        .position(|e| e.starts_with("RecipientAccepted"));
     let msg_pos = events.iter().position(|e| e.starts_with("MessageAccepted"));
     let quit_pos = events.iter().position(|e| e.starts_with("QuitCompleted"));
 
@@ -83,12 +93,24 @@ fn full_session_emits_expected_event_sequence() {
     assert!(quit_pos.is_some(), "QuitCompleted must be emitted");
 
     // Ordering checks.
-    assert!(connected_pos < greeting_pos, "Connected before GreetingReceived");
-    assert!(greeting_pos < ehlo_pos, "GreetingReceived before EhloCompleted");
+    assert!(
+        connected_pos < greeting_pos,
+        "Connected before GreetingReceived"
+    );
+    assert!(
+        greeting_pos < ehlo_pos,
+        "GreetingReceived before EhloCompleted"
+    );
     assert!(ehlo_pos < auth_pos, "EhloCompleted before AuthCompleted");
     assert!(auth_pos < mail_pos, "AuthCompleted before MailFromAccepted");
-    assert!(mail_pos < rcpt_pos, "MailFromAccepted before RecipientAccepted");
-    assert!(rcpt_pos < msg_pos, "RecipientAccepted before MessageAccepted");
+    assert!(
+        mail_pos < rcpt_pos,
+        "MailFromAccepted before RecipientAccepted"
+    );
+    assert!(
+        rcpt_pos < msg_pos,
+        "RecipientAccepted before MessageAccepted"
+    );
     assert!(msg_pos < quit_pos, "MessageAccepted before QuitCompleted");
 }
 
@@ -155,8 +177,8 @@ fn multiple_recipients_emit_one_event_each() {
         b"250-mail.example.com\r\n250 AUTH PLAIN LOGIN\r\n",
         b"235 2.7.0 OK\r\n",
         b"250 2.1.0 OK\r\n",
-        b"250 2.1.5 OK\r\n",  // first RCPT TO
-        b"250 2.1.5 OK\r\n",  // second RCPT TO
+        b"250 2.1.5 OK\r\n", // first RCPT TO
+        b"250 2.1.5 OK\r\n", // second RCPT TO
         b"354 Start mail input\r\n",
         b"250 2.0.0 OK\r\n",
         b"221 2.0.0 Bye\r\n",
@@ -164,8 +186,12 @@ fn multiple_recipients_emit_one_event_each() {
     let sink = Arc::new(VecAuditSink::default());
     let opts = SmtpClientOptions::new().with_audit(Box::new(Arc::clone(&sink)));
     let (transport, _written, _closed) = MockTransport::new(&[&two_rcpt_script]);
-    let mut client =
-        block_on(SmtpClient::connect_with(transport, "client.example.com", opts)).expect("connect");
+    let mut client = block_on(SmtpClient::connect_with(
+        transport,
+        "client.example.com",
+        opts,
+    ))
+    .expect("connect");
     block_on(client.login("u", "p")).expect("login");
     block_on(client.send_mail(
         "from@example.com",
@@ -180,7 +206,10 @@ fn multiple_recipients_emit_one_event_each() {
         .iter()
         .filter(|e| e.starts_with("RecipientAccepted"))
         .count();
-    assert_eq!(accepted_count, 2, "must emit one RecipientAccepted per recipient");
+    assert_eq!(
+        accepted_count, 2,
+        "must emit one RecipientAccepted per recipient"
+    );
 }
 
 // ---------------------------------------------------------------------------

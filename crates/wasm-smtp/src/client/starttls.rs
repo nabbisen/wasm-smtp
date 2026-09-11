@@ -3,15 +3,12 @@
 //! Only available on transports that implement [`crate::transport::StartTlsCapable`].
 //! For Implicit TLS (port 465) use [`super::SmtpClient::connect`] instead.
 
+use super::SmtpClient;
 use crate::error::{ProtocolError, SmtpError, SmtpOp};
-use crate::protocol::{
-    format_command,
-    ehlo_advertises_starttls,
-};
+use crate::protocol::{ehlo_advertises_starttls, format_command};
 use crate::session::SessionState;
 use crate::tracing_helpers::{smtp_debug, smtp_error};
 use crate::transport::StartTlsCapable;
-use super::SmtpClient;
 
 // STARTTLS (RFC 3207) — only available on transports that can be upgraded
 // to TLS in-place.
@@ -126,7 +123,8 @@ impl<T: StartTlsCapable> SmtpClient<T> {
             self.mark_closed_on_logical_failure();
             SmtpError::Io(e)
         })?;
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::TlsUpgraded);
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::TlsUpgraded);
 
         // RFC 3207 §4.2: re-issue EHLO on the now-secure channel. We
         // reuse send_ehlo, which writes the command, parses the reply,
@@ -144,4 +142,3 @@ impl<T: StartTlsCapable> SmtpClient<T> {
         Ok(())
     }
 }
-

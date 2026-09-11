@@ -5,10 +5,10 @@
 //! a result is available.
 
 use crate::error::WasiSmtpError;
+use wasi::io::poll::poll;
+use wasi::sockets::instance_network::instance_network;
 use wasi::sockets::ip_name_lookup::{IpAddress, resolve_addresses};
 use wasi::sockets::network::Network;
-use wasi::sockets::instance_network::instance_network;
-use wasi::io::poll::poll;
 
 /// Resolve `host` to a list of IP addresses.
 ///
@@ -37,7 +37,9 @@ pub(crate) fn resolve(host: &str) -> Result<Vec<IpAddress>, WasiSmtpError> {
     }
 
     if addresses.is_empty() {
-        return Err(WasiSmtpError::new(format!("DNS: no addresses found for '{host}'")));
+        return Err(WasiSmtpError::new(format!(
+            "DNS: no addresses found for '{host}'"
+        )));
     }
     Ok(addresses)
 }

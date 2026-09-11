@@ -178,10 +178,7 @@ impl VecAuditSink {
 
 impl AuditSink for VecAuditSink {
     fn on_event(&self, event: &SmtpAuditEvent<'_>) {
-        self.events
-            .lock()
-            .unwrap()
-            .push(format!("{event:?}"));
+        self.events.lock().unwrap().push(format!("{event:?}"));
     }
 }
 

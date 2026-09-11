@@ -70,7 +70,9 @@ mod scram;
 mod tracing_helpers;
 
 pub use client::{SmtpClient, SmtpClientOptions};
-pub use error::{AuthError, InvalidInputError, IoError, PolicyError, ProtocolError, SmtpError, SmtpOp};
+pub use error::{
+    AuthError, InvalidInputError, IoError, PolicyError, ProtocolError, SmtpError, SmtpOp,
+};
 pub use message_body::MessageBody;
 pub use outcome::SendOutcome;
 pub use protocol::{AuthMechanism, DotStufferState, EnhancedStatus};

@@ -30,17 +30,17 @@
     clippy::missing_panics_doc
 )]
 
+mod audit_tests;
 mod bytes_tests;
-mod stream_tests;
-mod oauthbearer_tests;
-mod pipelining_tests;
 mod client_tests;
 mod error_tests;
 mod harness;
+mod oauthbearer_tests;
+mod pipelining_tests;
 mod policy_tests;
-mod audit_tests;
 mod protocol_tests;
 mod session_tests;
+mod stream_tests;
 
 #[cfg(feature = "smtputf8")]
 mod smtputf8_tests;

@@ -2,13 +2,13 @@
 //! byte-oriented read/write interface consumed by `WasiTlsTransport`.
 
 use crate::error::WasiSmtpError;
-use wasi::io::streams::{InputStream, OutputStream, StreamError};
 use wasi::io::poll::poll;
-use wasi::sockets::tcp::{ShutdownType, TcpSocket};
-use wasi::sockets::network::{IpAddress, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress};
-use wasi::sockets::tcp_create_socket::create_tcp_socket;
-use wasi::sockets::network::IpAddressFamily;
+use wasi::io::streams::{InputStream, OutputStream, StreamError};
 use wasi::sockets::instance_network::instance_network;
+use wasi::sockets::network::IpAddressFamily;
+use wasi::sockets::network::{IpAddress, IpSocketAddress, Ipv4SocketAddress, Ipv6SocketAddress};
+use wasi::sockets::tcp::{ShutdownType, TcpSocket};
+use wasi::sockets::tcp_create_socket::create_tcp_socket;
 
 /// A connected, plaintext WASI TCP stream.
 pub(crate) struct WasiStream {
@@ -30,10 +30,7 @@ impl WasiStream {
 
         let network = instance_network();
         let remote_addr = match addr {
-            IpAddress::Ipv4(a) => IpSocketAddress::Ipv4(Ipv4SocketAddress {
-                port,
-                address: a,
-            }),
+            IpAddress::Ipv4(a) => IpSocketAddress::Ipv4(Ipv4SocketAddress { port, address: a }),
             IpAddress::Ipv6(a) => IpSocketAddress::Ipv6(Ipv6SocketAddress {
                 port,
                 address: a,
@@ -57,7 +54,11 @@ impl WasiStream {
             .finish_connect()
             .map_err(|e| WasiSmtpError::new(format!("finish_connect failed: {e:?}")))?;
 
-        Ok(Self { socket, reader, writer })
+        Ok(Self {
+            socket,
+            reader,
+            writer,
+        })
     }
 
     /// Read up to `buf.len()` bytes.
@@ -84,9 +85,9 @@ impl WasiStream {
                             return Ok(n);
                         }
                         Err(StreamError::Closed) => return Ok(0),
-                        Err(_) => return Err(WasiSmtpError::new(
-                            format!("stream read failed: {e:?}")
-                        )),
+                        Err(_) => {
+                            return Err(WasiSmtpError::new(format!("stream read failed: {e:?}")));
+                        }
                     }
                 }
             }
@@ -98,7 +99,9 @@ impl WasiStream {
         let mut written = 0;
         while written < buf.len() {
             // Check how many bytes the writer can accept.
-            let capacity = self.writer.check_write()
+            let capacity = self
+                .writer
+                .check_write()
                 .map_err(|e| WasiSmtpError::new(format!("check_write failed: {e:?}")))?;
 
             if capacity == 0 {

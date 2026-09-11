@@ -46,15 +46,13 @@ mod tests {
 
     #[test]
     fn connect_options_builder_sets_server_name() {
-        let opts = ConnectOptions::default()
-            .with_server_name("alt.example.com");
+        let opts = ConnectOptions::default().with_server_name("alt.example.com");
         assert_eq!(opts.server_name.as_deref(), Some("alt.example.com"));
     }
 
     #[test]
     fn connect_options_builder_sets_alpn() {
-        let opts = ConnectOptions::default()
-            .with_alpn(&[b"smtp"]);
+        let opts = ConnectOptions::default().with_alpn(&[b"smtp"]);
         assert_eq!(opts.alpn, vec![b"smtp".to_vec()]);
     }
 
@@ -75,7 +73,10 @@ mod tests {
             let mut client = SmtpClient::connect(transport, "client.example.com")
                 .await
                 .expect("connect");
-            client.login("user@example.com", "pass").await.expect("login");
+            client
+                .login("user@example.com", "pass")
+                .await
+                .expect("login");
             client
                 .send_mail(
                     "user@example.com",
@@ -115,17 +116,17 @@ mod tests {
             b"221 2.0.0 Bye\r\n",
         ]);
 
-        let (transport, written, _closed, upgrades) = MockTransport::with_starttls(
-            &[&pre_script],
-            &[&post_script],
-            UpgradeBehavior::Succeed,
-        );
+        let (transport, written, _closed, upgrades) =
+            MockTransport::with_starttls(&[&pre_script], &[&post_script], UpgradeBehavior::Succeed);
 
         block_on(async {
             let mut client = SmtpClient::connect_starttls(transport, "client.example.com")
                 .await
                 .expect("connect_starttls");
-            client.login("user@example.com", "pass").await.expect("login");
+            client
+                .login("user@example.com", "pass")
+                .await
+                .expect("login");
             client
                 .send_mail(
                     "user@example.com",
@@ -139,7 +140,10 @@ mod tests {
 
         assert_eq!(*upgrades.borrow(), 1, "exactly one TLS upgrade must occur");
         let sent = String::from_utf8(written.borrow().clone()).unwrap();
-        assert!(sent.contains("STARTTLS\r\n"), "STARTTLS command must be sent");
+        assert!(
+            sent.contains("STARTTLS\r\n"),
+            "STARTTLS command must be sent"
+        );
     }
 
     // -----------------------------------------------------------------------

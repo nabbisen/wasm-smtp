@@ -59,7 +59,10 @@ fn dot_at_line_start_spanning_chunk_boundary_is_stuffed() {
     let term = stuffer.finish();
     let wire: Vec<u8> = [out1, out2, term].concat();
     let pos = wire.windows(9).position(|w| w == b"..dotted\r");
-    assert!(pos.is_some(), "dot at chunk boundary must be stuffed: {wire:?}");
+    assert!(
+        pos.is_some(),
+        "dot at chunk boundary must be stuffed: {wire:?}"
+    );
 }
 
 #[test]
@@ -86,9 +89,18 @@ fn body_already_ending_with_crlf_not_doubled() {
 fn multiple_consecutive_dot_lines_all_stuffed() {
     let body = b".a\r\n.b\r\n.c\r\n";
     let out = stuff_single_chunk(body);
-    assert!(out.windows(3).any(|w| w == b"..a"), "first dot line must be stuffed");
-    assert!(out.windows(3).any(|w| w == b"..b"), "second dot line must be stuffed");
-    assert!(out.windows(3).any(|w| w == b"..c"), "third dot line must be stuffed");
+    assert!(
+        out.windows(3).any(|w| w == b"..a"),
+        "first dot line must be stuffed"
+    );
+    assert!(
+        out.windows(3).any(|w| w == b"..b"),
+        "second dot line must be stuffed"
+    );
+    assert!(
+        out.windows(3).any(|w| w == b"..c"),
+        "third dot line must be stuffed"
+    );
 }
 
 #[test]
@@ -207,8 +219,14 @@ fn send_mail_stream_dot_stuffs_correctly() {
 
     let wire = String::from_utf8(written.borrow().clone()).unwrap();
     let data_section = wire.split("DATA\r\n").nth(1).unwrap();
-    assert!(data_section.contains("..line one\r\n"), "first dot-line must be stuffed");
-    assert!(data_section.contains("..line two\r\n"), "second dot-line must be stuffed");
+    assert!(
+        data_section.contains("..line one\r\n"),
+        "first dot-line must be stuffed"
+    );
+    assert!(
+        data_section.contains("..line two\r\n"),
+        "second dot-line must be stuffed"
+    );
 }
 
 #[test]
@@ -231,8 +249,14 @@ fn send_mail_stream_with_slice_body() {
     });
 
     let wire = written.borrow();
-    assert!(wire.windows(6).any(|w| w == b"DATA\r\n"), "DATA command must be sent");
-    assert!(wire.windows(3).any(|w| w == b".\r\n"), "terminator must be present");
+    assert!(
+        wire.windows(6).any(|w| w == b"DATA\r\n"),
+        "DATA command must be sent"
+    );
+    assert!(
+        wire.windows(3).any(|w| w == b".\r\n"),
+        "terminator must be present"
+    );
 }
 
 #[test]
@@ -245,8 +269,12 @@ fn send_mail_stream_with_policy_rejection_sends_no_smtp_commands() {
         fn check_sender(&self, _: &str) -> Result<(), PolicyError> {
             Err(PolicyError::new("blocked"))
         }
-        fn check_recipients(&self, _: &[&str]) -> Result<(), PolicyError> { Ok(()) }
-        fn check_message_size(&self, _: usize) -> Result<(), PolicyError> { Ok(()) }
+        fn check_recipients(&self, _: &[&str]) -> Result<(), PolicyError> {
+            Ok(())
+        }
+        fn check_message_size(&self, _: usize) -> Result<(), PolicyError> {
+            Ok(())
+        }
     }
 
     let opts = SmtpClientOptions::new().with_policy(Box::new(BlockAll));
@@ -267,7 +295,10 @@ fn send_mail_stream_with_policy_rejection_sends_no_smtp_commands() {
 
     assert!(matches!(err, SmtpError::Policy(_)));
     let sent = String::from_utf8(written.borrow().clone()).unwrap();
-    assert!(!sent.contains("MAIL FROM"), "MAIL FROM must not be sent after policy rejection");
+    assert!(
+        !sent.contains("MAIL FROM"),
+        "MAIL FROM must not be sent after policy rejection"
+    );
 }
 
 #[test]

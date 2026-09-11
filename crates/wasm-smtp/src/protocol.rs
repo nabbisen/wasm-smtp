@@ -520,8 +520,7 @@ impl DotStufferState {
     /// This matches the semantics of [`dot_stuff_and_terminate`] exactly.
     #[must_use]
     pub fn finish(self) -> Vec<u8> {
-        let ends_with_crlf =
-            !self.empty && self.prev_prev == b'\r' && self.prev == b'\n';
+        let ends_with_crlf = !self.empty && self.prev_prev == b'\r' && self.prev == b'\n';
         let mut out = Vec::with_capacity(5);
         if !ends_with_crlf {
             out.extend_from_slice(b"\r\n");

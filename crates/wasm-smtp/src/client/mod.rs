@@ -116,7 +116,9 @@ impl<T: Transport> SmtpClient<T> {
     ) -> Result<Self, SmtpError> {
         protocol::validate_ehlo_domain(ehlo_domain)?;
         smtp_debug!(ehlo_domain = %ehlo_domain, "SMTP session: connect");
-        options.audit.on_event(&crate::audit::SmtpAuditEvent::Connected);
+        options
+            .audit
+            .on_event(&crate::audit::SmtpAuditEvent::Connected);
         let mut client = Self {
             transport,
             state: SessionState::Greeting,
@@ -212,9 +214,11 @@ impl<T: Transport> SmtpClient<T> {
         self.state = SessionState::Closed;
 
         if send_result.is_ok() && close_result.is_ok() {
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::QuitCompleted);
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::QuitCompleted);
         } else {
-            self.audit.on_event(&crate::audit::SmtpAuditEvent::SessionAborted);
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::SessionAborted);
         }
 
         send_result?;
@@ -263,7 +267,6 @@ impl<T: Transport> SmtpClient<T> {
         self.state = SessionState::Closed;
     }
 }
-
 
 // -----------------------------------------------------------------------------
 // SmtpClientOptions
@@ -327,8 +330,7 @@ impl Default for SmtpClientOptions {
 
 impl core::fmt::Debug for SmtpClientOptions {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        f.debug_struct("SmtpClientOptions")
-            .finish_non_exhaustive()
+        f.debug_struct("SmtpClientOptions").finish_non_exhaustive()
     }
 }
 

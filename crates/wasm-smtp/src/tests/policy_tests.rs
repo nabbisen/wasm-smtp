@@ -24,11 +24,18 @@ fn full_exchange() -> Vec<u8> {
 
 fn connect_and_login(
     opts: SmtpClientOptions,
-) -> (SmtpClient<MockTransport>, std::rc::Rc<std::cell::RefCell<Vec<u8>>>) {
+) -> (
+    SmtpClient<MockTransport>,
+    std::rc::Rc<std::cell::RefCell<Vec<u8>>>,
+) {
     let script = full_exchange();
     let (transport, written, _closed) = MockTransport::new(&[&script]);
-    let mut client = block_on(SmtpClient::connect_with(transport, "client.example.com", opts))
-        .expect("connect");
+    let mut client = block_on(SmtpClient::connect_with(
+        transport,
+        "client.example.com",
+        opts,
+    ))
+    .expect("connect");
     block_on(client.login("user@example.com", "pass")).expect("login");
     (client, written)
 }
@@ -77,14 +84,20 @@ fn policy_rejection_on_sender_returns_policy_error() {
     ))
     .expect_err("policy should reject");
 
-    assert!(matches!(err, SmtpError::Policy(_)), "expected Policy error, got {err:?}");
+    assert!(
+        matches!(err, SmtpError::Policy(_)),
+        "expected Policy error, got {err:?}"
+    );
     if let SmtpError::Policy(e) = &err {
         assert_eq!(e.message(), "all senders blocked");
     }
 
     // No MAIL FROM should have been sent.
     let sent = String::from_utf8(written.borrow().clone()).unwrap();
-    assert!(!sent.contains("MAIL FROM"), "MAIL FROM must not be sent after policy rejection");
+    assert!(
+        !sent.contains("MAIL FROM"),
+        "MAIL FROM must not be sent after policy rejection"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -172,14 +185,15 @@ fn bounded_policy_rejects_oversized_body() {
     let (mut client, written) = connect_and_login(opts);
 
     let body = "Subject: test\r\n\r\n".to_string() + &"X".repeat(100);
-    let err =
-        block_on(client.send_mail("from@example.com", &["to@example.com"], &body)).expect_err(
-            "body exceeds max_message_bytes",
-        );
+    let err = block_on(client.send_mail("from@example.com", &["to@example.com"], &body))
+        .expect_err("body exceeds max_message_bytes");
 
     assert!(matches!(err, SmtpError::Policy(_)));
     let sent = String::from_utf8(written.borrow().clone()).unwrap();
-    assert!(!sent.contains("DATA"), "DATA must not be sent when body is too large");
+    assert!(
+        !sent.contains("DATA"),
+        "DATA must not be sent when body is too large"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -193,7 +207,10 @@ fn policy_error_debug_contains_no_credentials() {
     // The message is part of Debug but no credentials are embedded here;
     // this test guards against future refactors that might attach a 'from'
     // address or other PII to the error struct.
-    assert!(!debug.contains("password"), "debug must not contain password");
+    assert!(
+        !debug.contains("password"),
+        "debug must not contain password"
+    );
     assert!(!debug.contains("secret"), "debug must not contain secret");
 }
 
@@ -205,8 +222,9 @@ fn policy_error_debug_contains_no_credentials() {
 fn default_policy_passes_all_checks() {
     let p = DefaultPolicy;
     assert!(p.check_sender("any@example.com").is_ok());
-    assert!(p
-        .check_recipients(&["a@example.com", "b@example.com"])
-        .is_ok());
+    assert!(
+        p.check_recipients(&["a@example.com", "b@example.com"])
+            .is_ok()
+    );
     assert!(p.check_message_size(usize::MAX).is_ok());
 }

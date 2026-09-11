@@ -92,10 +92,7 @@ impl WasiTlsTransport {
 
     /// Connect as plaintext (for STARTTLS). TLS is deferred to
     /// `upgrade_to_tls`.
-    pub(crate) async fn connect_plain(
-        host: &str,
-        port: u16,
-    ) -> Result<Self, WasiSmtpError> {
+    pub(crate) async fn connect_plain(host: &str, port: u16) -> Result<Self, WasiSmtpError> {
         let opts = ConnectOptions::default();
         let stream = tcp_connect(host, port)?;
         let sni = server_name(host)?;
@@ -116,9 +113,7 @@ impl Transport for WasiTlsTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         match &mut self.inner {
             Inner::Plain(s) => s.read(buf).map_err(|e| IoError::new(e.to_string())),
-            Inner::Tls(s) => {
-                s.read(buf).map_err(|e| IoError::new(e.to_string()))
-            }
+            Inner::Tls(s) => s.read(buf).map_err(|e| IoError::new(e.to_string())),
         }
     }
 
@@ -176,12 +171,12 @@ impl StartTlsCapable for WasiTlsTransport {
             Inner::Tls(_) => {
                 return Err(IoError::new(
                     "upgrade_to_tls called on a transport that is already TLS",
-                ))
+                ));
             }
         };
 
-        let tls_stream =
-            tls_handshake(plain, self.sni.clone(), tls_config).map_err(|e| IoError::new(e.to_string()))?;
+        let tls_stream = tls_handshake(plain, self.sni.clone(), tls_config)
+            .map_err(|e| IoError::new(e.to_string()))?;
         self.inner = Inner::Tls(tls_stream);
         Ok(())
     }

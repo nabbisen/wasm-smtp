@@ -6,6 +6,7 @@
 
 use crate::error::{AuthError, InvalidInputError, SmtpError, SmtpOp};
 // Only the challenge-response mechanisms raise a protocol error of their own.
+use super::{SmtpClient, convert_auth};
 #[cfg(any(
     feature = "xoauth2",
     feature = "oauthbearer",
@@ -13,18 +14,14 @@ use crate::error::{AuthError, InvalidInputError, SmtpError, SmtpOp};
 ))]
 use crate::error::ProtocolError;
 use crate::protocol::{
-    self, AuthMechanism,
-    build_auth_plain_initial_response,
-    ehlo_advertises_auth,
+    self, AuthMechanism, build_auth_plain_initial_response, ehlo_advertises_auth,
     select_auth_mechanism,
 };
 use crate::session::SessionState;
 use crate::tracing_helpers::{smtp_debug, smtp_warn};
 use crate::transport::Transport;
-use super::{SmtpClient, convert_auth};
 
 impl<T: Transport> SmtpClient<T> {
-
     /// Authenticate using the best `AUTH` mechanism the server advertised.
     ///
     /// `PLAIN` is preferred over `LOGIN` when both are advertised, because
@@ -128,7 +125,11 @@ impl<T: Transport> SmtpClient<T> {
                 protocol::validate_plain_username(user)?;
                 protocol::validate_plain_password(credential)?;
             }
-            #[cfg(not(any(feature = "xoauth2", feature = "oauthbearer", feature = "scram-sha-256")))]
+            #[cfg(not(any(
+                feature = "xoauth2",
+                feature = "oauthbearer",
+                feature = "scram-sha-256"
+            )))]
             _ => {
                 return Err(InvalidInputError::new(
                     "the requested AUTH mechanism is not compiled in",
@@ -165,9 +166,10 @@ impl<T: Transport> SmtpClient<T> {
 
         self.transition(SessionState::MailFrom)?;
         smtp_debug!(mechanism = mechanism.name(), "AUTH: succeeded");
-        self.audit.on_event(&crate::audit::SmtpAuditEvent::AuthCompleted {
-            mechanism: mechanism.name(),
-        });
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::AuthCompleted {
+                mechanism: mechanism.name(),
+            });
         Ok(())
     }
 
@@ -347,11 +349,7 @@ impl<T: Transport> SmtpClient<T> {
     /// a final `535`. The JSON error detail is preserved in
     /// [`AuthError::Rejected`].
     #[cfg(feature = "oauthbearer")]
-    async fn run_auth_oauthbearer(
-        &mut self,
-        user: &str,
-        token: &str,
-    ) -> Result<(), SmtpError> {
+    async fn run_auth_oauthbearer(&mut self, user: &str, token: &str) -> Result<(), SmtpError> {
         let response = protocol::build_oauthbearer_initial_response(user, token);
         let mut cmd = String::with_capacity(17 + response.len() + 2);
         cmd.push_str("AUTH OAUTHBEARER ");

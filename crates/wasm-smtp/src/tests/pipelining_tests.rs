@@ -33,16 +33,16 @@ fn pipelining_exchange(num_recipients: usize) -> Vec<u8> {
     let mut parts: Vec<&[u8]> = vec![
         b"220 mail.example.com ESMTP\r\n",
         b"250-mail.example.com\r\n250-AUTH PLAIN LOGIN\r\n250 PIPELINING\r\n",
-        b"235 2.7.0 OK\r\n",   // AUTH
-        b"250 2.1.0 OK\r\n",   // MAIL FROM
+        b"235 2.7.0 OK\r\n", // AUTH
+        b"250 2.1.0 OK\r\n", // MAIL FROM
     ];
     for _ in 0..num_recipients {
         parts.push(b"250 2.1.5 OK\r\n"); // RCPT TO
     }
     parts.extend_from_slice(&[
-        b"354 Start mail\r\n",       // DATA
-        b"250 2.0.0 OK: queued as A1B2C3\r\n",  // DATA body
-        b"221 2.0.0 Bye\r\n",        // QUIT
+        b"354 Start mail\r\n",                 // DATA
+        b"250 2.0.0 OK: queued as A1B2C3\r\n", // DATA body
+        b"221 2.0.0 Bye\r\n",                  // QUIT
     ]);
     flatten(&parts)
 }
@@ -79,10 +79,17 @@ fn extract_pre_data_commands(wire: &[u8]) -> Vec<String> {
 fn pipelining_send_mail_succeeds_single_recipient() {
     let (transport, written, _) = MockTransport::new(&[&pipelining_exchange(1)]);
     block_on(async {
-        let mut c = SmtpClient::connect(transport, "client.example.com").await.unwrap();
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
         c.login("u", "p").await.unwrap();
-        c.send_mail("from@example.com", &["to@example.com"],
-            "Subject: test\r\n\r\nbody\r\n").await.unwrap();
+        c.send_mail(
+            "from@example.com",
+            &["to@example.com"],
+            "Subject: test\r\n\r\nbody\r\n",
+        )
+        .await
+        .unwrap();
         c.quit().await.unwrap();
     });
 
@@ -96,10 +103,17 @@ fn pipelining_send_mail_succeeds_multiple_recipients() {
     let recipients = ["a@e.com", "b@e.com", "c@e.com"];
     let (transport, written, _) = MockTransport::new(&[&pipelining_exchange(3)]);
     block_on(async {
-        let mut c = SmtpClient::connect(transport, "client.example.com").await.unwrap();
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
         c.login("u", "p").await.unwrap();
-        c.send_mail("from@example.com", &recipients,
-            "Subject: multi\r\n\r\nbody\r\n").await.unwrap();
+        c.send_mail(
+            "from@example.com",
+            &recipients,
+            "Subject: multi\r\n\r\nbody\r\n",
+        )
+        .await
+        .unwrap();
         c.quit().await.unwrap();
     });
 
@@ -114,10 +128,17 @@ fn no_pipelining_send_mail_still_succeeds() {
     // Ensure the sequential path works correctly after the pipelining refactor.
     let (transport, written, _) = MockTransport::new(&[&no_pipelining_exchange(2)]);
     block_on(async {
-        let mut c = SmtpClient::connect(transport, "client.example.com").await.unwrap();
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
         c.login("u", "p").await.unwrap();
-        c.send_mail("from@example.com", &["a@e.com", "b@e.com"],
-            "Subject: seq\r\n\r\nbody\r\n").await.unwrap();
+        c.send_mail(
+            "from@example.com",
+            &["a@e.com", "b@e.com"],
+            "Subject: seq\r\n\r\nbody\r\n",
+        )
+        .await
+        .unwrap();
         c.quit().await.unwrap();
     });
 
@@ -132,39 +153,57 @@ fn pipelining_wire_contains_all_commands_before_body() {
     // before the first body bytes appear.
     let (transport, written, _) = MockTransport::new(&[&pipelining_exchange(2)]);
     block_on(async {
-        let mut c = SmtpClient::connect(transport, "client.example.com").await.unwrap();
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
         c.login("u", "p").await.unwrap();
-        c.send_mail("from@example.com", &["x@e.com", "y@e.com"],
-            "Subject: order\r\n\r\nbody\r\n").await.unwrap();
+        c.send_mail(
+            "from@example.com",
+            &["x@e.com", "y@e.com"],
+            "Subject: order\r\n\r\nbody\r\n",
+        )
+        .await
+        .unwrap();
         c.quit().await.unwrap();
     });
 
     let wire = written.borrow().clone();
     let s = String::from_utf8_lossy(&wire);
-    let mail_pos  = s.find("MAIL FROM:").unwrap();
+    let mail_pos = s.find("MAIL FROM:").unwrap();
     let rcpt1_pos = s.find("RCPT TO:<x@e.com>").unwrap();
     let rcpt2_pos = s.find("RCPT TO:<y@e.com>").unwrap();
-    let data_pos  = s.find("DATA\r\n").unwrap();
-    let body_pos  = s.find("Subject: order").unwrap();
+    let data_pos = s.find("DATA\r\n").unwrap();
+    let body_pos = s.find("Subject: order").unwrap();
 
-    assert!(mail_pos  < rcpt1_pos, "MAIL FROM before first RCPT TO");
+    assert!(mail_pos < rcpt1_pos, "MAIL FROM before first RCPT TO");
     assert!(rcpt1_pos < rcpt2_pos, "first RCPT TO before second");
-    assert!(rcpt2_pos < data_pos,  "RCPT TOs before DATA");
-    assert!(data_pos  < body_pos,  "DATA before body");
+    assert!(rcpt2_pos < data_pos, "RCPT TOs before DATA");
+    assert!(data_pos < body_pos, "DATA before body");
 }
 
 #[test]
 fn pipelining_result_carries_queue_id() {
     let (transport, _, _) = MockTransport::new(&[&pipelining_exchange(1)]);
     let outcome = block_on(async {
-        let mut c = SmtpClient::connect(transport, "client.example.com").await.unwrap();
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
         c.login("u", "p").await.unwrap();
-        let o = c.send_mail("from@example.com", &["to@example.com"],
-            "Subject: queue\r\n\r\nbody\r\n").await.unwrap();
+        let o = c
+            .send_mail(
+                "from@example.com",
+                &["to@example.com"],
+                "Subject: queue\r\n\r\nbody\r\n",
+            )
+            .await
+            .unwrap();
         c.quit().await.unwrap();
         o
     });
 
     assert_eq!(outcome.code, 250, "pipelining outcome must be 250");
-    assert!(outcome.queue_id.is_some(), "queue id should be parsed from '250 2.0.0 OK: queued as A1B2C3'");
+    assert!(
+        outcome.queue_id.is_some(),
+        "queue id should be parsed from '250 2.0.0 OK: queued as A1B2C3'"
+    );
 }

@@ -154,4 +154,3 @@ pub async fn connect_smtp_starttls(
         .map_err(|e| SmtpError::Io(e.into()))?;
     SmtpClient::connect_starttls(transport, ehlo_domain).await
 }
-

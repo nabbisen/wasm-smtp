@@ -36,11 +36,7 @@ fn run_bytes_send(body: &[u8]) -> String {
             .expect("connect");
         client.login("u", "p").await.expect("login");
         client
-            .send_mail_bytes(
-                "from@example.com",
-                &["to@example.com"],
-                body,
-            )
+            .send_mail_bytes("from@example.com", &["to@example.com"], body)
             .await
             .expect("send_mail_bytes");
         client.quit().await.expect("quit");
@@ -111,7 +107,10 @@ fn send_mail_bytes_appends_crlf_dot_crlf_terminator() {
 fn send_mail_bytes_handles_empty_body() {
     let wire = run_bytes_send(b"");
     // Empty body: should still have the terminator.
-    assert!(wire.contains("\r\n.\r\n"), "terminator required even for empty body");
+    assert!(
+        wire.contains("\r\n.\r\n"),
+        "terminator required even for empty body"
+    );
 }
 
 #[test]
@@ -249,12 +248,12 @@ fn dot_heavy_body_10k_lines_all_stuffed() {
 
     // Count "..line " occurrences (stuffed) vs ".line " (unstuffed).
     // There must be exactly 10_000 stuffed and 0 unstuffed (mid-payload).
-    let stuffed_count = after_data
-        .windows(7)
-        .filter(|w| *w == b"..line ")
-        .count();
+    let stuffed_count = after_data.windows(7).filter(|w| *w == b"..line ").count();
     // Each ".line N\r\n" becomes "..line N\r\n"; 10 000 lines.
-    assert_eq!(stuffed_count, 10_000, "all 10 000 dot-lines must be stuffed");
+    assert_eq!(
+        stuffed_count, 10_000,
+        "all 10 000 dot-lines must be stuffed"
+    );
 }
 
 /// Many recipients: 10 RCPT TO commands.
