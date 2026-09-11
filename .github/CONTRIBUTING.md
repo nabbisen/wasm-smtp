@@ -44,15 +44,35 @@ wasm-smtp/
 
 ## Required checks
 
-Before sending a pull request, please run, from the workspace root:
+Before sending a pull request, please run, from the workspace root, the
+same command list CI runs (RFC 024 §D3):
 
 ```bash
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace --all-targets
+cargo test --workspace                       # lib + integration + doctests
+
+# Feature combinations. Never use --all-features: the tokio adapter has a
+# deliberate compile_error! on aws-lc-rs + ring.
+cargo check -p wasm-smtp --no-default-features
+cargo check -p wasm-smtp --features smtputf8,mail-builder,tracing
+cargo check -p wasm-smtp-wasi --no-default-features --features native-roots
+cargo check -p wasm-smtp-wasi --features plaintext-only
+cargo check -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring
+
+# Real targets.
+cargo check -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
+cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2
 ```
 
-A pull request that does not pass all three is unlikely to be merged.
+A pull request that does not pass these is unlikely to be merged.
+
+The toolchain comes from `rust-toolchain.toml` at the workspace root: it
+pins the channel (which is also the MSRV, currently 1.88), `rustfmt` and
+`clippy`, and the two wasm targets. Run `rustup show active-toolchain`
+once to install them. If you work on a newer toolchain, invoke it
+explicitly with `cargo +stable ...`; the pinned version is what CI
+enforces, including rustfmt output and the clippy lint set.
 
 ## Commit messages
 
