@@ -16,7 +16,9 @@ lifecycle policy is defined in
 
 ## Accepted
 
-_(empty)_
+| ID | Title | Priority | Handoff |
+|----|-------|----------|---------|
+| [024](./accepted/024-release-gate-integrity-toolchain-baseline.md) | Release gate integrity, toolchain baseline, and MSRV correction | P0 | [yes](./handoffs/024-release-gate-integrity/implementation-handoff.md) |
 
 ## Proposed
 
@@ -62,4 +64,4 @@ _(empty)_
 
 ---
 
-RFC 000–023 are complete. The next RFC is **024**.
+RFC 000–021 are implemented; 022–023 are drafts; 024 is accepted. The next RFC is **025**.
