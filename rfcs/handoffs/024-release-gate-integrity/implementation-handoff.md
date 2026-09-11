@@ -282,3 +282,88 @@ Write `.git-exclude/review-request/024-release-gate-integrity.md` with:
 10. Requested review focus.
 
 Tell the owner only the path of that file.
+
+---
+
+# Revision 2 — 2026-09-12, after review 1
+
+Review: `.git-exclude/reviewed/024-release-gate-integrity-review-1.md`.
+Slices S1–S6 and S8 are accepted. The following replaces §6's
+"conditional" status of S7 and adds S9 and S10. Change scope (§4) is
+extended by exactly the files named here.
+
+## Correction C1 (from F1)
+
+`.github/CONTRIBUTING.md`: the "Repository layout" tree lists six
+crates; "Code style" says tests live in `crates/<crate>/src/tests/`
+(or `src/tests.rs`), not `crates/core/src/tests.rs`.
+
+## S7 — authorized. Execute as written in §6, dependency pinned to `0.15.2`.
+
+## S9 — WIT contract amendment (RFC 024 D8)
+
+Scope additions: `wit/smtp.wit`, `wit/deps/**` (new),
+`crates/wasm-smtp-component/Cargo.toml`, `rfcs/done/018-*.md`
+(amendment note only), `.github/workflows/ci.yml` (remove the NOTE
+comment once green).
+
+1. `wit/smtp.wit`: rename the record field to `%from: string`; change
+   every `@0.2.0` import annotation in `world smtp-client` to `@0.2.4`;
+   fix the header's docs path to `docs/src/adapters/component-model.md`.
+2. Vendor WASI 0.2.4 `wasi:io`, `wasi:sockets`, `wasi:clocks` under
+   `wit/deps/io/`, `wit/deps/sockets/`, `wit/deps/clocks/`. Source: the
+   WebAssembly WASI 0.2.4 release (an identical copy exists locally in
+   the `wasip2` 1.0.1 crate's `wit/deps/`). Keep upstream headers. Add
+   `wit/deps/README.md`: one paragraph naming the packages, version
+   0.2.4, the source, and that the files are vendored unmodified.
+3. `crates/wasm-smtp-component/Cargo.toml`: add
+   `wasi = { version = "0.14", default-features = false }` under
+   `[target.'cfg(target_arch = "wasm32")'.dependencies]`.
+4. `generate!`: add a `with:` block mapping each imported interface
+   (`wasi:io/error@0.2.4`, `wasi:io/poll@0.2.4`, `wasi:io/streams@0.2.4`,
+   `wasi:sockets/network@0.2.4`, `wasi:sockets/instance-network@0.2.4`,
+   `wasi:sockets/tcp@0.2.4`, `wasi:sockets/tcp-create-socket@0.2.4`,
+   `wasi:sockets/ip-name-lookup@0.2.4`, and `wasi:clocks/monotonic-clock@0.2.4`
+   if the resolver requires it) onto the corresponding `wasi::…` module.
+   Drop `generate_all` if the mapping covers every import. If the
+   mapping cannot be made to work with wit-bindgen 0.57, fall back to
+   `generate_all` with the vendored deps and say so in the review
+   request; do not move the pin unreported.
+5. `rfcs/done/018-component-model-wit-interface.md`: add under the
+   Status line: "Amended by RFC 024 D8 (v0.15.2): field `from` escaped
+   as `%from`; WASI imports at 0.2.4 with packages vendored under
+   `wit/deps/`."
+6. Acceptance: `cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2`
+   passes; the WIT package version remains `wasm-smtp:smtp@0.1.0`.
+
+## S10 — Explicit rustls crypto provider per adapter (RFC 024 D9)
+
+Scope additions: `crates/wasm-smtp-tokio/src/transport.rs`,
+`crates/wasm-smtp-wasi/src/tls.rs`, and the two test modules that
+currently install a provider.
+
+1. `wasm-smtp-tokio/src/transport.rs::build_client_config`: build with
+   `ClientConfig::builder_with_provider(Arc::new(provider))` where
+   `provider` is `tokio_rustls::rustls::crypto::aws_lc_rs::default_provider()`
+   under `cfg(feature = "aws-lc-rs")` and `…::ring::default_provider()`
+   under `cfg(feature = "ring")`; then
+   `.with_safe_default_protocol_versions()` mapped to `IoError`; then
+   the existing root-store and client-auth steps.
+2. `wasm-smtp-wasi/src/tls.rs::make_tls_config`: same shape with
+   `rustls::crypto::ring::default_provider()` and
+   `.with_protocol_versions(rustls::DEFAULT_VERSIONS)`.
+3. Remove `install_test_crypto_provider` and its two call sites from
+   `wasm-smtp-tokio/src/tests/`; remove the two `install_default()`
+   lines from `wasm-smtp-wasi/src/tests.rs`.
+4. Acceptance: `cargo test --workspace` passes with no
+   `install_default` anywhere in the workspace (`grep` is part of the
+   evidence); public API unchanged.
+5. CHANGELOG 0.15.2, Changed: one entry describing the provider
+   selection change and why.
+
+## Evidence and re-review
+
+Refresh every log under `evidence/024/`; command 10 now includes the
+component and must pass. Write the re-review request to
+`.git-exclude/review-request/024-release-gate-integrity-2.md` with the
+same structure as request 1, listing only what changed since `b2cc145`.

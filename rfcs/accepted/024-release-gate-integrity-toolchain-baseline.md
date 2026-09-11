@@ -168,8 +168,47 @@ instead of `"*"`, publish core before it, keep the "not for
 production" wording, and add an amendment note to RFC 001, which
 currently states the crate is not published.
 
-**This decision is pending owner confirmation.** The handoff carries
-it as a conditional slice.
+**Confirmed by the owner on 2026-09-12.**
+
+### D8. WIT contract amendment for `wasm-smtp-component`
+
+Implementation found two defects in `wit/smtp.wit` that have kept the
+component from ever building for `wasm32-wasip2`:
+
+1. The `smtp-message` record uses the reserved WIT keyword `from` as a
+   field name. Corrected to `%from`, WIT's escape for keywords used as
+   identifiers. Binding generators still see a field named `from`, so
+   no consumer-visible name changes. The package stays at `0.1.0`.
+2. The world imports `wasi:io` and `wasi:sockets` interfaces but the
+   repository carries no WIT packages to resolve them. The WASI 0.2.4
+   packages `wasi:io`, `wasi:sockets`, and `wasi:clocks` are vendored
+   under `wit/deps/` (0.2.4 is the version implemented by the `wasi`
+   0.14 crate the WASI adapter already uses), and the world's import
+   annotations move from `@0.2.0` to `@0.2.4`. The imports are mapped
+   onto the `wasi` crate with a `with:` block so wit-bindgen does not
+   generate a second copy of the WASI bindings; for that purpose
+   `wasi` becomes a direct `wasm32`-only dependency of the component
+   crate. It was already in the wasm32 dependency tree.
+
+Narrowing the world to exports only was rejected: the import list is
+the contract's statement of required host capabilities. RFC 018
+receives an amendment note pointing here.
+
+### D9. Adapters select their rustls crypto provider explicitly
+
+When `wasm-smtp-wasi` (ring) and `wasm-smtp-tokio` (aws-lc-rs by
+default) are compiled into one process, rustls has two providers
+enabled and `ClientConfig::builder()` panics because it cannot choose.
+`cargo test --workspace` hits this, and so would any application that
+depends on both adapters. DEC-009's guard does not cover it, because
+ordinary feature unification triggers it.
+
+Decision: a library must not depend on, or install, the process-wide
+default provider. Each adapter builds its `ClientConfig` with
+`builder_with_provider(...)` using the provider its own features
+selected (tokio: aws-lc-rs or ring per feature; WASI: ring). Test-side
+`install_default()` calls are removed; the workspace test run passing
+without them is the proof. No public API change.
 
 ### D7. Release
 
@@ -239,12 +278,20 @@ release candidate.
   names the current crate set in NOTICE and CONTRIBUTING.
 - CHANGELOG has a single `[0.9.4]` section and an English 0.15.2
   entry; comparison links resolve to real tags.
-- RFC 001 carries an amendment note if D6 is confirmed.
+- RFC 001 carries an amendment note for D6; RFC 018 carries one for D8.
+- `wit/smtp.wit` parses; `wit/deps/` holds the WASI 0.2.4 packages with
+  a README naming the source; the component's `generate!` maps imports
+  onto the `wasi` crate.
+- Both adapters build their `ClientConfig` with an explicit provider and
+  no test installs a process default.
 
 ## Open questions
 
-1. D6, publication of `wasm-smtp-test`: awaiting the owner's decision.
-2. Whether the June 2026 handoff bundle's "version offset" note
-   (v0.10.0 content released as v0.9.4) needs a permanent record beyond
-   the merged changelog section. Recommendation: the merged section
-   with a one-line note is sufficient.
+None. D6 was confirmed by the owner on 2026-09-12; the changelog's
+merged `[0.9.4]` section with its one-line note is the permanent record
+of the version offset.
+
+## Amendment log
+
+- 2026-09-12: D6 confirmed; D8 and D9 added after review 1 of the
+  implementation (see `.git-exclude/reviewed/024-release-gate-integrity-review-1.md`).
