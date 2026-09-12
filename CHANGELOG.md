@@ -1,5 +1,53 @@
 ## [Unreleased]
 
+## [0.17.0] — 2026-09-12
+
+RFC 027: publish the book, and bring the dependency declarations up to
+date. No library behaviour changes.
+
+**Compatibility notes.** Two items affect downstream builds. (1) The
+optional `mail-builder` dependency moves to **0.5**. `SmtpClient::send_message`
+takes a `mail_builder::MessageBuilder<'_>`, so for users of the
+`mail-builder` feature that type is part of this crate's public API and
+the major belongs in a version bump — hence 0.17.0 rather than a patch.
+The method's own signature is unchanged and no code in this crate needed
+adapting. (2) The `rustls` floor in `wasm-smtp-wasi` rises from `0.23` to
+**0.23.44**; anything already on a current 0.23.x is unaffected.
+
+### Added
+
+- **The book is published** at <https://nabbisen.github.io/wasm-smtp/>,
+  rebuilt from `main` on every push by `.github/workflows/docs.yml`. It
+  has existed since 0.15.0 and has never been served; the README pointed
+  readers at a source directory. The workflow is deliberately outside the
+  release gate: a broken book should be visible on the Actions tab, not a
+  reason a crate release cannot go out.
+
+### Changed
+
+- **`rustls` floor raised to 0.23.44** in `wasm-smtp-wasi`, matching the
+  version the lockfile resolves. The old `0.23` range admitted releases
+  before 0.23.18 that RUSTSEC-2024-0399 affects — a server-side accept
+  path this client never calls, and no lockfile of ours ever resolved
+  one, but a downstream lockfile could have, and deps.rs reported the
+  crate as "maybe insecure" to every reader.
+- **`mail-builder` moved to 0.5.** No source change was required.
+- **`wit-bindgen` moved to 0.62** in `wasm-smtp-component`. Build-time
+  only, `wasm32` only; the `generate!` `with:` map and the `export!` form
+  are unchanged.
+- **Lockfile refreshed**, taking the compatible updates it had not,
+  including `aws-lc-rs` 1.16 → 1.18 and `ring`, `tokio-rustls`, `worker`,
+  and `web-sys` moves. The full gate, including the on-target smoke test,
+  passes on the refreshed lockfile.
+
+### Documentation
+
+- The README's Documentation section leads with the published book and
+  keeps the source pointer for anyone who would rather build it locally.
+- `docs/src/reference/examples.md` linked to `TERMS_OF_USE.md` with a
+  relative path that escapes the book and would have 404'd once served;
+  it now uses the repository URL, as the security chapter already did.
+
 ## [0.16.1] — 2026-09-12
 
 A documentation release. No change to any published crate's source or
@@ -1562,7 +1610,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.16.1...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.17.0...HEAD
+[0.17.0]: https://github.com/nabbisen/wasm-smtp/compare/0.16.1...0.17.0
 [0.16.1]: https://github.com/nabbisen/wasm-smtp/compare/0.16.0...0.16.1
 [0.16.0]: https://github.com/nabbisen/wasm-smtp/compare/0.15.2...0.16.0
 [0.15.2]: https://github.com/nabbisen/wasm-smtp/compare/0.15.1...0.15.2
