@@ -30,7 +30,7 @@ native-roots = ["dep:rustls-native-certs"]
 plaintext-only = []
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.16.0", default-features = false }
+wasm-smtp = { path = "../wasm-smtp", version = "0.16.1", default-features = false }
 # RFC 017 Strategy A: rustls over WASI streams with the `ring` provider.
 # `default-features = false` matters here: rustls's defaults enable the
 # aws-lc-rs provider, whose `aws-lc-sys` C sources cannot cross-compile to

@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [0.16.1] — 2026-09-12
+
+A documentation release. No change to any published crate's source or
+dependencies; the Cloudflare adapter's package gains the compiled
+contact-form example described below.
+
 ### Documentation
 
 - **Anti-abuse patterns at the application boundary** (RFC 026). A new
@@ -1556,7 +1562,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.16.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.16.1...HEAD
+[0.16.1]: https://github.com/nabbisen/wasm-smtp/compare/0.16.0...0.16.1
 [0.16.0]: https://github.com/nabbisen/wasm-smtp/compare/0.15.2...0.16.0
 [0.15.2]: https://github.com/nabbisen/wasm-smtp/compare/0.15.1...0.15.2
 [0.15.1]: https://github.com/nabbisen/wasm-smtp/compare/0.15.0...0.15.1
