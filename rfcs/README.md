@@ -22,7 +22,10 @@ lifecycle policy is defined in
 
 ## Proposed
 
-_(empty)_
+| ID | Title | Priority |
+|----|-------|----------|
+| [030](./proposed/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface | P2 |
+| [031](./proposed/031-self-tests-for-the-projects-checkers.md) | Self-tests for the project's own checkers | P3 |
 
 ## Draft
 
@@ -69,4 +72,4 @@ _(empty)_
 
 ---
 
-RFC 000–021, 024–027 and 029 are implemented; 028 is accepted; 022–023 are drafts. The next RFC is **030**.
+RFC 000–021, 024–027 and 029 are implemented; 028 is accepted; 030–031 are proposed; 022–023 are drafts. The next RFC is **032**.

@@ -449,7 +449,14 @@ Order is the owner's decision after the RFC 024 roadmap review.
    snippets restated as `cargo add` commands that carry no version, and
    a gate check that fails when a documented version disagrees with the
    manifest — demonstrated failing before it was made to pass.
-6. Further extension themes (channel binding, DSN, Component Model
+6. **Trust-anchor configuration for the component** (RFC 030,
+   proposed): the Component Model interface has no way to name a
+   private CA, so a whole class of real caller cannot use it, and the
+   component's happy path can only be tested through the Rust adapter.
+7. **Self-tests for the project's own checkers** (RFC 031, proposed):
+   the two shell version guards were each demonstrated failing once, by
+   hand, in a review request; pin those demonstrations as tests.
+8. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 
 ## Phase 19 — WASI hardening and on-target verification *(0.16.0)*
