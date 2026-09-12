@@ -169,3 +169,37 @@ cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 Summary, changed files, whether the macro compiled on the host, whether
 `mdbook build` was run, gate outputs, and the rendered section text
 pasted for review.
+
+---
+
+# Revision 2 — 2026-09-12, after review 1
+
+Review: `.git-exclude/reviewed/026-anti-abuse-patterns-review-1.md`.
+Everything is accepted except one required correction.
+
+## C1 — Header injection guard (security)
+
+Form fields reach message headers unvalidated; a CR/LF in `name` or
+`email` injects headers such as `Bcc:`. Fix in the example and in both
+prose sections:
+
+1. `examples/contact_form_turnstile.rs`, before the send: reject `name`
+   or `email` containing `\r` or `\n` with `400`; run `email` through
+   `wasm_smtp::protocol::validate_address` and reject with `400` on
+   error; normalize `message` line endings to CRLF before building the
+   body. Keep the log lines content-free.
+2. `docs/src/reference/examples.md`: a fifth step "Header safety" in
+   the new section, linking the composing chapter's header-injection
+   discussion and its `mail-builder` route; apply the same guard to the
+   pre-existing "Contact-form delivery" block or point it at the guarded
+   version.
+3. `docs/src/concepts/security.md`, under "Two layers, both needed": one
+   line that validating input before it is placed in a header is part of
+   the request boundary, and that the library's envelope validation does
+   not cover headers.
+4. Optional single clause: non-ASCII `Subject:` values need RFC 2047,
+   which `mail-builder` handles.
+
+Acceptance: `400` for a `name` or `email` containing `\r\n`; full gate
+passes; sections updated. Second request at
+`.git-exclude/review-request/026-anti-abuse-patterns-2.md`. Do not push.
