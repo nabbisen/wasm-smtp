@@ -166,3 +166,8 @@ to 0.5 now.
   linked imports `@0.2.12` via a transitive caret range). Decided to
   ship 0.17.0 with it: it is not a regression and no lockfile of ours
   can fix it for a consumer. Carried to **RFC 028**.
+- 2026-09-12, after review 2: approved at `72b7e60`. Two documentation
+  corrections landed; a third (folding a changelog entry) was withdrawn
+  as the architect's error — the entry had already moved into `[0.16.1]`
+  at the 0.16.1 release commit, and the correction rested on an
+  unverified claim.
