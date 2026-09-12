@@ -217,3 +217,71 @@ the quoted GitHub documentation; S4's inventory table first, then either
 the stop report or the conversion, and all three failure
 demonstrations; the proposed gate list, numbered, with changes marked;
 changed files; full gate results per slice.
+
+---
+
+# Revision 2 — 2026-09-13, after review 1
+
+Review: `.git-exclude/reviewed/032-verification-coverage-review-1.md`.
+S1, S2, S3, and S5 are approved. The 21-command gate list is accepted.
+Read RFC 032's **Amendment** first: A1–A4 correct premises this handoff
+got wrong, including §2's claim that the Cloudflare fences cannot build
+on the host.
+
+What remains is S4, now in two parts. Nothing else in §3–§4 changes,
+except that the fence fixes below are in scope.
+
+## S4a — Fix the three wrong fences
+
+One commit, before any D2 work.
+
+1. `concepts/errors.md:160` (fence 8): each arm gets a block body holding
+   its comment, `=> { /* retry later */ }`, so the pattern reads the
+   same and compiles.
+2. `core/policy-audit.md:18` (fence 12): import `PolicyError` from the
+   crate root, `wasm_smtp::PolicyError`.
+3. `core/usage.md:336` (fence 29): add the missing
+   `Err(wasm_smtp::SmtpError::Policy(p))` arm, with a comment in the
+   same register as the others: the caller's own policy refused the
+   message, and it is not retryable as-is.
+4. Every other visible line stays as it is. Show each fix compiling in
+   the scratch crate from your inventory.
+
+## S4b — Compile the book (D2), under the amended rules
+
+1. **Measure before adding anything.** Record, on the current tree:
+   `cargo tree --workspace -e features -i wasm-smtp`, and the same for
+   `wasm-smtp-cloudflare`, `wasm-smtp-tokio`, and `wasm-smtp-wasi`. Add the
+   book crate and record them again. **If any output differs, stop,**
+   commit nothing for S4b, and report which fences need which features.
+   Do not narrow the crate's features to make the outputs match if that
+   leaves fences uncompiled. That trade is the architect's (RFC 032 A4).
+2. Fences: the 6 that compile as written stay as they are; the 17 get
+   hidden lines as inventoried; Cloudflare fences 2 and 3 compile; the 2
+   WASI fences become `rust,ignore`, with a note that the same connection
+   path is compiled for `wasm32-wasip2` by the gate in
+   `crates/wasm-smtp-wasi/examples/smoke.rs`; fence 16 becomes `no_run`.
+3. Listings (RFC 032 A3):
+   - `core/core.md:9` restated as `use wasm_smtp::{…};` naming the same
+     items, so it compiles. Nothing else in that section changes.
+   - `core/core.md:72` compiled with hidden setup, with visible changes
+     limited to what compiling needs (`let mut client =`).
+   - `adapters/cloudflare.md:39` becomes `rust,ignore`, preceded by one
+     sentence saying it lists signatures rather than a program and that
+     the crate's API documentation is authoritative.
+4. The crate, its coverage test, the `serde`/`derive` dependency for
+   `reference/examples.md:122`, and the `docs.yml` pull-request trigger
+   with its separate concurrency group: as in original S4.3, S4.5, and
+   S4.6.
+5. Remove `CHANGELOG.md`'s `### Not in this release` and describe what
+   landed.
+6. **Demonstrate failure** as in original S4.7, plus one more: undo
+   S4a's fix to fence 29, and the doctest must go red with `E0004`.
+   Revert.
+
+## Review request
+
+`.git-exclude/review-request/032-verification-coverage-2.md`: the
+before/after `cargo tree` outputs (or the stop report), S4a's three
+diffs, the fence-by-fence result against the inventory table, the four
+failure demonstrations, changed files, and the full gate.

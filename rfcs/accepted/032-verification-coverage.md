@@ -131,6 +131,8 @@ on `ring`, and the adapter must be depended on with
 `default-features = false, features = ["webpki-roots", "ring"]` so the
 test binary compiles one provider — the unambiguous-provider rule of
 RFC 024 D9 applies to test binaries too.
+*(Superseded by amendment A1: this configuration cannot build in the
+workspace, and the rule it cites is not what D9 requires.)*
 
 ### D2. The book's code is compiled
 
@@ -243,6 +245,46 @@ tag exists, and nothing needs un-tagging.
 This is recorded in `.github/CONTRIBUTING.md` beside the required checks
 in one short paragraph. It takes effect for 0.17.2, which predates this
 RFC's acceptance, as a practice the architect adopts now.
+
+## Amendment — 2026-09-13, after review 1
+
+Three premises in this RFC and its handoff were wrong, and each was
+found by the implementer **running** something the architect had only
+reasoned about. They are recorded here, not corrected silently.
+
+**A1. D1's provider constraint.** `default-features = false, features =
+["webpki-roots", "ring"]` on an in-workspace dependency of
+`wasm-smtp-tokio` cannot build: Cargo unifies a package's features across
+a workspace run, the adapter is also selected at its defaults, and both
+mutual-exclusion `compile_error!`s fire. The dev-dependency takes the
+adapter's defaults. RFC 024 D9's actual rule — no configuration relies
+on rustls's process-wide default provider — still holds, because both
+sides of the test name their provider explicitly, and the test checks it
+on every run.
+
+**A2. D2's host-impossibility of the Cloudflare fences.** The Cloudflare
+adapter and `worker` build on the host; only a Workers *runtime* does
+not exist there. Its code fences compile as doctests like any others.
+
+**A3. D2 assumed every `rust` fence was either correct code or
+host-impossible.** The inventory found two more kinds. The rules for
+them:
+
+- **A wrong fence** is a documentation defect. It is fixed as its own
+  reviewed change before D2 compiles it. Three were found.
+- **A listing** (re-exports, a call sequence, signatures) is compiled
+  wherever minimal visible changes allow it. A signature listing with no
+  bodies cannot compile without ceasing to be a listing, so it becomes
+  `rust,ignore` with a sentence saying so. That is the only `ignore`
+  permitted apart from host-impossible code.
+
+**A4. D2 feature unification.** The book crate is a workspace member.
+Whatever features it enables on `wasm-smtp` or an adapter apply to every
+`cargo test --workspace` build, so enabling them silently changes what
+the core's own tests compile against. The crate must leave the
+workspace's feature resolution unchanged, measured before and after. If
+it cannot, the choice between excluding it from the workspace and
+another shape is the architect's.
 
 ## Gate changes
 
