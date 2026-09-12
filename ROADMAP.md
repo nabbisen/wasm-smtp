@@ -449,9 +449,11 @@ Order is the owner's decision after the RFC 024 roadmap review.
    a gate check that fails when a documented version disagrees with the
    manifest — demonstrated failing before it was made to pass.
 6. **Trust-anchor configuration for the component** (RFC 030,
-   proposed): the Component Model interface has no way to name a
-   private CA, so a whole class of real caller cannot use it, and the
-   component's happy path can only be tested through the Rust adapter.
+   accepted, target 0.18.0, after RFC 032): the Component Model
+   interface has no way to name a private CA. `smtp-config` becomes a
+   validated, immutable resource with an explicit trust choice, strict
+   PEM parsing that never falls back or echoes its input, and room for
+   later options without another break. WIT package `0.2.0`.
 7. **Verification coverage** (RFC 032, accepted; supersedes RFC 031):
    the tokio adapter has never completed a send over a socket in a
    test, the book's code compiles nowhere, advisories are scanned only
