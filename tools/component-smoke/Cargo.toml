@@ -31,11 +31,11 @@ rustls-pki-types = { workspace = true, features = ["std"] }
 # 36.0.14 builds on the 1.88.0 this workspace pins, needs no source
 # change from 38, and clears the audit.
 #
-# Deliberately a different version from the wasmtime 27 CLI the adapter
-# smoke test uses — that one is whatever CI installs, this one is what
-# the component is linked against, and pinning them separately means a
-# bump to either is a visible decision. `cargo audit` is what forces the
-# next bump; an exact pin does not rot silently behind it.
+# The adapter smoke test's wasmtime CLI is on the same 36.0.x line since
+# RFC 032 D4, pinned separately in .github/workflows/ci.yml: that one is a
+# downloaded binary, this one is what the component is linked against, and
+# a bump to either is a visible decision. `cargo audit` is what forces the
+# next bump of this one; an exact pin does not rot silently behind it.
 wasmtime = "=36.0.14"
 wasmtime-wasi = "=36.0.14"
 

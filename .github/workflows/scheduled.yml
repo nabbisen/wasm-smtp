@@ -1,0 +1,69 @@
+name: Scheduled verification
+
+# Weekly checks for what arrives between commits (RFC 032 D3).
+#
+# The per-push gate in ci.yml only runs when someone pushes. During a quiet
+# period an advisory published against Cargo.lock would stay invisible until
+# the next unrelated commit, and the tests marked #[ignore] for speed — the
+# 10 MB body test among them — run nowhere at all. This runs both.
+#
+# A separate workflow rather than a job in ci.yml guarded by event: the two
+# have nothing in common but a checkout, and keeping the cron line in its
+# own file means only a deliberate edit to this schedule moves who is
+# notified (next paragraph), not every change to the gate.
+#
+# Two operational facts, confirmed against GitHub's documentation on
+# 2026-09-13, because both surprise people:
+#
+# - "Notifications for scheduled workflows are sent to the user who last
+#   modified the cron syntax in the workflow file."
+#   https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#schedule
+#   Not the repository's watchers: a failure here reaches one person.
+#
+# - "In a public repository, scheduled workflows are automatically disabled
+#   when no repository activity has occurred in 60 days."
+#   https://docs.github.com/en/actions/managing-workflow-runs-and-deployments/managing-workflow-runs/disabling-and-enabling-a-workflow
+#   That is precisely the quiet period this job exists for. Re-enable it
+#   from the Actions tab; CONTRIBUTING.md says so too.
+
+on:
+  schedule:
+    # Mondays, 03:17 UTC. Off the hour, where GitHub's scheduler is busiest.
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  audit:
+    name: audit (advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        # Same exact version as ci.yml's audit job.
+        run: cargo install cargo-audit --locked --version 0.22.2
+
+      - name: cargo audit
+        run: cargo audit
+
+  ignored-tests:
+    name: tests, including ignored
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install the pinned toolchain
+        run: |
+          rustup show active-toolchain
+          rustc --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+
+      - name: Test, including ignored
+        run: cargo test --workspace --locked -- --include-ignored

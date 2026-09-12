@@ -12,6 +12,13 @@ jobs:
   # Blocking gate. Runs the command list from RFC 024 §D3 verbatim on the
   # toolchain pinned by rust-toolchain.toml (channel, components, and the
   # wasm targets all come from that file).
+  #
+  # Cargo commands that resolve dependencies carry --locked, so CI tests
+  # the committed Cargo.lock rather than one it resolved itself (RFC 032
+  # D4). Third-party actions are pinned by commit SHA with the release in a
+  # trailing comment, so a moved tag cannot change what the gate runs;
+  # first-party actions/* stay on major tags. SHAs are bumped by hand, as a
+  # visible commit (RFC 032, resolution 1).
   gate:
     name: gate (pinned toolchain)
     runs-on: ubuntu-latest
@@ -26,32 +33,32 @@ jobs:
           rustc --version
           cargo --version
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
 
       - name: Format
         run: cargo fmt --all -- --check
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
 
       - name: Test (lib + integration + doctests)
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
 
       # Feature combinations. Never --all-features: the tokio adapter has a
       # deliberate compile_error! on aws-lc-rs + ring (DEC-009), so the sets
       # are enumerated instead.
       - name: Check feature combinations
         run: |
-          cargo check -p wasm-smtp --no-default-features
-          cargo check -p wasm-smtp --features smtputf8,mail-builder,tracing
-          cargo check -p wasm-smtp-wasi --no-default-features --features native-roots
-          cargo check -p wasm-smtp-wasi --features plaintext-only
-          cargo check -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring
+          cargo check --locked -p wasm-smtp --no-default-features
+          cargo check --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
+          cargo check --locked -p wasm-smtp-wasi --no-default-features --features native-roots
+          cargo check --locked -p wasm-smtp-wasi --features plaintext-only
+          cargo check --locked -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring
 
       - name: Check real targets
         run: |
-          cargo check -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
-          cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2
+          cargo check --locked -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
+          cargo check --locked -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2
 
       # The component is useless to a consumer without its contract, and
       # cargo silently omits files the manifest does not reach. Check the
@@ -64,7 +71,7 @@ jobs:
       # The documented Worker examples are compiled for the target they
       # claim to run on, so the prose cannot rot silently.
       - name: Check examples for the Workers target
-        run: cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
+        run: cargo check --locked -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 
       # Dependency versions in the documentation are constants that have to
       # match a release, which is exactly what rots between them. Twice the
@@ -86,20 +93,27 @@ jobs:
       # Examples carry tests of their own (the contact-form header guard);
       # `cargo test --workspace` builds examples but does not run those.
       - name: Test examples
-        run: cargo test -p wasm-smtp-cloudflare --examples
+        run: cargo test --locked -p wasm-smtp-cloudflare --examples
 
       # The adapter's defects were all of the kind that only running it
       # finds, so the gate runs it: a real wasm32-wasip2 guest under
       # wasmtime against a scripted TLS SMTP responder on loopback, in both
       # implicit-TLS and STARTTLS modes. No external network.
-      - uses: bytecodealliance/actions/wasmtime/setup@v1
+      #
+      # The wasmtime CLI is on the 36.0.x LTS line, the same line the component
+      # harness links (tools/component-smoke/Cargo.toml), and for the same
+      # reason: a test host should be trustworthy rather than current, and the
+      # LTS line is the one that receives security backports. It replaced
+      # 27.0.0, long out of support and invisible to cargo audit as a
+      # downloaded binary (RFC 032 D4). The action prefixes the `v` itself.
+      - uses: bytecodealliance/actions/wasmtime/setup@9152e710e9f7182e4c29ad218e4f335a7b203613 # v1.1.3
         with:
-          version: "27.0.0"
+          version: "36.0.15"
 
       - name: On-target smoke test
         run: |
-          cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
-          cargo run -p wasm-smtp-smoke
+          cargo build --locked --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
+          cargo run --locked -p wasm-smtp-smoke
 
       # The component shipped for three releases without ever being
       # instantiated. This runs it: wasmtime 36 as a library embeds the
@@ -108,8 +122,8 @@ jobs:
       # wasmtime CLI — the host is a crate dependency of the harness.
       - name: Component host smoke test
         run: |
-          cargo build --target wasm32-wasip2 -p wasm-smtp-component
-          cargo run -p wasm-smtp-component-smoke
+          cargo build --locked --target wasm32-wasip2 -p wasm-smtp-component
+          cargo run --locked -p wasm-smtp-component-smoke
 
   # Non-blocking early warning about upcoming toolchain breakage.
   stable:
@@ -124,7 +138,7 @@ jobs:
           rustup toolchain install stable --component clippy
           rustc +stable --version
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: stable
 
@@ -145,7 +159,9 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        # Exact version, so the scanner itself does not change between runs
+        # unannounced. 0.22.2 is the current release (crates.io, 2026-06-05).
+        run: cargo install cargo-audit --locked --version 0.22.2
 
       - name: cargo audit
         run: cargo audit

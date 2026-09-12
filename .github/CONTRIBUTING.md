@@ -59,20 +59,20 @@ same command list CI runs (RFC 024 §D3):
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace                       # lib + integration + doctests
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace                       # lib + integration + doctests
 
 # Feature combinations. Never use --all-features: the tokio adapter has a
 # deliberate compile_error! on aws-lc-rs + ring.
-cargo check -p wasm-smtp --no-default-features
-cargo check -p wasm-smtp --features smtputf8,mail-builder,tracing
-cargo check -p wasm-smtp-wasi --no-default-features --features native-roots
-cargo check -p wasm-smtp-wasi --features plaintext-only
-cargo check -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring
+cargo check --locked -p wasm-smtp --no-default-features
+cargo check --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
+cargo check --locked -p wasm-smtp-wasi --no-default-features --features native-roots
+cargo check --locked -p wasm-smtp-wasi --features plaintext-only
+cargo check --locked -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring
 
 # Real targets.
-cargo check -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
-cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2
+cargo check --locked -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
+cargo check --locked -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2
 
 # Packaged contents: the published component must carry its contract.
 # Add --allow-dirty when checking uncommitted work.
@@ -80,7 +80,7 @@ cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
 cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets.wit$'
 
 # The documented Worker examples must compile for the Workers target.
-cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
+cargo check --locked -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 
 # Dependency versions in the documentation must match the manifest.
 ./tools/check-doc-versions.sh
@@ -91,26 +91,31 @@ cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 
 # The two guards above, against fixture trees covering every branch.
 ./tools/guard-tests/run.sh
-cargo test -p wasm-smtp-cloudflare --examples   # example tests are not run by --workspace
+cargo test --locked -p wasm-smtp-cloudflare --examples   # example tests are not run by --workspace
 
 # On-target: a real wasm32-wasip2 guest under wasmtime against a scripted
 # TLS SMTP responder on loopback, in four modes — two positive and two
 # that prove an untrusted certificate is refused. Needs wasmtime on PATH
 # (or WASMTIME set).
-cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
-cargo run -p wasm-smtp-smoke
+cargo build --locked --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
+cargo run --locked -p wasm-smtp-smoke
 
 # The component, under a host: wasmtime 36 embedded as a library
 # instantiates the built artifact and calls smtp-send.send against the
 # same responder. No wasmtime CLI needed for this one.
-cargo build --target wasm32-wasip2 -p wasm-smtp-component
-cargo run -p wasm-smtp-component-smoke
+cargo build --locked --target wasm32-wasip2 -p wasm-smtp-component
+cargo run --locked -p wasm-smtp-component-smoke
 
 # Dependency advisories.
 cargo audit
 ```
 
 A pull request that does not pass these is unlikely to be merged.
+
+A weekly scheduled workflow (`.github/workflows/scheduled.yml`) also runs
+`cargo audit` and the `#[ignore]`d tests. GitHub disables scheduled
+workflows in a public repository after 60 days without activity; if it
+shows as disabled on the Actions tab, re-enable it there.
 
 The documentation book is built with **mdBook 0.5.4**, the version
 `.github/workflows/docs.yml` pins for the published site at
