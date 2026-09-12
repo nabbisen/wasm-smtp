@@ -1,6 +1,7 @@
 # RFC 032 — Verification coverage: what the gate does not yet reach
 
-**Status.** Proposed
+**Status.** Accepted (owner, 2026-09-13)
+**Handoff.** [`../handoffs/032-verification-coverage/implementation-handoff.md`](../handoffs/032-verification-coverage/implementation-handoff.md)
 **Priority.** P2
 **Tracks.** Testing / CI / Documentation
 **Touches.** `tools/smoke/` (or a new `tools/` crate), a new unpublished doctest crate under `tools/`, `docs/src/**` (code-fence annotations only), `tools/check-doc-versions.sh`, `tools/check-wasi-version.sh` and their fixtures, `.github/workflows/{ci.yml,docs.yml}`, `.github/CONTRIBUTING.md`
@@ -268,7 +269,19 @@ Nothing a consumer receives changes. The book changes only in fence
 annotations and hidden lines, and deploys on push without a crate
 release. This can land between releases or ride along with one.
 
-## Open questions
+## Resolution of the open questions
+
+Settled at acceptance as architect defaults, which the owner may
+override at any point before the handoff's slice lands:
+
+1. **No Dependabot.** Third-party action SHAs are bumped by hand, as a
+   visible commit. Revisit if the project moves to pull requests.
+2. **Convert, but inventory first.** The handoff's D2 slice counts the
+   fences needing hidden setup before converting any; above the
+   threshold it names, it stops and reports.
+3. **Weekly.**
+
+## Open questions (as proposed)
 
 1. **Keeping action SHAs current.** Dependabot for `github-actions`
    opens pull requests, which is a workflow change for a project that

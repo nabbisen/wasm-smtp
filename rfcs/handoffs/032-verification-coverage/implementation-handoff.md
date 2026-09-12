@@ -1,0 +1,219 @@
+# Developer Handoff — RFC 032: Verification coverage
+
+**Governing RFC.** [`../../accepted/032-verification-coverage.md`](../../accepted/032-verification-coverage.md) — read §Resolution of the open questions; all three were settled at acceptance.
+**Prepared.** 2026-09-13 by the architect. Baseline: the commit accepting RFC 032, on top of `bd1c121` (Release 0.17.2).
+**Starts.** After 0.17.2 is tagged and published. Do not branch from, amend, or rebase anything at or before `bd1c121`.
+**Target release.** None required. No published crate's API, dependencies, or artifact changes; the work lands on `main` and rides with whatever release comes next. Say in the review request if you find a reason that is not true.
+**Review request goes to.** `.git-exclude/review-request/032-verification-coverage.md`
+
+## 1. Purpose
+
+Make the gate reach what it does not yet: the tokio adapter's success
+path over a real socket, the book's code, advisories between commits,
+and the two shell guards' own behaviour — and put CI's pass before the
+release tag.
+
+## 2. What is already known, so you do not re-derive it
+
+Verified by the architect at `62e5ab9`. Check anything you rely on.
+
+- The shared responder is a library (`wasm_smtp_smoke`: `serve_implicit`,
+  `serve_starttls`, `generate_cert`, `server_config`, `Recording`, `Leg`).
+  It is synchronous, on `std::net::TcpStream`, and built on `ring`.
+- **The transcript assertions are not in that library.** They are in
+  `tools/smoke/src/main.rs` (`run_mode` and what it calls), and
+  `tools/component-smoke/src/main.rs` has its own `check`. D1 cannot
+  reuse them without moving them first. That is S2's first step.
+- `wasm-smtp-tokio` refuses two crypto providers at compile time and
+  defaults to `aws-lc-rs`. `ConnectOptions::with_root_store` exists.
+- Both guards take an optional root directory as `$1`, so fixture trees
+  need no guard changes. On an empty tree both exit 2, but on different
+  files: `check-doc-versions.sh` requires `Cargo.toml`,
+  `check-wasi-version.sh` requires `Cargo.lock`. Each fixture needs the
+  file its guard reads.
+- The book has 54 Rust fences: 31 `rust`, 18 `rust,ignore`, 5
+  `rust,no_run`. The `rust` fences that name a crate are in
+  `core/{usage,policy-audit,streaming}.md`, `adapters/{cloudflare,wasi}.md`,
+  and `reference/examples.md`. Cloudflare's use `worker` and cannot
+  build on the host.
+- `docs.yml` triggers on push to `main` and `workflow_dispatch` only.
+- The WASI smoke test installs the wasmtime CLI with
+  `bytecodealliance/actions/wasmtime/setup@v1`, `version: "27.0.0"`.
+
+## 3. Change scope
+
+`tools/smoke/{src/lib.rs,src/main.rs,Cargo.toml,tests/**}`;
+`tools/component-smoke/src/main.rs` (only to use the moved assertions);
+one new unpublished crate under `tools/` for D2; `tools/check-*.sh`
+headers, and fixtures and a runner for D5; `docs/src/**` fence
+annotations, hidden `# ` lines, and the one-sentence notes D2 requires;
+`.github/workflows/{ci.yml,docs.yml}`, and a new scheduled workflow or
+job; `.github/CONTRIBUTING.md`; `CHANGELOG.md` under `[Unreleased]`;
+`Cargo.lock` only for the new tool crates.
+
+## 4. Non-change scope
+
+- No library source in `crates/**`. No change to any published crate's
+  manifest — tests needing an adapter depend on it from `tools/`.
+- No change to what any book chapter *says*. Annotations, hidden setup
+  lines, and D2's notes only. If a fence is wrong, not merely
+  uncompiled, stop and report it: that is a documentation defect, and
+  its fix is reviewed as one.
+- No guard behaviour change for D5. If a fixture shows a guard is
+  wrong, report it before changing the guard.
+- No nightly toolchain, no fuzzing, no Node, no Cloudflare runtime.
+- No Dependabot. No branch protection or repository settings.
+- No `--all-features`. Do not tag, push, or publish. Do not edit
+  `rfcs/README.md`.
+
+## 5. Slices, in order
+
+Each slice ends with the full gate green and its own commit.
+
+### S1. Guard self-tests (D5)
+
+1. Fixtures for every case in RFC 032 D5 — six for
+   `check-doc-versions.sh`, four for `check-wasi-version.sh` — each a
+   minimal tree plus expected exit code and expected stdout.
+2. A runner. Shell or Rust test under `tools/`: choose on which prints
+   the more readable diff when expected and actual stdout differ, and
+   paste one such failure in the review request.
+3. Every branch of each guard reached by at least one fixture. List
+   the branches and the fixture that reaches each.
+4. `check-doc-versions.sh` header: its deliberate exclusions
+   (`CHANGELOG.md`, `rfcs/`), and that the tokio chapter's TOML block
+   is intentional live coverage.
+5. **Demonstrate failure:** alter one comparison in each guard locally
+   (for example, compare the full version instead of major.minor) and
+   show the runner going red on a named fixture. Revert; do not commit
+   the alteration.
+
+### S2. tokio adapter end to end (D1)
+
+1. Move the transcript assertions from `tools/smoke/src/main.rs` into
+   the library, unchanged in what they assert. Point the WASI smoke
+   binary at them, and the component harness too where it asserts the
+   same things. **Run adapter smoke in all four modes and the component
+   harness before going further:** a refactor of a checker is exactly
+   where a checker quietly stops checking.
+2. `tools/smoke/tests/tokio_adapter.rs`, with `wasm-smtp-tokio` as a
+   dev-dependency at `default-features = false, features =
+   ["webpki-roots", "ring"]`. Confirm with `cargo tree -e features -i
+   rustls` that the test binary has one provider, and paste the line.
+3. Three tests — implicit success, STARTTLS success, implicit refused —
+   using the moved assertions. Trust via `with_root_store` holding only
+   the run's CA. The refused case asserts that no SMTP command reached
+   the responder, not merely that an error came back.
+4. **Demonstrate failure:** give the refused case the run's CA. It must
+   go red. Revert.
+
+### S3. CI hygiene and scheduled verification (D4, D3)
+
+1. wasmtime CLI to the 36.0.x LTS line. **Run adapter smoke locally in
+   all four modes under that exact CLI** before changing CI, and paste
+   `wasmtime --version`. If the action cannot install it, say so and
+   stop on this item.
+2. `--locked` on the gate's `cargo build`, `test`, `run`, and `check`
+   commands in CI and in `CONTRIBUTING.md`, both. `cargo fmt` and
+   `cargo package --list` do not need it; say if you find otherwise.
+3. `cargo install cargo-audit --locked --version <exact>`, the current
+   release, recorded in a comment.
+4. Third-party actions by full SHA with `# vX.Y.Z` trailing:
+   `Swatinem/rust-cache`, `bytecodealliance/actions/wasmtime/setup`,
+   `peaceiris/actions-mdbook`. Resolve each SHA from the tag with
+   `git ls-remote`, and list tag → SHA in the review request so the
+   review can check them independently. First-party `actions/*` stay on
+   major tags.
+5. Scheduled run: weekly `schedule` plus `workflow_dispatch`,
+   `permissions: contents: read`, running `cargo audit` and `cargo test
+   --workspace --locked -- --include-ignored`. Separate workflow file or
+   a job in `ci.yml` guarded by event — your call, argued.
+6. Confirm GitHub's **current** documentation on (a) who is notified of
+   a scheduled-run failure and (b) automatic disabling of scheduled
+   workflows after inactivity. Quote the lines and link them in the
+   review request. Record both in the workflow comment. Add a sentence to
+   `CONTRIBUTING.md` only if (b) still applies.
+7. `workflow_dispatch` cannot be demonstrated locally. Say so; the
+   architect will dispatch it once after the push.
+
+### S4. The book's code is compiled (D2)
+
+1. **Inventory before converting anything.** For each of the 31 `rust`
+   fences: chapter and line, whether it compiles as a doctest as it
+   stands, and if not, how many hidden `# ` lines it needs or whether it
+   is host-impossible. Put the table in the review request.
+2. **Threshold.** If more than **eight** fences need more than **five**
+   hidden lines each, stop after the inventory, commit nothing for S4,
+   and report. The owner chooses between compiled chapters and fewer,
+   fuller examples (RFC 032, resolution 2). Otherwise continue.
+3. The unpublished crate — name it `wasm-smtp-book` or similar, `publish
+   = false` — with one `#[cfg(doctest)] #[doc = include_str!(…)]` item
+   per chapter holding a Rust fence, and the features those chapters
+   need. The tokio chapter's adapter dependency follows S2's provider
+   rule.
+4. Host-impossible fences become `rust,ignore`, each with a sentence
+   next to it in the chapter naming the example that compiles that code
+   on its real target. Leave existing `rust,ignore` fences alone unless
+   they now compile, in which case list them and ask; do not convert
+   them unilaterally.
+5. A test in the same crate: walks `docs/src/**/*.md`, finds files with
+   any `rust` fence, and fails naming each not included by the crate.
+6. `docs.yml`: `pull_request` trigger on the build job only; deploy
+   stays push-to-`main`. The `pages` concurrency group must not be
+   shared by pull-request builds, so a PR cannot cancel a deployment.
+   `mdbook build docs` still clean.
+7. **Demonstrate failure, three ways:** rename an API a compiled fence
+   uses — red; remove one chapter from the crate — the coverage test
+   names it; add a scratch chapter with a `rust` fence — the coverage
+   test names it. Revert all three.
+
+### S5. Release order and the gate list (D6)
+
+1. `CONTRIBUTING.md`: one short paragraph beside the required checks
+   stating RFC 032 D6's order. Contributors do not release, so keep it
+   to what they need to know: a release commit is tagged only after CI
+   has passed on that exact commit.
+2. Update the command list in `CONTRIBUTING.md` so it is again exactly
+   what the `gate` job runs, in order. State the resulting list in the
+   review request, numbered, marking every added or changed command.
+   The list is the architect's artifact: propose, do not present as
+   settled.
+3. `CHANGELOG.md` under `[Unreleased]`: one entry per decision, in terms
+   a contributor would care about. No version bump.
+
+## 6. Acceptance criteria
+
+- `cargo test --workspace` runs the three tokio adapter cases and the
+  book doctests and the coverage test; S1's runner runs in the gate.
+- The adapter smoke test (four modes) and the component harness assert
+  what they asserted before S2 moved their checks.
+- Every `rust` fence compiles, or is `ignore` with its note; the
+  coverage test would catch a new chapter.
+- Both test hosts on the wasmtime 36.0.x line, or the reason not.
+- Third-party actions SHA-pinned; `cargo-audit` pinned; `--locked`
+  applied.
+- A weekly scheduled run exists with read-only permissions.
+- Every demonstration in §5 performed and pasted.
+- No `crates/**` source or published manifest changed.
+
+## 7. Prohibited shortcuts
+
+- Marking a fence `ignore` because converting it is tedious. `ignore` is
+  for host-impossible code, with its note.
+- Asserting "an error was returned" in the refused case. The property is
+  that nothing was sent.
+- Rewriting a guard so a fixture passes.
+- Resolving an action SHA from anywhere but the upstream repository's
+  tag.
+- Weakening an assertion while moving it in S2.
+- Combining slices into one commit.
+
+## 8. Review request contents
+
+In order: S1's branch-to-fixture table and one pasted failing diff;
+S2's provider line, and before/after smoke output in all four modes plus
+the component harness; S3's `wasmtime --version`, tag → SHA table, and
+the quoted GitHub documentation; S4's inventory table first, then either
+the stop report or the conversion, and all three failure
+demonstrations; the proposed gate list, numbered, with changes marked;
+changed files; full gate results per slice.

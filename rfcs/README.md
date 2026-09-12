@@ -19,13 +19,13 @@ lifecycle policy is defined in
 | ID | Title | Priority | Handoff |
 |----|-------|----------|---------|
 | [028](./accepted/028-wasi-contract-version-alignment.md) | WASI contract version alignment and component execution | P1 | [yes](./handoffs/028-wasi-contract-alignment/implementation-handoff.md) |
+| [032](./accepted/032-verification-coverage.md) | Verification coverage: what the gate does not yet reach | P2 | [yes](./handoffs/032-verification-coverage/implementation-handoff.md) |
 
 ## Proposed
 
 | ID | Title | Priority |
 |----|-------|----------|
 | [030](./proposed/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface | P2 |
-| [032](./proposed/032-verification-coverage.md) | Verification coverage: what the gate does not yet reach | P2 |
 
 ## Draft
 
@@ -74,4 +74,4 @@ lifecycle policy is defined in
 
 ---
 
-RFC 000–021, 024–027 and 029 are implemented; 028 is accepted; 030 and 032 are proposed; 031 is superseded by 032; 022–023 are drafts. The next RFC is **033**.
+RFC 000–021, 024–027 and 029 are implemented; 028 and 032 are accepted; 030 is proposed; 031 is superseded by 032; 022–023 are drafts. The next RFC is **033**.

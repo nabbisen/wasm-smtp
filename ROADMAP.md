@@ -453,7 +453,7 @@ Order is the owner's decision after the RFC 024 roadmap review.
    proposed): the Component Model interface has no way to name a
    private CA, so a whole class of real caller cannot use it, and the
    component's happy path can only be tested through the Rust adapter.
-7. **Verification coverage** (RFC 032, proposed; supersedes RFC 031):
+7. **Verification coverage** (RFC 032, accepted; supersedes RFC 031):
    the tokio adapter has never completed a send over a socket in a
    test, the book's code compiles nowhere, advisories are scanned only
    on push, and the smoke test's host is an unsupported wasmtime. Close
