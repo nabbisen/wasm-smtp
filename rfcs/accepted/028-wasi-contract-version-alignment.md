@@ -1,9 +1,10 @@
 # RFC 028 — WASI contract version alignment and component execution
 
-**Status.** Proposed
+**Status.** Accepted
 **Priority.** P1
 **Tracks.** Component Model / WASI / Testing / CI
 **Touches.** `crates/wasm-smtp-component/wit/`, `crates/wasm-smtp-component/src/lib.rs`, `crates/wasm-smtp-component/Cargo.toml`, `tools/smoke/` or a new `tools/component-smoke/`, `.github/workflows/ci.yml`, `rfcs/done/018-*`, `rfcs/done/024-*` (amendment notes)
+**Handoff.** [`../handoffs/028-wasi-contract-alignment/implementation-handoff.md`](../handoffs/028-wasi-contract-alignment/implementation-handoff.md)
 **Origin.** Escalated by the dev team during RFC 027 implementation; decided by the architect in `.git-exclude/reviewed/027-docs-publication-dependency-currency-review-1.md` §2.
 
 ## Summary
@@ -90,8 +91,63 @@ the component's credential-passing path has never executed.
 
 ## Open questions
 
-1. D2: guard the `with:` map, or remove it and accept duplicated WASI
-   bindings? The handoff should decide on measured binary size.
-2. Does `cargo component` in CI need a pinned version, as wasmtime does?
-3. Should the WASI minor be tracked in one place both the WIT and the
-   guard read, rather than in three files?
+Superseded by the amendment below. Question 2 is answered (no
+`cargo component` is needed); questions 1 and 3 rest on a premise the
+amendment disproves.
+
+## Amendment — 2026-09-13, on accepting
+
+The owner accepted this RFC on 2026-09-13. Before writing the handoff
+the architect inspected the built artifact, and two of the design's
+assumptions above are wrong. They are recorded here rather than
+silently corrected, because they change what the work is.
+
+**A1. `cargo component` is not needed.** `cargo build --target
+wasm32-wasip2 -p wasm-smtp-component` already emits a **component**,
+not a core module — the artifact's version header is the component
+encoding. The Rust target performs the componentization itself. D3's
+premise that execution waits on a tool that is not installed is false,
+and nothing in this work requires installing one. This makes execution
+the cheapest part of the RFC rather than the most expensive.
+
+**A2. The mismatch is real, observable, and wider than a single
+version.** The import names in the built component are
+`wasi:sockets/tcp@0.2.12` and siblings, against our world's declared
+`@0.2.4` — confirmed in the artifact, not inferred. But the artifact
+also imports `wasi:io/streams@0.2.3` and other `@0.2.3` interfaces,
+contributed by the Rust standard library's own WASI support. So the
+component already imports **two** WASI minors, and re-vendoring
+`wit/deps/` at 0.2.12 would align one of them while leaving the other.
+
+A2 changes the nature of the defect. The world's import list does not
+describe the artifact and cannot be made to: the artifact's imports are
+assembled by the linker from every Rust crate that declares one,
+including `std`, while the `with:` mapping means our WIT generates no
+import bindings at all. The import annotations are therefore
+documentation — and documentation that is specific where it cannot be
+accurate is worse than documentation that states the real requirement,
+which is a WASI 0.2 host.
+
+**Revised design intent.** The handoff investigates before it changes
+anything, in this order:
+
+1. **Execute it** (was D3, now first). Build the component, instantiate
+   it in a host built on the `wasmtime` crate with WASI sockets
+   provided by `wasmtime-wasi`, and call `smtp-send.send` against the
+   scripted responder RFC 025 already provides. This is the check that
+   would have found all of this by running, and it is now cheap. What a
+   real host says about the version mismatch is evidence the rest of
+   the decision should rest on.
+2. **Then decide the contract's shape** with that evidence: either
+   align the annotations to the WASI minor the artifact predominantly
+   imports and document the `std` contribution, or stop pinning a minor
+   in the world at all and state the requirement as a WASI 0.2 host.
+   The second is the architect's leaning, and the handoff must confirm
+   that WIT permits it before committing to it.
+3. **Then guard** whatever invariant the chosen shape actually has. A
+   guard on a number that cannot be accurate would be worse than none.
+
+The `with:`-versus-duplicate-bindings question from the original
+Open questions is deferred: it is a binary-size optimisation, not a
+correctness matter, and bundling it here would obscure the result of
+step 1.

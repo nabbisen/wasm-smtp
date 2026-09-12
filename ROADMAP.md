@@ -436,9 +436,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    advisory; `mail-builder` 0.5 and `wit-bindgen` 0.62 are taken; the
    lockfile is current and deps.rs is clean.
 4. **WASI contract version alignment and component execution**
-   (RFC 028, proposed): the component declares WASI imports at a minor
-   a transitive caret range actually decides; align it, guard the drift
-   in the gate, and execute the component under a host.
+   (RFC 028, accepted): the component has never executed. Run it under
+   a host first — which is cheaper than the RFC first assumed, since
+   the `wasm32-wasip2` target already emits a component — and let that
+   decide how to fix the mismatch between its declared WASI imports
+   (`@0.2.4`) and the artifact's (`@0.2.12`, plus `@0.2.3` from the
+   Rust standard library).
 5. ✅ **Documentation version audit and guard** (RFC 029, shipped
    0.17.1): twenty stale dependency version strings corrected, the
    snippets restated as `cargo add` commands that carry no version, and
