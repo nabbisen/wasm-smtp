@@ -41,11 +41,21 @@ changes is what the gate reaches, and the order releases happen in.
   release commit is pushed alone, and the tag and publish wait for its
   green run. Recorded in `CONTRIBUTING.md`.
 
+### Documentation
+
+- **Three code examples in the book were wrong, not merely uncompiled**,
+  and are fixed (RFC 032). The error-classification match in
+  *Errors* had comments where Rust requires expressions; the policy
+  chapter imported `PolicyError` through a private path; and the retry
+  example in *Usage* did not compile because it had no arm for
+  `SmtpError::Policy` — the example a reader copies into production.
+
 ### Not in this release
 
-- **Compiling the book's Rust code blocks (RFC 032 D2) did not land.** The
-  inventory found blocks that are wrong rather than merely uncompiled, and
-  those are documentation defects to be fixed and reviewed as such first.
+- **Compiling the book's Rust code blocks (RFC 032 D2) did not land.**
+  One example needs the `smtputf8` feature, and a book crate enabling it
+  would change the features the core's own workspace tests build with.
+  How to resolve that is pending.
 
 ## [0.17.2] — 2026-09-13
 
