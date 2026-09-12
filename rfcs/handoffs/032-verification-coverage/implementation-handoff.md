@@ -343,3 +343,42 @@ Its own commit, before S4b. It is independent of the book.
 and demonstration; S4b's normalized before/after sets (or the stop
 report); the fence-by-fence result; the demonstrations; the gate list as
 22 commands with changes marked; the full gate.
+
+---
+
+# Revision 4 — 2026-09-13, after review 3
+
+Review: `.git-exclude/reviewed/032-verification-coverage-review-3.md`.
+S4c and S4b are approved; the 22-command gate list is accepted. One small
+slice remains, governed by RFC 032 amendment **A7**. RFC 030 may start in
+parallel: its files do not overlap these, apart from `CHANGELOG.md`.
+
+## S4d — Stale `ignore` and job-level permissions
+
+One commit.
+
+1. **Fences.** `adapters/tokio.md:80` and `:105`, and
+   `core/connection-reuse.md:39` and `:103`: `rust,ignore` →
+   `rust,no_run`. No other change to them. Command 22's count must move
+   from 33 compiled / 21 ignored to **37 / 17**. Paste it.
+2. **`docs.yml` permissions.**
+   - Workflow level: `contents: read` only.
+   - `build` job: `contents: read` and `pages: read`.
+   - `deploy` job: `pages: write` and `id-token: write`.
+
+   One comment line on each block saying what it is for. Nothing else in
+   the file changes.
+3. **The `pages: read` on `build` is the architect's expectation, not a
+   verified fact.** `actions/configure-pages`' README states no
+   permission. You cannot run it locally; say so, and the architect
+   confirms it on the first push to `main` after approval. If that run's
+   `configure-pages` step fails on permissions, the fix is the next
+   commit, not a revert of the job-level split.
+4. `CHANGELOG.md` under `[Unreleased]`: fold both into the existing
+   Documentation / CI entries. No new heading.
+5. Full gate: 22 commands.
+
+## Review request
+
+`.git-exclude/review-request/032-verification-coverage-4.md`, short:
+command 22's new count, the `docs.yml` diff, and the gate result.

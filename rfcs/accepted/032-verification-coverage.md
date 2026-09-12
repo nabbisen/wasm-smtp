@@ -322,6 +322,20 @@ cargo test --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
 which compiles everything the `check` did and then runs it, with `-p`
 keeping the features out of the workspace run.
 
+## Amendment — 2026-09-13, after review 3
+
+**A7. Stale `ignore`, and permissions that followed a new trigger.** Two
+follow-ups from review 3, both small:
+
+- Four fences marked `rust,ignore` already compile. They carry hidden
+  wrappers and were written to compile. They become `rust,no_run`. The
+  rule stays as A3 wrote it: `ignore` is for host-impossible code and
+  signature listings only.
+- D2 made `docs.yml` run on pull requests, so the workflow-level
+  `pages: write` and `id-token: write` now reach pull-request builds that
+  use neither. They move to the job that deploys, as
+  `actions/deploy-pages` documents; the workflow keeps `contents: read`.
+
 ## Gate changes
 
 The gate command list is the architect's artifact (RFC 024 D3). D1, D2,
