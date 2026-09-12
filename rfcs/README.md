@@ -16,11 +16,15 @@ lifecycle policy is defined in
 
 ## Accepted
 
-_(empty)_
+| ID | Title | Priority | Handoff |
+|----|-------|----------|---------|
+| [025](./accepted/025-wasi-hardening-on-target-verification.md) | WASI hardening and on-target verification | P0 | [yes](./handoffs/025-wasi-hardening/implementation-handoff.md) |
 
 ## Proposed
 
-_(empty)_
+| ID | Title | Priority |
+|----|-------|----------|
+| [026](./proposed/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) | P2 |
 
 ## Draft
 
@@ -63,4 +67,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024 are implemented; 022–023 are drafts. The next RFC is **025**.
+RFC 000–021 and 024 are implemented; 025 is accepted; 026 is proposed; 022–023 are drafts. The next RFC is **027**.

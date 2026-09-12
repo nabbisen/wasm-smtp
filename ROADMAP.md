@@ -417,6 +417,22 @@ that is pinned rather than assumed.
   `SmtpError` variants, and the current crate set in NOTICE and
   CONTRIBUTING.
 
+## Planned — agreed with the owner on 2026-09-12
+
+Order is the owner's decision after the RFC 024 roadmap review.
+
+1. **Phase 19 — WASI hardening and on-target verification** (RFC 025,
+   target 0.16.0): run the WASI adapter under wasmtime in CI, fix the
+   STARTTLS and read defects that only execution exposes, complete the
+   audit event model, bring pipelining to all send methods, preserve
+   adapter error causes, enforce dependency advisories.
+2. **Anti-abuse patterns documentation** (RFC 026, lower priority):
+   Turnstile-style challenges, rate limits, and honeypots at the
+   request boundary, documented as application-layer patterns; no
+   library integration.
+3. Further extension themes (channel binding, DSN, Component Model
+   resources, Direct Sockets) await a later planning session.
+
 ## Out of scope (for now)
 
 The following are deliberately omitted from the roadmap. They may be
