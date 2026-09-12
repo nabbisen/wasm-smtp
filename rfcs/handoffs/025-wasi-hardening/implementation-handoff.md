@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 025: WASI hardening and on-target verification
 
-**Governing RFC.** [`../../accepted/025-wasi-hardening-on-target-verification.md`](../../accepted/025-wasi-hardening-on-target-verification.md)
+**Governing RFC.** [`../../done/025-wasi-hardening-on-target-verification.md`](../../done/025-wasi-hardening-on-target-verification.md)
 **Target release.** 0.16.0. Release approval is the owner's; this handoff produces the release commit only.
 **Prepared.** 2026-09-12 by the architect. Baseline: `356f05c` (0.15.2 plus documentation commits).
 **Review request goes to.** `.git-exclude/review-request/025-wasi-hardening.md`

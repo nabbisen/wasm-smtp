@@ -16,9 +16,7 @@ lifecycle policy is defined in
 
 ## Accepted
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [025](./accepted/025-wasi-hardening-on-target-verification.md) | WASI hardening and on-target verification | P0 | [yes](./handoffs/025-wasi-hardening/implementation-handoff.md) |
+_(empty)_
 
 ## Proposed
 
@@ -60,6 +58,7 @@ lifecycle policy is defined in
 | [020](./done/020-large-message-handling-memory-tests.md) | Large message handling and memory behavior tests | 0.11.0 |
 | [021](./done/021-no-std-alloc-feasibility.md) | no_std / alloc feasibility | 0.11.0 |
 | [024](./done/024-release-gate-integrity-toolchain-baseline.md) | Release gate integrity, toolchain baseline, and MSRV correction ([handoff](./handoffs/024-release-gate-integrity/implementation-handoff.md)) | 0.15.2 |
+| [025](./done/025-wasi-hardening-on-target-verification.md) | WASI hardening and on-target verification ([handoff](./handoffs/025-wasi-hardening/implementation-handoff.md)) | 0.16.0 |
 
 ## Archive
 
@@ -67,4 +66,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024 are implemented; 025 is accepted; 026 is proposed; 022–023 are drafts. The next RFC is **027**.
+RFC 000–021, 024, and 025 are implemented; 026 is proposed; 022–023 are drafts. The next RFC is **027**.

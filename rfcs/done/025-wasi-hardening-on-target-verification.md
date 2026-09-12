@@ -1,6 +1,6 @@
 # RFC 025 — WASI hardening and on-target verification
 
-**Status.** Accepted
+**Status.** Implemented (0.16.0)
 **Priority.** P0
 **Tracks.** Adapter / WASI / Testing / Audit / Core / CI
 **Touches.** `crates/wasm-smtp-wasi/`, `crates/wasm-smtp/src/client/`, `crates/wasm-smtp/src/audit.rs`, `crates/wasm-smtp-cloudflare/src/`, `tools/smoke/` (new), `.github/workflows/ci.yml`, `rfcs/done/010-*` (amendment note), `rfcs/done/012-*` (amendment note), docs
@@ -261,6 +261,7 @@ finding to be reported, not a design choice left open.
     found by the first smoke run: `WasiStream` dropped its socket before
     the socket's child streams, which traps the guest under WASI 0.2.
     Fixed by field order, documented in place.
+- 2026-09-12: released as 0.16.0 (tag at `d259fe0`; six crates published).
 - 2026-09-12, after review 2
   (`.git-exclude/reviewed/025-wasi-hardening-review-2.md`): approved at
   `d259fe0`. The negative smoke mode was implemented for both implicit
