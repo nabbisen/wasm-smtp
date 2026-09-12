@@ -29,7 +29,7 @@ socket code so that the same SMTP engine can be reused on every host.
 | `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp`.         | Implemented    |
 | `wasm-smtp-tokio`       | Tokio + rustls socket adapter for `wasm-smtp`.             | Implemented    |
 | `wasm-smtp-wasi`        | WASI 0.2 sockets adapter (`wasm32-wasip2`).                | Implemented    |
-| `wasm-smtp-component`   | WASM Component Model WIT interface (`wit/smtp.wit`).       | Implemented    |
+| `wasm-smtp-component`   | WASM Component Model WIT interface (`crates/wasm-smtp-component/wit/smtp.wit`). | Implemented |
 
 `wasm-smtp` is the foundation: it implements the SMTP state
 machine, response parsing, command formatting, dot-stuffing, and error
@@ -41,7 +41,8 @@ Four adapters ship today:
 - `wasm-smtp-cloudflare` — Cloudflare Workers (WASM target).
 - `wasm-smtp-tokio` — tokio-based servers (axum, actix, warp, hyper, plain tokio, …).
 - `wasm-smtp-wasi` — WASI 0.2 runtimes (wasmtime, WAMR) targeting `wasm32-wasip2`.
-- `wasm-smtp-component` — WASM Component Model WIT interface (`wit/smtp.wit`),
+- `wasm-smtp-component` — WASM Component Model WIT interface
+  (`crates/wasm-smtp-component/wit/smtp.wit`),
   enabling language-neutral bindings (TypeScript, Go, Python, C, …).
 
 ## Minimum usage

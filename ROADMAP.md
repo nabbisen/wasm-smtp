@@ -378,7 +378,9 @@ development plan.
 
 ## Phase 17 — Component Model WIT interface *(complete)*
 
-- ✅ **`wit/smtp.wit`** (v0.14.0). Language-neutral WIT interface.
+- ✅ **`crates/wasm-smtp-component/wit/smtp.wit`** (v0.14.0; the
+  contract moved inside the crate in v0.15.2, RFC 024 D11).
+  Language-neutral WIT interface.
   Defines `smtp-config`, `smtp-credentials`, `smtp-message`,
   `send-result`, `send-error`, and the `send` function. Compatible
   with jco (TypeScript), wit-bindgen-go (Go), componentize-py (Python).

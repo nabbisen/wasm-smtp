@@ -42,6 +42,13 @@ every other crate keeps `"forbid"` unchanged.
   private no-op-waker `block_on` — sound because the WASI transport
   polls inline and resolves on first poll — uses the `export!` macro
   form, and compiles for the target. See Changed for the WIT amendment.
+- **`wasm-smtp-component` published without its WIT contract.** The
+  contract lived at the workspace root and the crate reached it with
+  `path: "../../wit"`, which cargo cannot include in a package, so every
+  previously published version shipped without it — invisible until the
+  crate could build for its target at all. The contract now lives at
+  `crates/wasm-smtp-component/wit/`, and the release gate checks the
+  packaged file list.
 - **`wasm-smtp-wasi` compiled its test module unconditionally**, rather
   than under `cfg(test)`.
 - **`cargo test --workspace` panicked in the tokio adapter's tests.**

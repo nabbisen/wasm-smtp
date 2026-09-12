@@ -37,7 +37,7 @@
 #[allow(unsafe_code)]
 mod bindings {
     wit_bindgen::generate!({
-        path: "../../wit",
+        path: "wit",
         world: "smtp-client",
         // Map every imported WASI interface onto the bindings the `wasi`
         // crate already provides, so the component carries one copy of them

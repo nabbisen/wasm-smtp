@@ -25,9 +25,9 @@ wasm-smtp/
 │  ├─ wasm-smtp-cloudflare/   Cloudflare Workers socket adapter
 │  ├─ wasm-smtp-tokio/        Tokio + rustls socket adapter
 │  ├─ wasm-smtp-wasi/         WASI 0.2 sockets adapter (wasm32-wasip2)
-│  ├─ wasm-smtp-component/    WASM Component Model export (wit/smtp.wit)
+│  ├─ wasm-smtp-component/    WASM Component Model export
+│  │  └─ wit/                 the contract (smtp.wit) and its WASI deps
 │  └─ wasm-smtp-test/         mock Transport for tests
-├─ wit/                       the Component Model contract and its deps
 ├─ docs/src/                  long-form, mdBook-ready documentation
 ├─ rfcs/                      design records; see rfcs/README.md
 └─ .github/                   policy, issue templates, CI workflow
@@ -44,8 +44,10 @@ wasm-smtp/
   mock transport — `wasm-smtp-test` in this workspace. Do not introduce
   a runtime dependency on `tokio`, `futures`, or any executor in the
   core.
-- Keep `unsafe` out of the core. The workspace `Cargo.toml` enforces
-  `unsafe_code = "forbid"`.
+- Keep `unsafe` out of the code you write. The workspace `Cargo.toml`
+  enforces `unsafe_code = "forbid"`; the one exception is
+  `wasm-smtp-component`, at `deny`, where wit-bindgen's generated
+  Component Model glue carries a scoped allowance (RFC 024 D10).
 - All public items must have a doc comment. Comments and documentation
   are written in English.
 
@@ -70,6 +72,11 @@ cargo check -p wasm-smtp-tokio --no-default-features --features webpki-roots,rin
 # Real targets.
 cargo check -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
 cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2
+
+# Packaged contents: the published component must carry its contract.
+# Add --allow-dirty when checking uncommitted work.
+cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
+cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
 ```
 
 A pull request that does not pass these is unlikely to be merged.

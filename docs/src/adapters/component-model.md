@@ -1,8 +1,10 @@
 # Component Model interface
 
 `wasm-smtp-component` exports the `smtp-send` WIT interface defined in
-`wit/smtp.wit`, enabling any language with WIT tooling to send email
-without writing Rust.
+`crates/wasm-smtp-component/wit/smtp.wit`, enabling any language with WIT
+tooling to send email without writing Rust. The contract lives inside the
+crate so that the published crate carries it (RFC 024 D11); the paths
+below are relative to the crate directory.
 
 ## WIT interface (abbreviated)
 
@@ -29,8 +31,8 @@ Two notes on reading that file:
   TypeScript, `From` in Go, and so on).
 - The world imports `wasi:io`, `wasi:sockets`, and their transitive
   `wasi:clocks` at version 0.2.4. Those packages are vendored under
-  `wit/deps/` so that `wit/` resolves standalone — see
-  `wit/deps/README.md`.
+  `wit/deps/` so that the contract resolves standalone, both in a
+  checkout and in the published crate — see `wit/deps/README.md`.
 
 ## Building the component
 

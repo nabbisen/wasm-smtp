@@ -29,16 +29,16 @@ interface smtp-send {
 }
 ```
 
-See [`wit/smtp.wit`](../../wit/smtp.wit) for the complete interface.
+See [`wit/smtp.wit`](./wit/smtp.wit) for the complete interface.
 
 ## Language bindings
 
 ```sh
 # TypeScript / JavaScript
-jco types ../../wit/smtp.wit -o ./types
+jco types wit/smtp.wit -o ./types
 
 # Go
-wit-bindgen go ../../wit/smtp.wit --out-dir ./smtp_bindings
+wit-bindgen go wit/smtp.wit --out-dir ./smtp_bindings
 ```
 
 ## Building
@@ -63,7 +63,7 @@ cargo component build --target wasm32-wasip2 -p wasm-smtp-component
 ## Security
 
 Credentials are passed as plain strings on each `send` call and are **not**
-retained between calls. See `docs/src/component-model.md` for the threat model.
+retained between calls. See `docs/src/adapters/component-model.md` for the threat model.
 
 ## License
 

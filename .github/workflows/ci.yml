@@ -53,6 +53,14 @@ jobs:
           cargo check -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
           cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2
 
+      # The component is useless to a consumer without its contract, and
+      # cargo silently omits files the manifest does not reach. Check the
+      # packaged file list, not just that the crate compiles.
+      - name: Check packaged contents
+        run: |
+          cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
+          cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
+
   # Non-blocking early warning about upcoming toolchain breakage.
   stable:
     name: stable (advisory)

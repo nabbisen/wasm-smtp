@@ -2,7 +2,9 @@
 
 **Status.** Implemented (v0.14.0)
 Amended by RFC 024 D8 (v0.15.2): `from` escaped as `%from`, WASI imports
-moved to `@0.2.4` with the packages vendored under `wit/deps/`.
+moved to `@0.2.4` with the packages vendored under `wit/deps/`; contract
+relocated to `crates/wasm-smtp-component/wit/` so the published crate
+carries it (RFC 024 D11).
 **Priority.** P2
 **Tracks.** Component Model / WIT
 **Touches.** `wit/` (new), `docs/src/component-model.md`

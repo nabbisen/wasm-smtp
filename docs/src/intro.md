@@ -15,7 +15,8 @@ per runtime:
   servers.
 - **`wasm-smtp-wasi`** adapts WASI 0.2 sockets (`wasm32-wasip2`).
 - **`wasm-smtp-component`** exports the WASM Component Model interface
-  in `wit/smtp.wit`, for callers that are not written in Rust.
+  in `crates/wasm-smtp-component/wit/smtp.wit`, for callers that are not
+  written in Rust.
 
 This split is the project's central design choice. By drawing the
 boundary between SMTP and the host runtime as a single small trait
