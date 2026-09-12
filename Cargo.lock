@@ -1260,6 +1260,7 @@ dependencies = [
 name = "wasm-smtp-component"
 version = "0.15.2"
 dependencies = [
+ "wasi 0.14.7+wasi-0.2.4",
  "wasm-smtp",
  "wasm-smtp-test",
  "wasm-smtp-wasi",

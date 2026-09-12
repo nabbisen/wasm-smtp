@@ -49,13 +49,6 @@ jobs:
           cargo check -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring
 
       - name: Check real targets
-        # NOTE: the wasm32-wasip2 line is RFC 024 §D3 verbatim and includes
-        # wasm-smtp-component, which does not yet build: wit/smtp.wit uses the
-        # reserved WIT keyword `from` as a record field, and the world's
-        # wasi:sockets / wasi:io imports have no vendored packages under
-        # wit/deps. Both need a decision on the frozen WIT contract, so this
-        # step stays red on purpose until that lands rather than being
-        # narrowed to the subset that passes.
         run: |
           cargo check -p wasm-smtp -p wasm-smtp-cloudflare --target wasm32-unknown-unknown
           cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2

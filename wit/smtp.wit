@@ -30,7 +30,7 @@
 ///
 /// Credentials (`smtp-credentials`) are passed as plain WIT strings and
 /// cross the host-component boundary in each call. They are not retained
-/// by the component between calls. See docs/src/component-model.md for
+/// by the component between calls. See docs/src/adapters/component-model.md for
 /// the credential handling threat model.
 
 package wasm-smtp:smtp@0.1.0;
@@ -82,7 +82,7 @@ interface smtp-send {
     /// A single SMTP message: envelope + body.
     record smtp-message {
         /// Envelope sender address (used in MAIL FROM).
-        from: string,
+        %from: string,
         /// Envelope recipient addresses (used in RCPT TO, one per entry).
         to: list<string>,
         /// Fully composed RFC 5322 message body: headers, a blank line,
@@ -163,13 +163,13 @@ interface smtp-send {
 /// and exports the `smtp-send` interface.
 world smtp-client {
     /// DNS lookup, TCP sockets, and byte streams.
-    import wasi:sockets/instance-network@0.2.0;
-    import wasi:sockets/network@0.2.0;
-    import wasi:sockets/tcp@0.2.0;
-    import wasi:sockets/tcp-create-socket@0.2.0;
-    import wasi:sockets/ip-name-lookup@0.2.0;
-    import wasi:io/streams@0.2.0;
-    import wasi:io/poll@0.2.0;
+    import wasi:sockets/instance-network@0.2.4;
+    import wasi:sockets/network@0.2.4;
+    import wasi:sockets/tcp@0.2.4;
+    import wasi:sockets/tcp-create-socket@0.2.4;
+    import wasi:sockets/ip-name-lookup@0.2.4;
+    import wasi:io/streams@0.2.4;
+    import wasi:io/poll@0.2.4;
 
     export smtp-send;
 }

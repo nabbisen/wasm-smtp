@@ -21,6 +21,17 @@ interface smtp-send {
 See `wit/smtp.wit` for the complete interface including all record and
 variant type definitions.
 
+Two notes on reading that file:
+
+- The envelope sender field is written `%from`. `from` is a reserved WIT
+  keyword, and `%` is WIT's escape for using a keyword as an identifier.
+  Binding generators still produce a field named `from` (`from` in
+  TypeScript, `From` in Go, and so on).
+- The world imports `wasi:io`, `wasi:sockets`, and their transitive
+  `wasi:clocks` at version 0.2.4. Those packages are vendored under
+  `wit/deps/` so that `wit/` resolves standalone — see
+  `wit/deps/README.md`.
+
 ## Building the component
 
 Prerequisites:
