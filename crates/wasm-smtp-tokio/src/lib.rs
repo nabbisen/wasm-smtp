@@ -127,8 +127,9 @@
 //
 // `cargo` does not support mutually-exclusive features natively. We use
 // `compile_error!` to surface misconfigurations as a build error rather
-// than letting them slip through and produce a runtime panic from rustls's
-// `CryptoProvider::install_default()`.
+// than letting them slip through to a runtime failure. The guards below
+// also let `transport::crypto_provider` name a provider unambiguously, so
+// this crate never consults — or installs — rustls's process-wide default.
 
 #[cfg(all(feature = "native-roots", feature = "webpki-roots"))]
 compile_error!(

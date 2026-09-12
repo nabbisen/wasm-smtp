@@ -76,9 +76,22 @@ pub(crate) fn make_tls_config(opts: &ConnectOptions) -> Result<Arc<ClientConfig>
         default_root_store()?
     };
 
-    let mut config = ClientConfig::builder_with_protocol_versions(rustls::DEFAULT_VERSIONS)
-        .with_root_certificates(root_store)
-        .with_no_client_auth();
+    // The provider is named explicitly rather than taken from the rustls
+    // process-wide default. A library must not depend on, or install, that
+    // default: an application that links this adapter together with
+    // `wasm-smtp-tokio` gets a rustls with both `ring` and `aws-lc-rs`
+    // compiled in, and the automatic choice then panics. RFC 017 Strategy A
+    // selects ring here.
+    let mut config =
+        ClientConfig::builder_with_provider(Arc::new(rustls::crypto::ring::default_provider()))
+            .with_protocol_versions(rustls::DEFAULT_VERSIONS)
+            .map_err(|e| {
+                WasiSmtpError::new(format!(
+                    "rustls rejected the default protocol versions: {e}"
+                ))
+            })?
+            .with_root_certificates(root_store)
+            .with_no_client_auth();
 
     if !opts.alpn.is_empty() {
         config.alpn_protocols.clone_from(&opts.alpn);

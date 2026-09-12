@@ -159,6 +159,25 @@ fn default_root_store() -> Result<RootCertStore, IoError> {
     }
 }
 
+/// The rustls crypto provider this build selected.
+///
+/// A library must not depend on, or install, the process-wide default
+/// provider: an application that links both this adapter and
+/// `wasm-smtp-wasi` ends up with a rustls that has two providers compiled
+/// in, and `ClientConfig::builder()` then panics because it cannot choose.
+/// The crate's own `compile_error!` guards guarantee exactly one of these
+/// features is enabled.
+fn crypto_provider() -> tokio_rustls::rustls::crypto::CryptoProvider {
+    #[cfg(feature = "aws-lc-rs")]
+    {
+        tokio_rustls::rustls::crypto::aws_lc_rs::default_provider()
+    }
+    #[cfg(all(feature = "ring", not(feature = "aws-lc-rs")))]
+    {
+        tokio_rustls::rustls::crypto::ring::default_provider()
+    }
+}
+
 /// Build the rustls `ClientConfig` for a connect call.
 fn build_client_config(opts: &ConnectOptions) -> Result<Arc<ClientConfig>, IoError> {
     let root_store = match &opts.root_store {
@@ -166,7 +185,13 @@ fn build_client_config(opts: &ConnectOptions) -> Result<Arc<ClientConfig>, IoErr
         None => default_root_store()?,
     };
 
-    let mut config = ClientConfig::builder()
+    let mut config = ClientConfig::builder_with_provider(Arc::new(crypto_provider()))
+        .with_safe_default_protocol_versions()
+        .map_err(|e| {
+            IoError::new(format!(
+                "rustls rejected the default protocol versions: {e}"
+            ))
+        })?
         .with_root_certificates(root_store)
         .with_no_client_auth();
 

@@ -148,7 +148,6 @@ fn mock_transport_starttls_flow_succeeds() {
 
 #[test]
 fn make_tls_config_succeeds_with_default_options() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
     let opts = ConnectOptions::default();
     let result = crate::tls::make_tls_config(&opts);
     assert!(
@@ -160,7 +159,6 @@ fn make_tls_config_succeeds_with_default_options() {
 
 #[test]
 fn make_tls_config_accepts_alpn_override() {
-    let _ = rustls::crypto::ring::default_provider().install_default();
     let opts = ConnectOptions::default().with_alpn(&[b"smtp"]);
     let config = crate::tls::make_tls_config(&opts).expect("config");
     assert_eq!(config.alpn_protocols, vec![b"smtp".to_vec()]);

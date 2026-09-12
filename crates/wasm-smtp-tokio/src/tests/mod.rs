@@ -13,20 +13,3 @@
 
 mod connect_options_tests;
 mod error_path_tests;
-
-/// Install a process-level rustls crypto provider for tests that build a
-/// `ClientConfig`.
-///
-/// `ClientConfig::builder()` derives the provider from rustls's enabled
-/// features, which is unambiguous when this crate is built on its own.
-/// Under `cargo test --workspace`, however, cargo unifies rustls features
-/// across the workspace — `wasm-smtp-wasi` enables `ring` while this crate
-/// defaults to `aws-lc-rs` — so rustls has both compiled in and the
-/// automatic choice panics. Installing one explicitly settles it. The
-/// result is ignored because another test may have installed it first.
-pub(crate) fn install_test_crypto_provider() {
-    #[cfg(feature = "aws-lc-rs")]
-    let _ = tokio_rustls::rustls::crypto::aws_lc_rs::default_provider().install_default();
-    #[cfg(all(feature = "ring", not(feature = "aws-lc-rs")))]
-    let _ = tokio_rustls::rustls::crypto::ring::default_provider().install_default();
-}
