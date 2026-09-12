@@ -73,6 +73,110 @@ on someone's behalf without spoofing the envelope sender, which would
 violate SPF/DKIM at the receiving server. The `\r\n` line endings are
 not optional: SMTP requires CRLF.
 
+## Contact form with a bot challenge
+
+The example above sends whatever arrives. A public form needs one more
+thing first: some evidence that a human asked. Without it the endpoint is
+a relay, and it will be found.
+
+The controls that provide that evidence belong at the HTTP boundary,
+before any SMTP session exists — see
+[Anti-abuse at the request boundary](../concepts/security.md#anti-abuse-at-the-request-boundary)
+for why they are not in the library. The complete Worker is
+`crates/wasm-smtp-cloudflare/examples/contact_form_turnstile.rs`; the
+shape is:
+
+1. **Method.** Only `POST` with a form body. Anything else is `405` or
+   `400`.
+2. **Honeypot.** A `website` field, hidden by CSS in the page. Humans
+   leave it empty; naive bots fill in everything. Non-empty means `400`,
+   with no network call spent.
+3. **Challenge verification.** `POST` the submitted token to the vendor's
+   verification endpoint with your secret key. A refusal is `403`; an
+   unreachable verifier is `503`.
+4. **Send.** Only now open the SMTP session.
+
+The middle of it, with the boilerplate elided:
+
+```rust,no_run
+# use serde::Deserialize;
+# use worker::{console_log, Env, Request, Response, Result, Method};
+# #[derive(Deserialize)]
+# struct SiteVerify { success: bool, #[serde(rename = "error-codes", default)] error_codes: Vec<String> }
+# async fn verify(_s: &str, _t: &str, _ip: &str) -> Result<SiteVerify> { unimplemented!() }
+# fn field(_f: &worker::FormData, _n: &str) -> String { String::new() }
+# async fn deliver(_h: &str, _p: u16, _u: &str, _pw: &str, _n: &str, _e: &str, _m: &str)
+#     -> std::result::Result<(), wasm_smtp::SmtpError> { Ok(()) }
+# async fn handle(mut req: Request, env: Env) -> Result<Response> {
+# let Ok(form) = req.form_data().await else { return Response::error("Expected a form body", 400) };
+// Honeypot: no network call, no log of what was submitted.
+if !field(&form, "website").is_empty() {
+    console_log!("contact form: honeypot triggered");
+    return Response::error("Bad Request", 400);
+}
+
+// Challenge: the last gate before we spend a round trip on SMTP.
+let token = field(&form, "cf-turnstile-response");
+if token.is_empty() {
+    return Response::error("Missing challenge response", 400);
+}
+let secret = env.secret("TURNSTILE_SECRET")?.to_string();
+let remote_ip = req.headers().get("CF-Connecting-IP").ok().flatten().unwrap_or_default();
+
+match verify(&secret, &token, &remote_ip).await {
+    Ok(v) if v.success => {}
+    Ok(v) => {
+        // The verdict and its reason codes only. Never the token.
+        console_log!("contact form: challenge rejected: {:?}", v.error_codes);
+        return Response::error("Forbidden", 403);
+    }
+    Err(_) => {
+        // Fail closed: an outage at the verifier must not open the relay.
+        console_log!("contact form: challenge verification unavailable");
+        return Response::error("Service Unavailable", 503);
+    }
+}
+
+// Only past this point does an SMTP session exist.
+let host = env.var("SMTP_HOST")?.to_string();
+let user = env.secret("SMTP_USER")?.to_string();
+let pass = env.secret("SMTP_PASS")?.to_string();
+deliver(&host, 465, &user, &pass,
+        &field(&form, "name"), &field(&form, "email"), &field(&form, "message"))
+    .await
+    .map_err(|e| { console_log!("contact form: send failed: {e}"); worker::Error::RustError("send failed".into()) })?;
+
+Response::ok("Thanks — your message is on its way.")
+# }
+```
+
+The handler itself carries `#[event(fetch)]`:
+
+```rust,ignore
+#[event(fetch)]
+async fn fetch(req: Request, env: Env, _ctx: worker::Context) -> Result<Response> {
+    handle(req, env).await
+}
+```
+
+### Configuration
+
+| Binding | Kind | Notes |
+|---|---|---|
+| `TURNSTILE_SECRET` | secret | `wrangler secret put TURNSTILE_SECRET` |
+| `SMTP_USER`, `SMTP_PASS` | secret | the submission mailbox |
+| `SMTP_HOST`, `SMTP_PORT` | var | `wrangler.toml` `[vars]` |
+
+The Turnstile **site key** is not in this table on purpose: it is public
+and belongs in the page's HTML widget. Only the secret key goes near the
+Worker, and it never appears in a log line.
+
+Two notes on why the verification is here rather than in the library. It
+needs an HTTP client, a JSON parser, and a vendor's secret — none of which
+the SMTP core or its adapters have any business carrying. And keeping it
+in your handler is what lets you swap Turnstile for hCaptcha, reCAPTCHA,
+or your own scheme by changing one function.
+
 ## Transactional alert
 
 A scheduled Worker emits an alert when a metric crosses a threshold.

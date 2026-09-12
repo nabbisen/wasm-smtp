@@ -61,6 +61,11 @@ jobs:
           cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
           cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
 
+      # The documented Worker examples are compiled for the target they
+      # claim to run on, so the prose cannot rot silently.
+      - name: Check examples for the Workers target
+        run: cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
+
       # The adapter's defects were all of the kind that only running it
       # finds, so the gate runs it: a real wasm32-wasip2 guest under
       # wasmtime against a scripted TLS SMTP responder on loopback, in both

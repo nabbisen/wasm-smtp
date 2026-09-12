@@ -1486,6 +1486,7 @@ name = "wasm-smtp-cloudflare"
 version = "0.16.0"
 dependencies = [
  "getrandom 0.4.2",
+ "serde",
  "tokio",
  "tokio-test",
  "wasm-smtp",

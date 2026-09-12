@@ -5,6 +5,12 @@ every send operation without modifying the core library.
 
 ## SendPolicy
 
+`SendPolicy` is the SMTP-layer control: it decides whether a given
+envelope may go out. Controls that decide whether a request may cause a
+send at all — bot challenges, rate limits, honeypots — belong before the
+session starts; see
+[Anti-abuse at the request boundary](../concepts/security.md#anti-abuse-at-the-request-boundary).
+
 `SendPolicy` is called before any SMTP command is sent. It can veto a
 transaction on the basis of the sender address, recipient list, or
 estimated message size.

@@ -1,5 +1,20 @@
 ## [Unreleased]
 
+### Documentation
+
+- **Anti-abuse patterns at the application boundary** (RFC 026). A new
+  examples section walks a Cloudflare Worker contact form that refuses in
+  order — method, honeypot, then a Turnstile challenge — and opens an SMTP
+  session only once the request has earned it, failing closed if the
+  verifier is unreachable. A new security section draws the boundary the
+  library works to: challenges, rate limits, and honeypots are HTTP-layer
+  and vendor-specific; `SendPolicy` is the SMTP-layer, vendor-neutral hook;
+  the library provides the latter and deliberately not the former. The
+  Worker is a compiled example
+  (`crates/wasm-smtp-cloudflare/examples/contact_form_turnstile.rs`) and
+  the gate checks it for `wasm32-unknown-unknown`, so it cannot rot
+  silently. No published crate gains a dependency.
+
 ## [0.16.0] — 2026-09-12
 
 RFC 025: run the WASI adapter on a real host for the first time, and fix

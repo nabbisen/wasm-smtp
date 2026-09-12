@@ -65,6 +65,10 @@ getrandom = { workspace = true, optional = true, features = ["wasm_js"] }
 [dev-dependencies]
 tokio = { workspace = true, features = ["io-util", "macros", "rt"] }
 tokio-test = { workspace = true }
+# For the contact_form_turnstile example only: it deserializes the
+# challenge verifier'''s JSON reply. Dev-only; the published crate gains
+# no dependency.
+serde = { version = "1", features = ["derive"] }
 
 [lints]
 workspace = true
