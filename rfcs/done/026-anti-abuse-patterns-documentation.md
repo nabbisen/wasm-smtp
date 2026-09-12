@@ -1,6 +1,6 @@
 # RFC 026 — Anti-abuse patterns at the application boundary (documentation)
 
-**Status.** Accepted
+**Status.** Implemented (on `main` 2026-09-12; ships with the next release)
 **Priority.** P2
 **Tracks.** Docs / Security
 **Touches.** `docs/src/reference/examples.md`, `docs/src/concepts/security.md`, `docs/src/SUMMARY.md`
@@ -85,3 +85,13 @@ adapter's `examples/`, which the gate builds on the host and checks for
 ## Open questions
 
 None.
+
+## Amendment log
+
+- 2026-09-12: implemented at `2f78514` after two reviews
+  (`.git-exclude/reviewed/026-anti-abuse-patterns-review-{1,2}.md`).
+  Review 1 required a header-injection guard on the form fields that
+  reach message headers; the same guard was applied to the chapter's
+  pre-existing contact-form example. The gate gained
+  `cargo test -p wasm-smtp-cloudflare --examples` so the guard's tests
+  run in CI.

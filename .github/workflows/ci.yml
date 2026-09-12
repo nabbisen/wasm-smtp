@@ -66,6 +66,11 @@ jobs:
       - name: Check examples for the Workers target
         run: cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 
+      # Examples carry tests of their own (the contact-form header guard);
+      # `cargo test --workspace` builds examples but does not run those.
+      - name: Test examples
+        run: cargo test -p wasm-smtp-cloudflare --examples
+
       # The adapter's defects were all of the kind that only running it
       # finds, so the gate runs it: a real wasm32-wasip2 guest under
       # wasmtime against a scripted TLS SMTP responder on loopback, in both

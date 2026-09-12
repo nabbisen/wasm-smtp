@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 026: Anti-abuse patterns at the application boundary
 
-**Governing RFC.** [`../../accepted/026-anti-abuse-patterns-documentation.md`](../../accepted/026-anti-abuse-patterns-documentation.md)
+**Governing RFC.** [`../../done/026-anti-abuse-patterns-documentation.md`](../../done/026-anti-abuse-patterns-documentation.md)
 **Prepared.** 2026-09-12 by the architect. Baseline: `9fcda99` (0.16.0 released).
 **Release.** None by default. This is documentation plus one compiled example; it ships with whatever release comes next. If the owner wants it on crates.io sooner, that is a separate patch-release decision.
 **Review request goes to.** `.git-exclude/review-request/026-anti-abuse-patterns.md`

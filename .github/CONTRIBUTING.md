@@ -81,6 +81,7 @@ cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit
 
 # The documented Worker examples must compile for the Workers target.
 cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
+cargo test -p wasm-smtp-cloudflare --examples   # example tests are not run by --workspace
 
 # On-target: a real wasm32-wasip2 guest under wasmtime against a scripted
 # TLS SMTP responder on loopback, in four modes — two positive and two

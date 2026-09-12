@@ -16,9 +16,7 @@ lifecycle policy is defined in
 
 ## Accepted
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [026](./accepted/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) | P2 | [yes](./handoffs/026-anti-abuse-patterns/implementation-handoff.md) |
+_(empty)_
 
 ## Proposed
 
@@ -59,6 +57,7 @@ _(empty)_
 | [021](./done/021-no-std-alloc-feasibility.md) | no_std / alloc feasibility | 0.11.0 |
 | [024](./done/024-release-gate-integrity-toolchain-baseline.md) | Release gate integrity, toolchain baseline, and MSRV correction ([handoff](./handoffs/024-release-gate-integrity/implementation-handoff.md)) | 0.15.2 |
 | [025](./done/025-wasi-hardening-on-target-verification.md) | WASI hardening and on-target verification ([handoff](./handoffs/025-wasi-hardening/implementation-handoff.md)) | 0.16.0 |
+| [026](./done/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) ([handoff](./handoffs/026-anti-abuse-patterns/implementation-handoff.md)) | on `main`, next release |
 
 ## Archive
 
@@ -66,4 +65,4 @@ _(empty)_
 
 ---
 
-RFC 000–021, 024, and 025 are implemented; 026 is accepted; 022–023 are drafts. The next RFC is **027**.
+RFC 000–021 and 024–026 are implemented; 022–023 are drafts. The next RFC is **027**.
