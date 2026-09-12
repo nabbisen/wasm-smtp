@@ -20,9 +20,10 @@ _(empty)_
 
 ## Proposed
 
-| ID | Title | Priority |
-|----|-------|----------|
-| [028](./proposed/028-wasi-contract-version-alignment.md) | WASI contract version alignment and component execution | P1 |
+| ID | Title | Priority | Handoff |
+|----|-------|----------|---------|
+| [028](./proposed/028-wasi-contract-version-alignment.md) | WASI contract version alignment and component execution | P1 | — |
+| [029](./proposed/029-documentation-version-audit-and-guard.md) | Documentation version audit, and a guard so it stops recurring | P1 | [drafted](./handoffs/029-documentation-version-audit/implementation-handoff.md) |
 
 ## Draft
 
@@ -68,4 +69,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–027 are implemented; 028 is proposed; 022–023 are drafts. The next RFC is **029**.
+RFC 000–021 and 024–027 are implemented; 028–029 are proposed; 022–023 are drafts. The next RFC is **030**.
