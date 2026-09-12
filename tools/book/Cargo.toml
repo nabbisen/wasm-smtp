@@ -1,0 +1,42 @@
+[package]
+name = "wasm-smtp-book"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Compiles the Rust code blocks in the wasm-smtp book (dev-only, never published)."
+publish = false
+
+# The chapters are compiled only under this feature, by its own gate command:
+#
+#   cargo test --locked -p wasm-smtp-book --features book
+#
+# One fence needs `smtputf8` on the core (`send_mail_smtputf8`). A
+# non-default feature keeps that out of `cargo test --workspace`, which
+# never enables a member's non-default features, so the core's own tests
+# keep building at its defaults (RFC 032 A4, A5). `-p` scopes the dedicated
+# command's feature unification to this crate's graph.
+[features]
+book = ["wasm-smtp/smtputf8"]
+
+# Everything at default features. Measured before this crate was added:
+# with `book` declared but not enabled, the resolved features of wasm-smtp
+# and all three adapters are unchanged. Adding or narrowing a dependency
+# here changes what that measurement covered; re-measure.
+[dependencies]
+wasm-smtp = { path = "../../crates/wasm-smtp" }
+wasm-smtp-tokio = { path = "../../crates/wasm-smtp-tokio" }
+wasm-smtp-wasi = { path = "../../crates/wasm-smtp-wasi" }
+wasm-smtp-cloudflare = { path = "../../crates/wasm-smtp-cloudflare" }
+tokio = { workspace = true, features = ["rt", "macros"] }
+worker = { workspace = true }
+# reference/examples.md's contact-form excerpt derives Deserialize.
+serde = { version = "1", features = ["derive"] }
+# core/usage.md's retry example logs through `log`.
+log = "0.4"
+
+[lints]
+workspace = true

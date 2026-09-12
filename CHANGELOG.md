@@ -50,6 +50,18 @@ changes is what the gate reaches, and the order releases happen in.
 
 ### Documentation
 
+- **The book's Rust code is compiled.** A new unpublished crate,
+  `tools/book`, includes every chapter holding Rust code and runs its
+  code blocks as doctests under a dedicated gate command, `cargo test
+  --locked -p wasm-smtp-book --features book`. A renamed function or an
+  example that stops compiling now fails the gate. The few blocks that
+  cannot compile on a host say why beside them: two call
+  `wasm32-wasip2`-only functions (compiled on that target by the smoke
+  example instead), and one lists signatures. A test fails if a chapter
+  with Rust code is added without being compiled. The feature it needs
+  stays out of the workspace-wide test run.
+- **Pull requests build the book**, so a book that fails to build is seen
+  before merge. Only pushes to `main` deploy it.
 - **Three code examples in the book were wrong, not merely uncompiled**,
   and are fixed (RFC 032). The error-classification match in
   *Errors* had comments where Rust requires expressions; the policy
@@ -67,13 +79,6 @@ changes is what the gate reaches, and the order releases happen in.
   nothing to await, each with its reason. No API or behaviour change; the
   pinned 1.88 gate is unaffected, and the advisory `stable` job reports
   every crate's lints rather than stopping at the first.
-
-### Not in this release
-
-- **Compiling the book's Rust code blocks (RFC 032 D2) did not land.**
-  One example needs the `smtputf8` feature, and a book crate enabling it
-  would change the features the core's own workspace tests build with.
-  How to resolve that is pending.
 
 ## [0.17.2] — 2026-09-13
 

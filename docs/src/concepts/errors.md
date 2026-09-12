@@ -5,6 +5,7 @@ with five variants. The taxonomy is intentionally coarse so that the
 match arms in caller code are stable.
 
 ```rust
+# use wasm_smtp::{IoError, ProtocolError, AuthError, InvalidInputError, PolicyError};
 pub enum SmtpError {
     Io(IoError),
     Protocol(ProtocolError),
@@ -51,6 +52,8 @@ This is the granularity an operator wants in a log line: knowing
 the field directly:
 
 ```rust
+# use wasm_smtp::{SmtpError, ProtocolError, SmtpOp};
+# fn f(err: SmtpError) {
 match err {
     SmtpError::Protocol(ProtocolError::UnexpectedCode { during, actual, .. })
         if during == SmtpOp::AuthPlain && actual == 535 => {
@@ -58,6 +61,7 @@ match err {
     }
     _ => {}
 }
+# }
 ```
 
 The enum is `non_exhaustive`, so future SMTP extensions can add
@@ -158,6 +162,8 @@ A typical caller distinguishes only between transient and permanent
 failures. The standard pattern is:
 
 ```rust
+# use wasm_smtp::{SmtpError, ProtocolError};
+# async fn run<T: wasm_smtp::Transport>(client: &mut wasm_smtp::SmtpClient<T>, from: &str, to: &str, body: &str) {
 match client.send_mail(from, &[to], body).await {
     Ok(_) => {}
     Err(SmtpError::Io(_))                           => { /* retry later */ }
@@ -168,6 +174,7 @@ match client.send_mail(from, &[to], body).await {
     Err(SmtpError::InvalidInput(_))                 => { /* programmer error */ }
     Err(SmtpError::Policy(_))                       => { /* your own policy refused it */ }
 }
+# }
 ```
 
 The reply code is preserved on `ProtocolError::UnexpectedCode` and

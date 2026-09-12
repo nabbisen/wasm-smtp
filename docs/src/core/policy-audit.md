@@ -40,12 +40,22 @@ impl SendPolicy for BlockBigMessages {
 Attach the policy when building the client:
 
 ```rust
+# use wasm_smtp::SmtpClient;
+# struct BlockBigMessages;
+# impl wasm_smtp::policy::SendPolicy for BlockBigMessages {
+#     fn check_sender(&self, _: &str) -> Result<(), wasm_smtp::PolicyError> { Ok(()) }
+#     fn check_recipients(&self, _: &[&str]) -> Result<(), wasm_smtp::PolicyError> { Ok(()) }
+#     fn check_message_size(&self, _: usize) -> Result<(), wasm_smtp::PolicyError> { Ok(()) }
+# }
+# async fn run<T: wasm_smtp::Transport>(transport: T) -> Result<(), wasm_smtp::SmtpError> {
 use wasm_smtp::client::SmtpClientOptions;
 
 let opts = SmtpClientOptions::new()
     .with_policy(Box::new(BlockBigMessages));
 
 let mut client = SmtpClient::connect_with(transport, "client.example.com", opts).await?;
+# Ok(())
+# }
 ```
 
 When `check_message_size` is called from `send_mail_stream`, the
@@ -108,6 +118,9 @@ impl AuditSink for MetricsSink {
 ```
 
 ```rust
+# use wasm_smtp::client::SmtpClientOptions;
+# struct MetricsSink;
+# impl wasm_smtp::audit::AuditSink for MetricsSink { fn on_event(&self, _: &wasm_smtp::audit::SmtpAuditEvent<'_>) {} }
 let opts = SmtpClientOptions::new()
     .with_audit(Box::new(MetricsSink));
 ```
@@ -117,7 +130,8 @@ let opts = SmtpClientOptions::new()
 `VecAuditSink` is a built-in sink for testing. It stores every event
 as a `String` and exposes them via `.events()`:
 
-```rust
+```rust,no_run
+# use wasm_smtp::client::SmtpClientOptions;
 use wasm_smtp::audit::VecAuditSink;
 use std::sync::Arc;
 

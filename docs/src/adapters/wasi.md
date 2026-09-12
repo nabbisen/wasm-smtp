@@ -19,7 +19,12 @@ cargo add wasm-smtp-wasi --no-default-features --features native-roots
 
 ## Implicit TLS (port 465)
 
-```rust
+This example and the STARTTLS one below call functions that exist only on
+`wasm32-wasip2`, so they are not compiled as host doctests; the same
+connection path is compiled for `wasm32-wasip2` by the gate, in
+`crates/wasm-smtp-wasi/examples/smoke.rs`.
+
+```rust,ignore
 use wasm_smtp_wasi::connect_smtps;
 
 let mut client =
@@ -74,7 +79,11 @@ not already buffered, and a resource-drop order that trapped the guest.
 
 ## STARTTLS (port 587)
 
-```rust
+Not compiled as a host doctest, for the reason given above; the same
+connection path is compiled for `wasm32-wasip2` in
+`crates/wasm-smtp-wasi/examples/smoke.rs`.
+
+```rust,ignore
 use wasm_smtp_wasi::connect_smtp_starttls;
 
 let mut client =

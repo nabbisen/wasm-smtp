@@ -111,6 +111,10 @@ cargo run --locked -p wasm-smtp-smoke
 # same responder. No wasmtime CLI needed for this one.
 cargo build --locked --target wasm32-wasip2 -p wasm-smtp-component
 cargo run --locked -p wasm-smtp-component-smoke
+
+# The book's Rust code blocks, compiled as doctests. Only under the `book`
+# feature, so the workspace run above does not see them.
+cargo test --locked -p wasm-smtp-book --features book
 ```
 
 That block is the `gate` job in `.github/workflows/ci.yml`, command for

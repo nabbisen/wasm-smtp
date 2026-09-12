@@ -2478,6 +2478,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-smtp-book"
+version = "0.17.2"
+dependencies = [
+ "log",
+ "serde",
+ "tokio",
+ "wasm-smtp",
+ "wasm-smtp-cloudflare",
+ "wasm-smtp-tokio",
+ "wasm-smtp-wasi",
+ "worker",
+]
+
+[[package]]
 name = "wasm-smtp-cloudflare"
 version = "0.17.2"
 dependencies = [

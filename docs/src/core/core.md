@@ -7,15 +7,15 @@ that shaped it.
 ## Public surface
 
 ```rust
-pub use client::{SmtpClient, SmtpClientOptions};
-pub use error::{
+use wasm_smtp::{SmtpClient, SmtpClientOptions};
+use wasm_smtp::{
     AuthError, InvalidInputError, IoError, PolicyError, ProtocolError, SmtpError, SmtpOp,
 };
-pub use message_body::MessageBody;
-pub use outcome::SendOutcome;
-pub use protocol::{AuthMechanism, DotStufferState, EnhancedStatus};
-pub use session::SessionState;
-pub use transport::{StartTlsCapable, Transport};
+use wasm_smtp::MessageBody;
+use wasm_smtp::SendOutcome;
+use wasm_smtp::{AuthMechanism, DotStufferState, EnhancedStatus};
+use wasm_smtp::SessionState;
+use wasm_smtp::{StartTlsCapable, Transport};
 ```
 
 The hooks live in their own modules: `policy` (`SendPolicy`,
@@ -39,6 +39,7 @@ and the server's queue id when it supplied one; `MessageBody` and
 ## `Transport` and `StartTlsCapable`
 
 ```rust
+# use wasm_smtp::IoError;
 pub trait Transport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError>;
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError>;
@@ -70,10 +71,15 @@ compile time. Implicit-TLS-only transports need not implement it.
 ## `SmtpClient`
 
 ```rust
-SmtpClient::connect(transport, ehlo_domain).await?;          // greeting + EHLO
+# use wasm_smtp::SmtpClient;
+# async fn run<T: wasm_smtp::Transport>(transport: T, ehlo_domain: &str, user: &str, pass: &str,
+#     from: &str, to_a: &str, to_b: &str, body: &str) -> Result<(), wasm_smtp::SmtpError> {
+let mut client = SmtpClient::connect(transport, ehlo_domain).await?; // greeting + EHLO
 client.login(user, pass).await?;                             // optional, best mechanism
 client.send_mail(from, &[to_a, to_b], body).await?;          // 0..N times
 client.quit().await?;                                        // consumes self
+# Ok(())
+# }
 ```
 
 `connect` reads the server greeting, validates that it is a 2xx code,

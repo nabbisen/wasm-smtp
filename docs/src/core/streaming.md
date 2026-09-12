@@ -44,6 +44,7 @@ the DATA phase.
 ## Usage
 
 ```rust
+# async fn run<T: wasm_smtp::Transport>(client: &mut wasm_smtp::SmtpClient<T>) -> Result<(), wasm_smtp::SmtpError> {
 use wasm_smtp::message_body::StrBody;
 
 let body = "Subject: hello\r\n\r\nworld\r\n";
@@ -52,6 +53,8 @@ client.send_mail_stream(
     &["to@example.com"],
     &mut StrBody::new(body),
 ).await?;
+# Ok(())
+# }
 ```
 
 ## Body requirements

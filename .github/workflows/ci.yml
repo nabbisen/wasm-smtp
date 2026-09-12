@@ -127,6 +127,13 @@ jobs:
           cargo build --locked --target wasm32-wasip2 -p wasm-smtp-component
           cargo run --locked -p wasm-smtp-component-smoke
 
+      # The book's Rust code, compiled (RFC 032 D2, A5). Chapters are included
+      # only under the non-default `book` feature, so the workspace test run
+      # neither compiles them nor enables `smtputf8` on the core; this command
+      # does both, and `-p` keeps that feature to this crate's graph.
+      - name: Book code blocks
+        run: cargo test --locked -p wasm-smtp-book --features book
+
   # Non-blocking early warning about upcoming toolchain breakage.
   stable:
     name: stable (advisory)

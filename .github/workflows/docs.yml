@@ -10,6 +10,9 @@ name: Docs
 on:
   push:
     branches: [main]
+  # Pull requests build the book so a broken one is seen before merge; they
+  # never deploy (RFC 032 D2).
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -18,8 +21,10 @@ permissions:
   id-token: write
 
 # One deployment at a time; a newer push supersedes an in-flight one.
+# Pull-request builds get a group of their own per pull request, so a PR can
+# cancel its own stale build but never a deployment.
 concurrency:
-  group: pages
+  group: ${{ github.event_name == 'pull_request' && format('pages-pr-{0}', github.event.pull_request.number) || 'pages' }}
   cancel-in-progress: true
 
 env:
@@ -42,14 +47,17 @@ jobs:
         run: mdbook build docs
 
       - uses: actions/configure-pages@v5
+        if: github.event_name != 'pull_request'
 
       - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
         with:
           path: docs/book
 
   deploy:
     name: deploy to Pages
     needs: build
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     environment:
       name: github-pages

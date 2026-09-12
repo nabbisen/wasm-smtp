@@ -9,6 +9,7 @@ members = [
     "crates/wasm-smtp-component",
     "tools/smoke",
     "tools/component-smoke",
+    "tools/book",
 ]
 
 [workspace.package]

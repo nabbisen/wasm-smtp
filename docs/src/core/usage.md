@@ -40,6 +40,8 @@ beyond dot-stuffing and the terminator.
 ## Multiple messages on one connection
 
 ```rust
+# use wasm_smtp::SmtpClient;
+# async fn run<T: wasm_smtp::Transport>(transport: T, messages: Vec<(&str, &str)>) -> Result<(), wasm_smtp::SmtpError> {
 let mut client = SmtpClient::connect(transport, "client.example.com").await?;
 client.login("user@example.com", "secret").await?;
 
@@ -48,6 +50,8 @@ for (rcpt, body) in messages {
 }
 
 client.quit().await?;
+# Ok(())
+# }
 ```
 
 After `send_mail` returns, the client is back in `MailFrom` state and
@@ -82,6 +86,8 @@ runtime decision based on them) the explicit two-call form is also
 available:
 
 ```rust
+# use wasm_smtp::SmtpClient;
+# async fn run<T: wasm_smtp::StartTlsCapable>(transport: T) -> Result<(), wasm_smtp::SmtpError> {
 let mut client = SmtpClient::connect(transport, "client.example.com").await?;
 // Pre-TLS capabilities are visible here.
 if client.capabilities().iter().any(|c| c.eq_ignore_ascii_case("STARTTLS")) {
@@ -89,6 +95,8 @@ if client.capabilities().iter().any(|c| c.eq_ignore_ascii_case("STARTTLS")) {
 }
 // After starttls() the post-TLS capabilities have replaced the pre-TLS ones.
 client.login("user@example.com", "secret").await?;
+# Ok(())
+# }
 ```
 
 The state machine enforces ordering: `starttls()` may be called only
@@ -109,10 +117,14 @@ should never end up authenticating in cleartext.
 For a relay that does not require authentication:
 
 ```rust
+# use wasm_smtp::SmtpClient;
+# async fn run<T: wasm_smtp::Transport>(transport: T, body: &str) -> Result<(), wasm_smtp::SmtpError> {
 let mut client = SmtpClient::connect(transport, "client.example.com").await?;
 // No call to login() — go straight to send_mail.
 client.send_mail("user@example.com", &["recipient@example.org"], body).await?;
 client.quit().await?;
+# Ok(())
+# }
 ```
 
 The state machine accepts the `Authentication → MailFrom` skip
@@ -139,6 +151,7 @@ server whose advertisement is known to be inaccurate — call
 `login_with`:
 
 ```rust
+# async fn run<T: wasm_smtp::Transport>(client: &mut wasm_smtp::SmtpClient<T>) -> Result<(), wasm_smtp::SmtpError> {
 use wasm_smtp::AuthMechanism;
 
 client.login_with(AuthMechanism::ScramSha256, "user", "secret").await?;
@@ -146,6 +159,8 @@ client.login_with(AuthMechanism::ScramSha256, "user", "secret").await?;
 client.login_with(AuthMechanism::Plain, "user", "secret").await?;
 // or:
 client.login_with(AuthMechanism::Login, "user", "secret").await?;
+# Ok(())
+# }
 ```
 
 `login_with` returns `AuthError::UnsupportedMechanism` if the chosen
@@ -161,8 +176,12 @@ than static passwords — Gmail's SMTP relay and Microsoft 365's
 submission endpoint are the most common — call `login_xoauth2`:
 
 ```rust
+# async fn obtain_oauth2_token() -> Result<String, wasm_smtp::SmtpError> { unimplemented!() }
+# async fn run<T: wasm_smtp::Transport>(client: &mut wasm_smtp::SmtpClient<T>) -> Result<(), wasm_smtp::SmtpError> {
 let access_token = obtain_oauth2_token().await?; // your code
 client.login_xoauth2("user@example.com", &access_token).await?;
+# Ok(())
+# }
 ```
 
 XOAUTH2 lives behind the `xoauth2` cargo feature, which is enabled
@@ -239,6 +258,7 @@ to the basic three-digit code. The crate parses these into
 the structured code instead of grepping the message text:
 
 ```rust
+# async fn run<T: wasm_smtp::Transport>(client: &mut wasm_smtp::SmtpClient<T>, from: &str, to: &str, body: &str) -> Result<(), wasm_smtp::SmtpError> {
 use wasm_smtp::{EnhancedStatus, ProtocolError, SmtpError};
 
 match client.send_mail(from, &[to], body).await {
@@ -257,6 +277,8 @@ match client.send_mail(from, &[to], body).await {
     }
     Err(other) => return Err(other),
 }
+# Ok(())
+# }
 ```
 
 The same structured field is present on `AuthError::Rejected`, which
@@ -281,11 +303,14 @@ cargo add wasm-smtp-cloudflare --features smtputf8
 ```
 
 ```rust
+# async fn run<T: wasm_smtp::Transport>(client: &mut wasm_smtp::SmtpClient<T>) -> Result<(), wasm_smtp::SmtpError> {
 client.send_mail_smtputf8(
     "\u{9001}\u{4FE1}@example.jp",
     &["\u{53D7}\u{4FE1}@\u{4F8B}\u{3048}.jp"],
     "Subject: hello\r\n\r\nbody\r\n",
 ).await?;
+# Ok(())
+# }
 ```
 
 The method validates addresses with a UTF-8-permissive validator
@@ -307,10 +332,14 @@ the normal `send_mail` continues to enforce strict ASCII as before.
 After `connect`, the EHLO capability lines are exposed as a slice:
 
 ```rust
+# use wasm_smtp::SmtpClient;
+# async fn run<T: wasm_smtp::Transport>(transport: T) -> Result<(), wasm_smtp::SmtpError> {
 let client = SmtpClient::connect(transport, "client.example.com").await?;
 for line in client.capabilities() {
     println!("server advertises: {line}");
 }
+# Ok(())
+# }
 ```
 
 The greeting line is excluded. Each remaining entry is one extension as
@@ -334,6 +363,7 @@ give it; nothing else.
 ## Errors and retries
 
 ```rust
+# async fn run<T: wasm_smtp::Transport>(client: &mut wasm_smtp::SmtpClient<T>, from: &str, recipients: &[&str], body: &str) {
 match client.send_mail(from, recipients, body).await {
     Ok(_) => log::info!("delivered"),
     Err(wasm_smtp::SmtpError::Io(e)) => {
@@ -360,6 +390,7 @@ match client.send_mail(from, recipients, body).await {
         // Not retryable as-is: the same message will be refused again.
     }
 }
+# }
 ```
 
 See [Errors](../concepts/errors.md) for the full taxonomy and which states the

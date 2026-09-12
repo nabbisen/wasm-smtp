@@ -36,7 +36,10 @@ two-method translation layer plus a connect helper.
 
 ## Public surface
 
-```rust
+This lists the crate's signatures rather than a program, so it is not
+compiled; the crate's API documentation is authoritative.
+
+```rust,ignore
 pub struct CloudflareTransport { /* ... */ }
 
 impl CloudflareTransport {
@@ -106,6 +109,7 @@ Two layers:
 Implicit TLS (port 465):
 
 ```rust
+# async fn run() -> Result<(), wasm_smtp::SmtpError> {
 use wasm_smtp_cloudflare::connect_smtps;
 
 let mut client =
@@ -118,17 +122,22 @@ client.send_mail(
      Subject: hi\r\n\r\nbody\r\n",
 ).await?;
 client.quit().await?;
+# Ok(())
+# }
 ```
 
 STARTTLS (port 587):
 
 ```rust
+# async fn run() -> Result<(), wasm_smtp::SmtpError> {
 use wasm_smtp_cloudflare::connect_smtp_starttls;
 
 let mut client =
     connect_smtp_starttls("smtp.example.com", 587, "client.example.com").await?;
 client.login("user@example.com", "secret").await?;
 // ...same body and send_mail/quit calls as above
+# Ok(())
+# }
 ```
 
 The shape of this code is identical to the example in `core.md`; the
