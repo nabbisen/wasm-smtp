@@ -35,7 +35,11 @@ wasm-smtp = { path = "../wasm-smtp", version = "0.16.1", default-features = fals
 # `default-features = false` matters here: rustls's defaults enable the
 # aws-lc-rs provider, whose `aws-lc-sys` C sources cannot cross-compile to
 # `wasm32-wasip2`. Only `ring` is wanted on this target.
-rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+# Floor at 0.23.44, the version the lockfile resolves, so the declared
+# range and the tested version agree. The floor matters beyond tidiness:
+# "0.23" admitted pre-0.23.18 releases affected by RUSTSEC-2024-0399, so
+# a downstream lockfile could land on one even though ours never did.
+rustls = { version = "0.23.44", default-features = false, features = ["ring", "std", "tls12", "logging"] }
 rustls-pki-types = { workspace = true }
 
 # Trust anchor sources (feature-gated; at most one should be enabled).

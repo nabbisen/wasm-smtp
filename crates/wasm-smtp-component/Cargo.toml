@@ -31,7 +31,7 @@ wasm-smtp-wasi = { path = "../wasm-smtp-wasi", version = "0.16.1", default-featu
 # The generated Guest trait is implemented in src/lib.rs.
 # Only needed on WASM targets; on native the bindings module is stubbed out.
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wit-bindgen = { version = "0.57", default-features = false, features = ["macros"] }
+wit-bindgen = { version = "0.62", default-features = false, features = ["macros"] }
 # The WASI imports of the `smtp-client` world are mapped onto this crate's
 # bindings (see the `with:` block in src/lib.rs) so that wit-bindgen does not
 # generate a second, unused copy of them. It is already in the wasm32

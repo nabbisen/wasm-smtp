@@ -78,7 +78,7 @@ webpki-roots = "1.0"
 # with no required deps. Floor = 0.4 (current major; 0.4.x has been
 # stable for over a year). We do not enable optional features so the
 # crate adds no transitive deps either.
-mail-builder = { version = "0.4", default-features = false }
+mail-builder = { version = "0.5", default-features = false }
 
 # Crypto crates used by the optional `scram-sha-256` feature on the
 # main crate. RustCrypto project, no_std-compatible, RustSec-clean.
