@@ -460,11 +460,11 @@ Order is the owner's decision after the RFC 024 roadmap review.
    on push, and the smoke test's host is an unsupported wasmtime. Close
    those, add fixture tests for the two shell guards, and tag a
    release only after CI has passed on its commit.
-8. **Stable-toolchain lint currency** (RFC 033, accepted): the
-   advisory stable Clippy job has been red on 22 lints the pinned 1.88
-   does not know. Fix six, allow one pedantic lint at the impl block where
-   no rewrite works on both toolchains, and make the job report every
-   crate. No API or behaviour change.
+8. ✅ **Stable-toolchain lint currency** (RFC 033, on `main`, ships with
+   the next release): the advisory stable Clippy job is green again. Six
+   lints fixed, including base64 with a new round-trip test; one pedantic
+   lint allowed on eight impl blocks where no rewrite works on both
+   toolchains; the job now reports every crate. No API or behaviour change.
 9. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 

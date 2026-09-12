@@ -1,6 +1,6 @@
 # RFC 033 — Stable-toolchain lint currency
 
-**Status.** Accepted (owner, 2026-09-13)
+**Status.** Implemented (on `main` at `e6a15de`, 2026-09-13; ships with the next release)
 **Priority.** P3
 **Tracks.** Code quality / CI
 **Touches.** `crates/wasm-smtp/src/{error.rs,policy.rs,protocol.rs,message_body.rs,tests/**}`, `crates/wasm-smtp/tests/public_api.rs`, `crates/wasm-smtp-cloudflare/src/{adapter.rs,tests/**}`, `crates/wasm-smtp-test/src/transport.rs`, `tools/smoke/tests/tokio_adapter.rs`, `.github/workflows/ci.yml` (advisory job only)

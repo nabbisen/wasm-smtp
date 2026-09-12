@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 033: Stable-toolchain lint currency
 
-**Governing RFC.** [`../../accepted/033-stable-toolchain-lint-currency.md`](../../accepted/033-stable-toolchain-lint-currency.md). Its D2 lists the rewrites that do **not** work, and why. Do not retry them.
+**Governing RFC.** [`../../done/033-stable-toolchain-lint-currency.md`](../../done/033-stable-toolchain-lint-currency.md). Its D2 lists the rewrites that do **not** work, and why. Do not retry them.
 **Prepared.** 2026-09-13 by the architect. Baseline: `a7bd640`.
 **Starts.** Now. Independent of RFC 032 S4, which touches only `docs/src/**` and a new `tools/` crate. Commit separately. If both are in progress, rebase whichever lands second.
 **Target release.** None required; lands on `main`.
