@@ -144,9 +144,13 @@ operating policy of any SMTP server. See [`TERMS_OF_USE.md`].
 
 ## Documentation
 
-Long-form documentation lives in [`docs/src`]. The mdBook structure
-covers project architecture, the SMTP protocol surface, the error
-taxonomy, and end-to-end usage.
+The long-form documentation is published at
+**<https://nabbisen.github.io/wasm-smtp/>**, rebuilt from `main` on every
+push. It covers project architecture, the SMTP protocol surface, the
+error taxonomy, security and anti-abuse guidance, and end-to-end usage.
+
+The source lives in [`docs/src`] if you would rather read it in the
+repository or build it yourself with `mdbook build docs`.
 
 [`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/trait.Transport.html
 [`docs/src`]: ./docs/src

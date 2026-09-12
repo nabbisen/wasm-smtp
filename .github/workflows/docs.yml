@@ -1,0 +1,59 @@
+name: Docs
+
+# Builds the mdBook under docs/ and publishes it to GitHub Pages.
+#
+# Deliberately separate from the release gate in ci.yml: a broken book
+# should be visible on the Actions tab, not a reason a crate release
+# cannot go out. The repository's Pages source must be set to
+# "GitHub Actions" for the deploy step to succeed.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time; a newer push supersedes an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  # Pinned so the published book matches what contributors build locally.
+  MDBOOK_VERSION: "0.5.4"
+
+jobs:
+  build:
+    name: build the book
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mdBook
+        uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: ${{ env.MDBOOK_VERSION }}
+
+      - name: Build
+        run: mdbook build docs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/book
+
+  deploy:
+    name: deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

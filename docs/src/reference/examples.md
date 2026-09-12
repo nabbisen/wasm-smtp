@@ -420,4 +420,4 @@ recipient, on behalf of a domain whose operator has consented. None of
 these patterns is a marketing blast or a scrape-and-spam loop. See
 [`TERMS_OF_USE.md`] at the repository root for the full statement.
 
-[`TERMS_OF_USE.md`]: ../../TERMS_OF_USE.md
+[`TERMS_OF_USE.md`]: https://github.com/nabbisen/wasm-smtp/blob/main/TERMS_OF_USE.md

@@ -6,6 +6,9 @@ language = "en"
 src = "src"
 
 [output.html]
+# The book is served from a project path on GitHub Pages, not the domain
+# root, so links have to resolve under /wasm-smtp/.
+site-url = "/wasm-smtp/"
 default-theme = "light"
 preferred-dark-theme = "navy"
 git-repository-url = "https://github.com/nabbisen/wasm-smtp"
