@@ -7,9 +7,13 @@
 /// ## Building
 ///
 /// ```sh
-/// cargo component build --target wasm32-wasip2 -p wasm-smtp-component
+/// cargo build --target wasm32-wasip2 -p wasm-smtp-component
 /// # Produces: target/wasm32-wasip2/debug/wasm_smtp_component.wasm
 /// ```
+///
+/// No `cargo-component`: the target emits a component on its own. Running
+/// it needs a WASI 0.2 host; the `@0.2.12` below is the minor these
+/// bindings come from, and any 0.2.x host satisfies it.
 ///
 /// ## Language bindings
 ///

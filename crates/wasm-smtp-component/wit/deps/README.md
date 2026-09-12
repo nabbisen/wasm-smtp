@@ -34,9 +34,9 @@ literally named `wasi:sockets` and does not find `wasi:sockets@0.2.12`.
 Tested, not assumed (RFC 028 S2).
 
 What makes this safe in practice is that a host satisfies these imports
-by semver compatibility, not by exact match: the component instantiates
-under a host providing a different 0.2.x, which `tools/component-smoke`
-proves on every gate run by doing exactly that.
+by semver compatibility, not by exact match. `tools/component-smoke`
+proves it on every gate run: wasmtime 36 serves `wasi:*@0.2.6`, neither
+of the two minors in the artifact, and both resolve against it.
 
 ## Maintenance
 

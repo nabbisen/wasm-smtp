@@ -387,7 +387,9 @@ development plan.
 - ✅ **`wasm-smtp-component` crate** (v0.14.0). Rust WIT implementation
   wrapping `wasm-smtp-wasi`. Uses `wit-bindgen 0.57` on `wasm32-wasip2`.
   5 native-host tests (no WASM runtime required for `cargo test`).
-- Build: `cargo component build --target wasm32-wasip2 -p wasm-smtp-component`
+- Build: `cargo build --target wasm32-wasip2 -p wasm-smtp-component` — the
+  target emits a component on its own; `cargo-component` was never needed
+  (corrected in RFC 028, which ran the artifact for the first time).
 
 ## Phase 18 — Release gate integrity *(v0.15.2)*
 

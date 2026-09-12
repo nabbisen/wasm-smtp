@@ -97,7 +97,7 @@ cargo test -p wasm-smtp-cloudflare --examples   # example tests are not run by -
 cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
 cargo run -p wasm-smtp-smoke
 
-# The component, under a host: wasmtime 38 embedded as a library
+# The component, under a host: wasmtime 36 embedded as a library
 # instantiates the built artifact and calls smtp-send.send against the
 # same responder. No wasmtime CLI needed for this one.
 cargo build --target wasm32-wasip2 -p wasm-smtp-component

@@ -1,5 +1,60 @@
 ## [Unreleased]
 
+RFC 028. The `wasm-smtp-component` crate had shipped for three releases
+without ever being executed. It now runs in the gate, and what running
+it showed corrects both the contract it declares and the instructions
+for building it. No change to the `smtp-send` interface: no type, field,
+function, or the `wasm-smtp:smtp@0.1.0` package version.
+
+### Changed
+
+- **The world's WASI imports move from `@0.2.4` to `@0.2.12`**, and the
+  packages vendored under `wit/deps/` move with them — three flat files
+  now, where the 0.2.4 release shipped three directories. The old number
+  came from reading `wasi 0.14.7+wasi-0.2.4`'s own version; that crate is
+  a facade over `wasip2 1.0.4+wasi-0.2.12`, and it is `wasip2` the
+  bindings actually come from. The declared contract had been eight
+  minors from the artifact since 0.15.2.
+  - This changes nothing about the built artifact. Its import names were
+    captured before and after and are byte-identical: the `with:` map
+    means this WIT generates no import bindings, only the export. It does
+    change the `wit/` directory the crate publishes, which is why it is
+    recorded here rather than passed over.
+- **Building it never required `cargo-component`.** `cargo build
+  --target wasm32-wasip2` emits a Component Model component directly.
+  The README, the crate docs, the WIT header, the book chapter, and the
+  roadmap all said otherwise and now do not.
+
+### Added
+
+- **`tools/component-smoke`**, run by the gate: it embeds wasmtime 36 as
+  a library, instantiates the built artifact, and calls `smtp-send.send`
+  against the same scripted TLS SMTP responder the adapter smoke test
+  uses — which is now a library shared by both, rather than a second
+  copy of the SMTP script. It asserts the component validates the
+  server's certificate, refuses one it cannot chain, reports that as a
+  `send-error` rather than trapping or hanging, and speaks no SMTP over
+  the unvalidated channel.
+- **`tools/check-wasi-version.sh`**, also in the gate: the WASI minor is
+  written in nineteen places across the WIT and the crate source, and
+  this compares every one against `wasip2`'s `+wasi-X.Y.Z` metadata in
+  `Cargo.lock`. A `cargo update` that bumps `wasip2` now fails the gate
+  naming both versions, instead of silently widening the gap this
+  release closed.
+
+### Documentation
+
+- The book's component chapter gains a **host requirement** section: a
+  WASI 0.2 host, with the declared minor explained as the one the
+  bindings come from rather than an exact description of the artifact —
+  which also carries `wasi:*@0.2.3` interfaces from the Rust standard
+  library, outside this project's control. Hosts satisfy these imports
+  by semver compatibility, which the gate demonstrates by running the
+  artifact under wasmtime 36, whose WASI packages are at 0.2.6 —
+  neither of the two minors in the artifact, and both resolve.
+- `wit/deps/README.md` rewritten around what the vendored files are for
+  and what the version annotation does and does not mean.
+
 ## [0.17.1] — 2026-09-13
 
 A documentation release. No change to any published crate's source,

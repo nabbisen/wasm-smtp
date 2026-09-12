@@ -210,6 +210,14 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
     // host's WASI implementation under the interface names the guest
     // imports. If the guest's `@0.2.12` imports cannot be satisfied by
     // what this wasmtime provides, instantiation fails here.
+    //
+    // It does not, and that is the finding. wasmtime 36's `wasi:*`
+    // packages are at 0.2.6, while the artifact imports 0.2.12 (from the
+    // `wasi` crate) and 0.2.3 (from the Rust standard library). One host
+    // minor satisfies both, because a 0.2.x host is compatible across
+    // the 0.2 line — which is why the world's declared minor is a
+    // statement about where our bindings came from, not a requirement a
+    // host has to match exactly.
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
         .map_err(|e| format!("adding WASI to the linker failed: {e:?}"))?;
 
@@ -320,4 +328,74 @@ fn check(outcome: &Outcome, rec: &Recording) -> Result<(), String> {
     }
 
     Ok(())
+}
+
+// ── Self-tests for the checker ────────────────────────────────────────────
+//
+// `check` is the whole assertion of this harness, so it gets the same
+// treatment the things it guards get: it is shown failing, on inputs
+// chosen to be the ways it could be wrong. A checker that cannot fail
+// passes every run and means nothing.
+//
+// These cover the three properties from synthetic inputs; the end-to-end
+// demonstration is in the RFC 028 review request, where a build that
+// trusted the responder's certificate produced exactly the first case
+// below against a live responder.
+#[cfg(test)]
+mod tests {
+    use super::{Outcome, check};
+    use wasm_smtp_smoke::{Leg, Recording};
+
+    fn recording(lines: &[&str]) -> Recording {
+        Recording {
+            lines: lines.iter().map(|l| (Leg::Tls, (*l).to_owned())).collect(),
+            body: String::new(),
+        }
+    }
+
+    /// The failure that matters: validation was skipped and the send went
+    /// through. A harness that only asserted "it ran" would pass here.
+    #[test]
+    fn a_successful_send_is_a_failure() {
+        let e = check(&Outcome::Ok(250), &recording(&["EHLO x", "QUIT"])).unwrap_err();
+        assert!(e.contains("did not validate"), "{e}");
+    }
+
+    /// Failing is not enough; it has to fail for the right reason. A
+    /// refused connection or an unresolved name would otherwise be
+    /// indistinguishable from a rejected certificate.
+    #[test]
+    fn the_wrong_error_is_a_failure() {
+        let e = check(
+            &Outcome::Err("Io(\"connection refused\")".to_owned()),
+            &recording(&[]),
+        )
+        .unwrap_err();
+        assert!(e.contains("not with a certificate error"), "{e}");
+    }
+
+    /// And nothing may have been said over a channel that was never
+    /// authenticated, even if the send ultimately failed.
+    #[test]
+    fn speaking_before_the_refusal_is_a_failure() {
+        let e = check(
+            &Outcome::Err("Io(\"TLS handshake failed: UnknownIssuer\")".to_owned()),
+            &recording(&["EHLO component.example.com"]),
+        )
+        .unwrap_err();
+        assert!(e.contains("no SMTP command may cross"), "{e}");
+    }
+
+    /// The shape a correct run has, so the three tests above are known to
+    /// be rejecting something a passing input does not trip.
+    #[test]
+    fn a_certificate_refusal_with_an_empty_transcript_passes() {
+        check(
+            &Outcome::Err(
+                "Io(\"TLS handshake failed: invalid peer certificate: UnknownIssuer\")".to_owned(),
+            ),
+            &recording(&[]),
+        )
+        .unwrap();
+    }
 }

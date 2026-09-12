@@ -20,14 +20,24 @@ path = "src/main.rs"
 wasm-smtp-smoke = { path = "../smoke" }
 rustls-pki-types = { workspace = true, features = ["std"] }
 
-# The host. Pinned to 38.0.4: its MSRV is exactly the 1.88.0 this workspace
-# pins, so the harness builds on the gate's toolchain without loosening
-# anything. Deliberately a different version from the wasmtime 27 CLI the
-# adapter smoke test uses — that one is whatever CI installs, this one is
-# what the component is linked against, and pinning them separately means a
-# bump to either is a visible decision.
-wasmtime = "=38.0.4"
-wasmtime-wasi = "=38.0.4"
+# The host, pinned exactly so a bump is a visible decision.
+#
+# 36.0.14 is on wasmtime's LTS line, and the line is the point: at the
+# time of writing every advisory RustSec has open against wasmtime and
+# wasmtime-wasi — twenty of them, two rated critical — is fixed in
+# 36.0.14, and the LTS line keeps receiving those backports. The first
+# version tried here was 38.0.4, chosen for its MSRV, and `cargo audit`
+# in the gate rejected it: 38.x is a release line nobody backports to.
+# 36.0.14 builds on the 1.88.0 this workspace pins, needs no source
+# change from 38, and clears the audit.
+#
+# Deliberately a different version from the wasmtime 27 CLI the adapter
+# smoke test uses — that one is whatever CI installs, this one is what
+# the component is linked against, and pinning them separately means a
+# bump to either is a visible decision. `cargo audit` is what forces the
+# next bump; an exact pin does not rot silently behind it.
+wasmtime = "=36.0.14"
+wasmtime-wasi = "=36.0.14"
 
 [lints]
 workspace = true

@@ -97,7 +97,7 @@ jobs:
           cargo run -p wasm-smtp-smoke
 
       # The component shipped for three releases without ever being
-      # instantiated. This runs it: wasmtime 38 as a library embeds the
+      # instantiated. This runs it: wasmtime 36 as a library embeds the
       # built artifact, satisfies its WASI imports, and calls
       # `smtp-send.send` against the same scripted responder. No
       # wasmtime CLI — the host is a crate dependency of the harness.

@@ -9,10 +9,16 @@
 //! ## Building
 //!
 //! ```sh
-//! # Requires cargo-component and the wasm32-wasip2 target.
-//! cargo component build --target wasm32-wasip2 -p wasm-smtp-component
+//! # The wasm32-wasip2 target is all that is needed; it emits a
+//! # Component Model component directly, without cargo-component.
+//! cargo build --target wasm32-wasip2 -p wasm-smtp-component
 //! # Output: target/wasm32-wasip2/debug/wasm_smtp_component.wasm
 //! ```
+//!
+//! ## Running it
+//!
+//! Under any WASI 0.2 host. `tools/component-smoke` in this workspace is
+//! one, and the gate runs it against every build.
 //!
 //! ## Running tests on native
 //!
