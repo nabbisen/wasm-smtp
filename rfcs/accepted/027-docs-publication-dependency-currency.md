@@ -1,6 +1,6 @@
 # RFC 027 — Documentation publication and dependency currency
 
-**Status.** Proposed
+**Status.** Accepted
 **Priority.** P1
 **Tracks.** Docs / Release / Dependencies / CI
 **Touches.** `.github/workflows/docs.yml` (new), `README.md`, `docs/book.toml`, `Cargo.toml`, `crates/wasm-smtp-wasi/Cargo.toml`, `crates/wasm-smtp/Cargo.toml`, `crates/wasm-smtp-component/Cargo.toml`, `Cargo.lock`, `CHANGELOG.md`
@@ -13,8 +13,7 @@ Publish the mdBook under `docs/` to GitHub Pages from CI on every push
 to `main`, and bring the dependency declarations up to date: raise the
 rustls floor past the advisory that deps.rs flags, move the two
 dependencies that have a newer major, and refresh the lockfile. Ships
-as **0.17.0** if the `mail-builder` major moves (it changes a type in a
-public signature), otherwise as a patch.
+as **0.17.0**: the owner authorized taking the `mail-builder` major now.
 
 ## Motivation
 
@@ -153,6 +152,10 @@ release commit.
 
 ## Open questions
 
-1. Owner: confirm the Pages source is "GitHub Actions". If it is a
-   branch, the handoff has the alternative.
-2. Owner: 0.17.0 as the release number if `mail-builder` moves.
+None. Both closed by the owner on 2026-09-12: the Pages source is
+"GitHub Actions", and the release is 0.17.0 with `mail-builder` moved
+to 0.5 now.
+
+## Amendment log
+
+- 2026-09-12: accepted by the owner with both open questions answered.

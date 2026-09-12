@@ -1,8 +1,8 @@
 # Developer Handoff — RFC 027: Documentation publication and dependency currency
 
-**Governing RFC.** [`../../proposed/027-docs-publication-dependency-currency.md`](../../proposed/027-docs-publication-dependency-currency.md)
+**Governing RFC.** [`../../accepted/027-docs-publication-dependency-currency.md`](../../accepted/027-docs-publication-dependency-currency.md)
 **Prepared.** 2026-09-12 by the architect. Baseline: the README commits `81fb3a4`, `4f0db09`.
-**Starts.** On the owner's approval of RFC 027 (the architect relays it).
+**Starts.** Now. The owner accepted RFC 027 on 2026-09-12; the Pages source is "GitHub Actions"; the release is **0.17.0** with `mail-builder` moved to 0.5.
 **Review request goes to.** `.git-exclude/review-request/027-docs-publication-dependency-currency.md`
 
 ## 1. Change scope
@@ -52,13 +52,13 @@ tag, push, or publish. Do not add the README badge; the owner does.
 2. `crates/wasm-smtp-wasi/Cargo.toml`: `rustls` floor to the resolved
    version (at least `0.23.18`). Keep `default-features = false` and
    the feature list.
-3. `mail-builder`: read its 0.5 changelog. If `MessageBuilder::new`,
-   `.from`, `.to`, `.subject`, `.text_body`, `.html_body`,
-   `.attachment`, and `write_to_string` are unchanged, move the
-   workspace floor to `0.5` and run `cargo test -p wasm-smtp --features mail-builder`
-   plus the composing-chapter snippets by eye. If any of those changed,
-   stop and report the delta; do not adapt `send_message` without the
-   architect's word.
+3. `mail-builder`: move the workspace floor to `0.5` (owner's
+   decision). Run `cargo test -p wasm-smtp --features mail-builder` and
+   re-read the composing-chapter snippets against the 0.5 API. If
+   `write_to_string` or a builder method the docs use changed signature,
+   adapt `send_message` and the snippets minimally and list every change
+   in the review request; if the change is more than a rename or a
+   return-type wrapper, stop and report first.
 4. `wit-bindgen`: try `0.62` in the component crate. Acceptance is the
    wasip2 check and the smoke test (`cargo check --target wasm32-wasip2 -p wasm-smtp-component`
    and `cargo run -p wasm-smtp-smoke`). If `generate!`'s `with:` map or
@@ -67,7 +67,7 @@ tag, push, or publish. Do not add the README badge; the owner does.
 
 ### S3. Release commit
 
-Version per RFC 027 D6 (0.17.0 if `mail-builder` moved, else 0.16.2)
+Version 0.17.0
 across the workspace and pins; CHANGELOG entry with a compatibility
 note for the rustls floor and, if applicable, the `mail-builder` major;
 full gate; evidence under `.git-exclude/review-request/evidence/027/`;

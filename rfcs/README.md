@@ -16,13 +16,13 @@ lifecycle policy is defined in
 
 ## Accepted
 
-_(empty)_
+| ID | Title | Priority | Handoff |
+|----|-------|----------|---------|
+| [027](./accepted/027-docs-publication-dependency-currency.md) | Documentation publication and dependency currency | P1 | [yes](./handoffs/027-docs-publication-dependency-currency/implementation-handoff.md) |
 
 ## Proposed
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [027](./proposed/027-docs-publication-dependency-currency.md) | Documentation publication and dependency currency | P1 | [drafted](./handoffs/027-docs-publication-dependency-currency/implementation-handoff.md) |
+_(empty)_
 
 ## Draft
 
@@ -67,4 +67,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–026 are implemented; 027 is proposed; 022–023 are drafts. The next RFC is **028**.
+RFC 000–021 and 024–026 are implemented; 027 is accepted; 022–023 are drafts. The next RFC is **028**.
