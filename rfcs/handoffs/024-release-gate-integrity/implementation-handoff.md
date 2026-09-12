@@ -388,14 +388,14 @@ approved the v0.15.2 release on 2026-09-12. S11 is authorized; begin.**
    items: MSRV 1.88, and the component crate's `unsafe_code` level.
 3. Run the full RFC 024 §D3 gate once more on the pinned toolchain;
    refresh `evidence/024/`.
-4. Commit as "Release 0.15.2". Tag `0.15.2` (no `v` prefix). Push the
-   branch and the tag.
-5. Publish in dependency order, each after the previous is visible on
-   crates.io: `wasm-smtp`, `wasm-smtp-test`, `wasm-smtp-tokio`,
-   `wasm-smtp-cloudflare`, `wasm-smtp-wasi`, `wasm-smtp-component`.
-   Use `cargo publish -p <crate>`; never `--all-features`. If any
-   publish is rejected, stop and report; do not retag.
-6. Report the tag commit hash and the six crates.io URLs to the
-   architect in `.git-exclude/review-request/024-release-gate-integrity-3.md`.
-   The architect then moves RFC 024 to `rfcs/done/` with
-   `Implemented (0.15.2)` and updates `rfcs/README.md`.
+4. Commit as "Release 0.15.2". **Do not tag, push, or publish.** Those
+   three steps belong to the owner and the architect, not the dev team.
+5. Report the release commit hash in
+   `.git-exclude/review-request/024-release-gate-integrity-3.md`, with
+   the refreshed gate summary. The architect verifies the commit, then
+   the owner and the architect tag `0.15.2` (no `v` prefix), push, and
+   publish the six crates in dependency order (`wasm-smtp`,
+   `wasm-smtp-test`, `wasm-smtp-tokio`, `wasm-smtp-cloudflare`,
+   `wasm-smtp-wasi`, `wasm-smtp-component`). The architect then moves
+   RFC 024 to `rfcs/done/` with `Implemented (0.15.2)` and updates
+   `rfcs/README.md`.
