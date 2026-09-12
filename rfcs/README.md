@@ -16,9 +16,7 @@ lifecycle policy is defined in
 
 ## Accepted
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [029](./accepted/029-documentation-version-audit-and-guard.md) | Documentation version audit, and a guard so it stops recurring | P1 | [yes](./handoffs/029-documentation-version-audit/implementation-handoff.md) |
+_(empty)_
 
 ## Proposed
 
@@ -63,6 +61,7 @@ lifecycle policy is defined in
 | [025](./done/025-wasi-hardening-on-target-verification.md) | WASI hardening and on-target verification ([handoff](./handoffs/025-wasi-hardening/implementation-handoff.md)) | 0.16.0 |
 | [026](./done/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) ([handoff](./handoffs/026-anti-abuse-patterns/implementation-handoff.md)) | 0.16.1 |
 | [027](./done/027-docs-publication-dependency-currency.md) | Documentation publication and dependency currency ([handoff](./handoffs/027-docs-publication-dependency-currency/implementation-handoff.md)) | 0.17.0 |
+| [029](./done/029-documentation-version-audit-and-guard.md) | Documentation version audit, and a guard so it stops recurring ([handoff](./handoffs/029-documentation-version-audit/implementation-handoff.md)) | 0.17.1 |
 
 ## Archive
 
@@ -70,4 +69,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–027 are implemented; 029 is accepted; 028 is proposed; 022–023 are drafts. The next RFC is **030**.
+RFC 000–021, 024–027 and 029 are implemented; 028 is proposed; 022–023 are drafts. The next RFC is **030**.

@@ -439,11 +439,11 @@ Order is the owner's decision after the RFC 024 roadmap review.
    (RFC 028, proposed): the component declares WASI imports at a minor
    a transitive caret range actually decides; align it, guard the drift
    in the gate, and execute the component under a host.
-5. **Documentation version audit and guard** (RFC 029, accepted,
-   shipping 0.17.1): every dependency instruction in the documentation
-   carried a hard-coded version and seventeen were stale; state them as
-   `cargo add` commands instead and add a gate check so a stale version
-   cannot reach `main` again.
+5. ✅ **Documentation version audit and guard** (RFC 029, shipped
+   0.17.1): twenty stale dependency version strings corrected, the
+   snippets restated as `cargo add` commands that carry no version, and
+   a gate check that fails when a documented version disagrees with the
+   manifest — demonstrated failing before it was made to pass.
 6. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 

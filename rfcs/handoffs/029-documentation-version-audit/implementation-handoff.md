@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 029: Documentation version audit and guard
 
-**Governing RFC.** [`../../accepted/029-documentation-version-audit-and-guard.md`](../../accepted/029-documentation-version-audit-and-guard.md)
+**Governing RFC.** [`../../done/029-documentation-version-audit-and-guard.md`](../../done/029-documentation-version-audit-and-guard.md)
 **Prepared.** 2026-09-12 by the architect. Baseline: `79de96f` (0.17.0 released).
 **Starts.** Now. The owner accepted RFC 029 on 2026-09-13 and opened **0.17.1** as its release.
 **Target release.** 0.17.1 (patch). Release approval is the owner's; this handoff produces the release commit only.

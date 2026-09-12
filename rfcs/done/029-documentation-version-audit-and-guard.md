@@ -1,6 +1,6 @@
 # RFC 029 — Documentation version audit, and a guard so it stops recurring
 
-**Status.** Accepted
+**Status.** Implemented (0.17.1)
 **Priority.** P1
 **Tracks.** Docs / CI
 **Touches.** `README.md`, `docs/src/adapters/{tokio,wasi}.md`, `docs/src/concepts/protocol.md`, `docs/src/core/{composing-messages,usage}.md`, `TERMS_OF_USE.md`, `.github/workflows/ci.yml`, `.github/CONTRIBUTING.md`, `tools/` (one check script)
@@ -171,6 +171,10 @@ fails and proves it can, then the sweep turns it green, then 0.17.1.
 None. The owner authorized the 0.17.1 patch on 2026-09-13.
 
 ## Amendment log
+
+- 2026-09-13: released as 0.17.1 (tag at `d13a212`, published from the
+  tagged commit). The published README now states dependencies as
+  `cargo add` commands with no version to go stale.
 
 - 2026-09-13: accepted by the owner, who opened 0.17.1 as the release
   for it (D5).
