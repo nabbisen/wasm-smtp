@@ -16,14 +16,15 @@ lifecycle policy is defined in
 
 ## Accepted
 
-_(empty)_
+| ID | Title | Priority | Handoff |
+|----|-------|----------|---------|
+| [029](./accepted/029-documentation-version-audit-and-guard.md) | Documentation version audit, and a guard so it stops recurring | P1 | [yes](./handoffs/029-documentation-version-audit/implementation-handoff.md) |
 
 ## Proposed
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [028](./proposed/028-wasi-contract-version-alignment.md) | WASI contract version alignment and component execution | P1 | — |
-| [029](./proposed/029-documentation-version-audit-and-guard.md) | Documentation version audit, and a guard so it stops recurring | P1 | [drafted](./handoffs/029-documentation-version-audit/implementation-handoff.md) |
+| ID | Title | Priority |
+|----|-------|----------|
+| [028](./proposed/028-wasi-contract-version-alignment.md) | WASI contract version alignment and component execution | P1 |
 
 ## Draft
 
@@ -69,4 +70,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–027 are implemented; 028–029 are proposed; 022–023 are drafts. The next RFC is **030**.
+RFC 000–021 and 024–027 are implemented; 029 is accepted; 028 is proposed; 022–023 are drafts. The next RFC is **030**.

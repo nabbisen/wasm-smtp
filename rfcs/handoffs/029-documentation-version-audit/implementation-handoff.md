@@ -1,8 +1,9 @@
 # Developer Handoff — RFC 029: Documentation version audit and guard
 
-**Governing RFC.** [`../../proposed/029-documentation-version-audit-and-guard.md`](../../proposed/029-documentation-version-audit-and-guard.md)
+**Governing RFC.** [`../../accepted/029-documentation-version-audit-and-guard.md`](../../accepted/029-documentation-version-audit-and-guard.md)
 **Prepared.** 2026-09-12 by the architect. Baseline: `79de96f` (0.17.0 released).
-**Starts.** On the owner's approval of RFC 029.
+**Starts.** Now. The owner accepted RFC 029 on 2026-09-13 and opened **0.17.1** as its release.
+**Target release.** 0.17.1 (patch). Release approval is the owner's; this handoff produces the release commit only.
 **Review request goes to.** `.git-exclude/review-request/029-documentation-version-audit.md`
 
 ## 1. Purpose
@@ -20,14 +21,14 @@ is the authoritative work list.
 `docs/src/core/{composing-messages,usage}.md`, `TERMS_OF_USE.md`,
 `tools/check-doc-versions.sh` (new, or a Rust bin under `tools/` if you
 prefer — say which and why), `.github/workflows/ci.yml`,
-`.github/CONTRIBUTING.md`, `CHANGELOG.md` under `[Unreleased]`.
+`.github/CONTRIBUTING.md`, `CHANGELOG.md`, and for the release commit
+the workspace `version` plus the five inter-crate pins.
 
 ## 3. Non-change scope
 
-No library source. No `Cargo.toml` edits except none at all. No new
-dependency. No version bump — the release decision is the owner's and
-comes after this is reviewed. Do not tag, push, or publish. Do not edit
-`rfcs/README.md`.
+No library source. No dependency change — the only manifest edits are
+the version bump in S4. No `--all-features`. Do not tag, push, or
+publish: stop at the release commit. Do not edit `rfcs/README.md`.
 
 ## 4. Slices
 
@@ -78,11 +79,24 @@ comes after this is reviewed. Do not tag, push, or publish. Do not edit
    rest of the document untouched; it is a policy document.
 3. Re-run the guard: it must now be silent.
 
-### S3. Finish
+### S3. Verify
 
-`mdbook build docs` clean; full gate green including the new check;
-`CHANGELOG.md` `[Unreleased]` gains one Documentation bullet naming the
-audit and the guard. Stop there — no release commit, no bump.
+`mdbook build docs` clean; full gate green including the new check.
+
+### S4. Release commit (0.17.1)
+
+1. Workspace `version` and the five inter-crate pins to `0.17.1`.
+   Note the ordering trap: the guard reads the manifest, so bumping the
+   version makes every `0.17` string in the documentation stale again.
+   Run the guard after the bump and fix whatever it names — if S2 left
+   any TOML block showing a version, that block moves too. A green
+   guard after the bump is the proof the two are actually coupled.
+2. `CHANGELOG.md`: a `[0.17.1]` section dated the release day, with a
+   Documentation entry naming the audit and the guard, and the
+   comparison links. Nothing belongs under `[Unreleased]` afterwards.
+3. Full gate on the bumped tree; evidence under
+   `.git-exclude/review-request/evidence/029/`.
+4. Commit as "Release 0.17.1". Stop.
 
 ## 5. Acceptance criteria
 
@@ -94,7 +108,9 @@ guard's failing output from S1.3 and its silent output after S2.
 - Correcting the strings without the guard. That is what failed twice.
 - An exception list in the guard to make a line pass rather than
   rewording it.
-- Touching library source, manifests, or the version.
+- Touching library source or any dependency.
+- Bumping the version before the guard is green on the unbumped tree;
+  the two must be shown to disagree and then agree.
 
 ## 7. Review request contents
 

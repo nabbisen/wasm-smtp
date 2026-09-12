@@ -1,9 +1,10 @@
 # RFC 029 — Documentation version audit, and a guard so it stops recurring
 
-**Status.** Proposed
+**Status.** Accepted
 **Priority.** P1
 **Tracks.** Docs / CI
 **Touches.** `README.md`, `docs/src/adapters/{tokio,wasi}.md`, `docs/src/concepts/protocol.md`, `docs/src/core/{composing-messages,usage}.md`, `TERMS_OF_USE.md`, `.github/workflows/ci.yml`, `.github/CONTRIBUTING.md`, `tools/` (one check script)
+**Handoff.** [`../handoffs/029-documentation-version-audit/implementation-handoff.md`](../handoffs/029-documentation-version-audit/implementation-handoff.md)
 **Origin.** The owner found a stale version in the README's Cargo-features example for the **second** time, and asked for an audit of all documentation, examples, and comments.
 
 ## Summary
@@ -121,11 +122,12 @@ kind of thing a machine should check.
 
 ### D5. Release
 
-Documentation only; nothing ships by itself. But crates.io renders the
+Ships as **0.17.1**, a patch, authorized by the owner on 2026-09-13.
+Documentation changes nothing in the crates, but crates.io renders the
 README attached to each published version, so the version a reader sees
-there stays wrong until a release carries the fix. That makes a 0.17.1
-patch worth considering purely to correct the published README — the
-owner's call, and the same trade as the 0.16.1 decision.
+there stays wrong until a release carries the fix. Same trade as the
+0.16.1 decision. Release approval at release time; tag, push, and
+publish are the owner's and the architect's.
 
 ## Security considerations
 
@@ -152,8 +154,8 @@ problem justifies.
 
 ## Implementation plan
 
-One slice; see the handoff. Guard first, so it fails and proves it can,
-then the sweep turns it green.
+Two slices plus a release commit; see the handoff. Guard first, so it
+fails and proves it can, then the sweep turns it green, then 0.17.1.
 
 ## Acceptance criteria
 
@@ -166,5 +168,9 @@ then the sweep turns it green.
 
 ## Open questions
 
-1. Owner: a 0.17.1 patch to correct the README that crates.io shows
-   (D5), or wait for the next substantive release?
+None. The owner authorized the 0.17.1 patch on 2026-09-13.
+
+## Amendment log
+
+- 2026-09-13: accepted by the owner, who opened 0.17.1 as the release
+  for it (D5).
