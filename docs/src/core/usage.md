@@ -366,11 +366,18 @@ client moves to after each kind of failure.
 Because `SmtpClient` is generic over `Transport`, you can drive it
 against any synchronous mock you like — no executor required.
 
-The workspace ships that mock as `wasm-smtp-test`: `MockTransport`
-replays scripted server replies and captures the bytes your code wrote,
-and `block_on` polls a future that never yields to completion. It is a
-dev-only crate inside this repository (`publish = false`), so reach for
-it by path if you are working in a checkout.
+The project ships that mock as `wasm-smtp-test`: `MockTransport` replays
+scripted server replies and captures the bytes your code wrote, and
+`block_on` polls a future that never yields to completion. Add it as a
+dev-dependency:
+
+```toml
+[dev-dependencies]
+wasm-smtp-test = "0.15"
+```
+
+It is meant for development and testing only — never build production
+code on it.
 
 Otherwise the pattern reproduces in a few lines: a struct holding a
 `VecDeque<Vec<u8>>` of scripted replies and a `Vec<u8>` of captured

@@ -25,19 +25,22 @@ public API changes; no protocol behavior changes.
   `Debug` label of each event rather than the enum, `PolicyError` lives
   at the crate root rather than in `policy`, and the `wasm-smtp-wasi`
   crate-level example uses helpers that exist only on `wasm32`.
-- **`wasm-smtp-component` failed to build.** It referenced a
-  non-existent `wasm_smtp_component_rt` crate, used an `exports:` key
-  that wit-bindgen 0.57 does not accept, and dropped `TlsMode` from the
-  native stub imports. The crate now drives its futures with a private
-  no-op-waker `block_on` — sound because the WASI transport polls
-  inline and resolves on first poll — and uses the `export!` macro form.
+- **`wasm-smtp-component` had never built for `wasm32-wasip2`**, its
+  only real target. It referenced a non-existent `wasm_smtp_component_rt`
+  crate, used an `exports:` key that wit-bindgen 0.57 does not accept,
+  and dropped `TlsMode` from the native stub imports; `wit/smtp.wit`
+  itself did not parse, and the WASI packages its world imports were not
+  present to resolve against. The crate now drives its futures with a
+  private no-op-waker `block_on` — sound because the WASI transport
+  polls inline and resolves on first poll — uses the `export!` macro
+  form, and compiles for the target. See Changed for the WIT amendment.
 - **`wasm-smtp-wasi` compiled its test module unconditionally**, rather
   than under `cfg(test)`.
 - **`cargo test --workspace` panicked in the tokio adapter's tests.**
   Feature unification across the workspace leaves rustls with both the
   `ring` and `aws-lc-rs` providers compiled in, so rustls could not pick
-  one automatically. The affected tests now install a provider
-  explicitly.
+  one automatically. Fixed properly in the adapters themselves — see
+  Changed.
 - **A stale doc comment** describing `login` sat orphaned in
   `client/mod.rs`, attached to no item, and the `send_message` doc block
   began with a copy of the SMTPUTF8 text.
@@ -64,6 +67,39 @@ public API changes; no protocol behavior changes.
   XOAUTH2, and OAUTHBEARER per feature), instead of mentioning only
   XOAUTH2. A unit test asserts the text follows the features.
 
+- **The WIT contract is amended** (RFC 024 D8), without an interface
+  change. `smtp-message`'s envelope sender field is written `%from`,
+  since `from` is a reserved WIT keyword and the file had never parsed;
+  binding generators still see a field named `from`, and the package
+  stays at `wasm-smtp:smtp@0.1.0`. The `wasi:io`, `wasi:sockets`, and
+  transitive `wasi:clocks` packages are vendored under `wit/deps/` at
+  WASI 0.2.4 — the version the `wasi` 0.14 crate implements — and the
+  world's import annotations move from `@0.2.0` to `@0.2.4` to match.
+  The component's `generate!` maps those imports onto the `wasi` crate
+  so the component carries one copy of the WASI bindings rather than
+  two.
+- **Both TLS adapters now name their rustls crypto provider explicitly**
+  (RFC 024 D9) instead of relying on the process-wide default:
+  `wasm-smtp-tokio` uses whichever of aws-lc-rs or ring its features
+  selected, `wasm-smtp-wasi` uses ring. A library should not depend on,
+  or install, that default — with both adapters in one process rustls
+  has two providers compiled in and the automatic choice panics. Public
+  API is unchanged; an application that installed a different process
+  default no longer influences these adapters.
+- **`wasm-smtp-test` is now published** to crates.io (RFC 024 D6,
+  confirmed by the owner). It is the reference implementation of the
+  `Transport` contract for third-party adapter authors. Its
+  "development and testing only, not for production" framing is
+  unchanged, and its `wasm-smtp` dependency is pinned to the workspace
+  version.
+- **`wasm-smtp-component` declares its own lint table** with
+  `unsafe_code = "deny"` rather than inheriting the workspace's
+  `forbid`. The Component Model export glue that wit-bindgen generates
+  is `unsafe` by construction, and `forbid` cannot be lifted anywhere in
+  a crate. The allowance is scoped to the two generated-code modules;
+  hand-written `unsafe` in that crate is still refused, and every other
+  crate keeps `forbid`.
+
 ### Documentation
 
 - The Cloudflare adapter is no longer described as planned: four
@@ -79,8 +115,15 @@ public API changes; no protocol behavior changes.
   four methods including `flush`, and no longer claims the crate has no
   external dependencies (the optional SCRAM crypto crates are the
   exception).
-- `usage.md` points at the `wasm-smtp-test` mock and the self-contained
-  example in `tests/public_api.rs`.
+- `usage.md` points at the `wasm-smtp-test` mock, now a published
+  dev-dependency, and at the self-contained example in
+  `tests/public_api.rs`.
+- `adapters/component-model.md` explains the `%from` escape and the
+  vendored WASI packages; `wit/deps/README.md` names their source,
+  version, and license.
+- `CONTRIBUTING.md`'s repository layout lists all six crates, and its
+  code-style section points at `crates/<crate>/src/tests/` rather than a
+  path that has not existed for several releases.
 - The WASI adapter no longer claims its helpers "return a compile-time
   error" on non-WASM targets; they are simply absent there.
 - `README.md` documents every cargo feature, uses `"0.15"` in dependency
@@ -90,16 +133,6 @@ public API changes; no protocol behavior changes.
   duplicated `[0.9.4]` headings are merged into one section with a note
   about the version offset, and the comparison links use the project's
   tag format (no `v` prefix) and cover 0.10.0 onward.
-
-### Known limitation
-
-`wasm-smtp-component` still does not build for `wasm32-wasip2`, and the
-corresponding CI step is red on purpose. Two blockers remain in the
-frozen WIT contract: `wit/smtp.wit` uses the reserved WIT keyword `from`
-as a record field, and the world's `wasi:sockets` / `wasi:io` imports
-have no packages vendored under `wit/deps`. Both require a decision
-about `wit/smtp.wit` itself. Everything else in this release is
-unaffected; the crate's native build and tests pass.
 
 ## [0.15.1] — 2026-05-11
 
