@@ -1,7 +1,8 @@
 # Terms of Use
 
-`wasm-smtp` is a library for sending mail by SMTP from constrained
-runtimes (initially Cloudflare Workers). The Apache License governs the
+`wasm-smtp` is a library for sending mail by SMTP from WebAssembly and
+other constrained runtimes, with adapters for Cloudflare Workers, WASI
+0.2, tokio, and the WASM Component Model. The Apache License governs the
 copyright and patent terms; this document defines the additional rules
 of acceptable use that authors of this project consider non-negotiable.
 

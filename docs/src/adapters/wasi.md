@@ -4,18 +4,17 @@
 runtimes (wasmtime ≥ 19, WAMR) targeting `wasm32-wasip2`. It uses WASI
 sockets (`wasi:sockets/tcp`) and rustls for TLS.
 
-## Add to Cargo.toml
+## Add the dependency
 
-```toml
-[dependencies]
-wasm-smtp-wasi = "0.15"
+```sh
+cargo add wasm-smtp-wasi
 ```
 
 For native-roots (platform certificate store) instead of bundled
 WebPKI roots:
 
-```toml
-wasm-smtp-wasi = { version = "0.15", default-features = false, features = ["native-roots"] }
+```sh
+cargo add wasm-smtp-wasi --no-default-features --features native-roots
 ```
 
 ## Implicit TLS (port 465)

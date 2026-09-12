@@ -370,9 +370,8 @@ a release WASM bundle. For the majority of submission workloads
 that only ever send ASCII addresses, that's dead weight, so the
 feature is opt-in. Enable it via:
 
-```toml
-[dependencies]
-wasm-smtp = { version = "0.4", features = ["smtputf8"] }
+```sh
+cargo add wasm-smtp --features smtputf8
 ```
 
 When the feature is disabled, none of the helpers above exist; the

@@ -115,15 +115,15 @@ Defaults favour the strongest authentication available. To strip OAuth
 2.0 support entirely (typical for transactional senders against a
 self-hosted Postfix or commercial relay using static passwords):
 
-```toml
-wasm-smtp = { version = "0.16", default-features = false }
+```sh
+cargo add wasm-smtp --no-default-features
 ```
 
 To opt into international addresses while keeping the OAuth 2.0
 support:
 
-```toml
-wasm-smtp = { version = "0.16", features = ["smtputf8"] }
+```sh
+cargo add wasm-smtp --features smtputf8
 ```
 
 The `wasm-smtp-cloudflare` adapter exposes a matching `smtputf8`

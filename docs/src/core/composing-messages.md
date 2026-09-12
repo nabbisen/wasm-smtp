@@ -38,11 +38,10 @@ one. The reasoning:
 
 Add it as a peer dependency:
 
-```toml
-[dependencies]
-wasm-smtp = "0.7"
-wasm-smtp-tokio = "0.7"     # or wasm-smtp-cloudflare, depending on runtime
-mail-builder = "0.4"
+```sh
+cargo add wasm-smtp mail-builder
+# plus the adapter for your runtime:
+cargo add wasm-smtp-tokio      # or wasm-smtp-cloudflare, wasm-smtp-wasi
 ```
 
 ### Convenience: `SmtpClient::send_message` (with the `mail-builder` feature)
@@ -51,10 +50,9 @@ To skip the explicit `write_to_string()?` step, enable the
 `mail-builder` cargo feature on `wasm-smtp` and use
 `SmtpClient::send_message`:
 
-```toml
-[dependencies]
-wasm-smtp = { version = "0.8", features = ["mail-builder"] }
-mail-builder = "0.4"
+```sh
+cargo add wasm-smtp --features mail-builder
+cargo add mail-builder
 ```
 
 ```rust,ignore
@@ -311,11 +309,8 @@ verification.
 
 ### Minimum signing example
 
-```toml
-[dependencies]
-wasm-smtp = "0.9"
-mail-builder = "0.4"
-mail-auth = "0.7"
+```sh
+cargo add wasm-smtp mail-builder mail-auth
 ```
 
 ```rust,ignore

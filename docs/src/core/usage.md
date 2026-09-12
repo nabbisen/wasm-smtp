@@ -274,11 +274,10 @@ mailbox names, IDN U-label domains, and so on — enable the
 `smtputf8` cargo feature and use `send_mail_smtputf8` instead of
 `send_mail`:
 
-```toml
-[dependencies]
-wasm-smtp = { version = "0.4", features = ["smtputf8"] }
+```sh
+cargo add wasm-smtp --features smtputf8
 # or, via the cloudflare adapter (which re-exports the feature):
-wasm-smtp-cloudflare = { version = "0.4", features = ["smtputf8"] }
+cargo add wasm-smtp-cloudflare --features smtputf8
 ```
 
 ```rust
@@ -371,9 +370,8 @@ scripted server replies and captures the bytes your code wrote, and
 `block_on` polls a future that never yields to completion. Add it as a
 dev-dependency:
 
-```toml
-[dev-dependencies]
-wasm-smtp-test = "0.15"
+```sh
+cargo add --dev wasm-smtp-test
 ```
 
 It is meant for development and testing only — never build production

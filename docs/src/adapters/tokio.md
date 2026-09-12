@@ -62,17 +62,17 @@ rather than as a runtime panic from rustls.
 ```toml
 # Default — system trust, aws-lc-rs.
 [dependencies]
-wasm-smtp = "0.8"
-wasm-smtp-tokio = "0.8"
+wasm-smtp = "0.17"
+wasm-smtp-tokio = "0.17"
 
 # Distroless container with bundled Mozilla roots, aws-lc-rs:
-# wasm-smtp-tokio = { version = "0.8", default-features = false, features = ["webpki-roots", "aws-lc-rs"] }
+# wasm-smtp-tokio = { version = "0.17", default-features = false, features = ["webpki-roots", "aws-lc-rs"] }
 
 # Fast-rebuild CI with system trust, ring:
-# wasm-smtp-tokio = { version = "0.8", default-features = false, features = ["native-roots", "ring"] }
+# wasm-smtp-tokio = { version = "0.17", default-features = false, features = ["native-roots", "ring"] }
 
 # Most minimal — bundled roots, ring (smallest dep tree, fastest build):
-# wasm-smtp-tokio = { version = "0.8", default-features = false, features = ["webpki-roots", "ring"] }
+# wasm-smtp-tokio = { version = "0.17", default-features = false, features = ["webpki-roots", "ring"] }
 ```
 
 ## Implicit TLS (port 465)
