@@ -16,13 +16,13 @@ lifecycle policy is defined in
 
 ## Accepted
 
-_(empty)_
+| ID | Title | Priority | Handoff |
+|----|-------|----------|---------|
+| [026](./accepted/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) | P2 | [yes](./handoffs/026-anti-abuse-patterns/implementation-handoff.md) |
 
 ## Proposed
 
-| ID | Title | Priority |
-|----|-------|----------|
-| [026](./proposed/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) | P2 |
+_(empty)_
 
 ## Draft
 
@@ -66,4 +66,4 @@ _(empty)_
 
 ---
 
-RFC 000–021, 024, and 025 are implemented; 026 is proposed; 022–023 are drafts. The next RFC is **027**.
+RFC 000–021, 024, and 025 are implemented; 026 is accepted; 022–023 are drafts. The next RFC is **027**.

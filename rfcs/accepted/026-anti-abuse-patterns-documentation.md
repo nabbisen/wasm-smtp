@@ -1,10 +1,11 @@
 # RFC 026 — Anti-abuse patterns at the application boundary (documentation)
 
-**Status.** Proposed
+**Status.** Accepted
 **Priority.** P2
 **Tracks.** Docs / Security
 **Touches.** `docs/src/reference/examples.md`, `docs/src/concepts/security.md`, `docs/src/SUMMARY.md`
-**Authorized.** Theme approved by the owner on 2026-09-12 as lower priority than RFC 025.
+**Handoff.** [`../handoffs/026-anti-abuse-patterns/implementation-handoff.md`](../handoffs/026-anti-abuse-patterns/implementation-handoff.md)
+**Authorized.** Theme approved by the owner on 2026-09-12 as lower priority than RFC 025; proceed authorized the same day after 0.16.0 shipped.
 
 ## Summary
 
@@ -70,7 +71,10 @@ parse with no SMTP content and a vendor-bound maintenance tax.
 
 ## Implementation plan
 
-After RFC 025 ships. A one-slice handoff.
+One slice; see the handoff. Ships with the next release rather than
+forcing one: documentation plus a compiled example under the Cloudflare
+adapter's `examples/`, which the gate builds on the host and checks for
+`wasm32-unknown-unknown`.
 
 ## Acceptance criteria
 
