@@ -1,6 +1,6 @@
 # RFC 027 — Documentation publication and dependency currency
 
-**Status.** Accepted
+**Status.** Implemented (0.17.0)
 **Priority.** P1
 **Tracks.** Docs / Release / Dependencies / CI
 **Touches.** `.github/workflows/docs.yml` (new), `README.md`, `docs/book.toml`, `Cargo.toml`, `crates/wasm-smtp-wasi/Cargo.toml`, `crates/wasm-smtp/Cargo.toml`, `crates/wasm-smtp-component/Cargo.toml`, `Cargo.lock`, `CHANGELOG.md`
@@ -157,6 +157,10 @@ None. Both closed by the owner on 2026-09-12: the Pages source is
 to 0.5 now.
 
 ## Amendment log
+
+- 2026-09-12: released as 0.17.0 (tag at `72b7e60`, published from the
+  tagged commit). The book is live at <https://nabbisen.github.io/wasm-smtp/>
+  and deps.rs reports every published crate as all-up-to-date.
 
 - 2026-09-12: accepted by the owner with both open questions answered.
 - 2026-09-12, after review 1 of the implementation: `mail-builder` 0.5

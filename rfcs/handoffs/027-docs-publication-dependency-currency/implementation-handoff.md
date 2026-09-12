@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 027: Documentation publication and dependency currency
 
-**Governing RFC.** [`../../accepted/027-docs-publication-dependency-currency.md`](../../accepted/027-docs-publication-dependency-currency.md)
+**Governing RFC.** [`../../done/027-docs-publication-dependency-currency.md`](../../done/027-docs-publication-dependency-currency.md)
 **Prepared.** 2026-09-12 by the architect. Baseline: the README commits `81fb3a4`, `4f0db09`.
 **Starts.** Now. The owner accepted RFC 027 on 2026-09-12; the Pages source is "GitHub Actions"; the release is **0.17.0** with `mail-builder` moved to 0.5.
 **Review request goes to.** `.git-exclude/review-request/027-docs-publication-dependency-currency.md`

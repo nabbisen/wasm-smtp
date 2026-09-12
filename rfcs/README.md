@@ -16,9 +16,7 @@ lifecycle policy is defined in
 
 ## Accepted
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [027](./accepted/027-docs-publication-dependency-currency.md) | Documentation publication and dependency currency | P1 | [yes](./handoffs/027-docs-publication-dependency-currency/implementation-handoff.md) |
+_(empty)_
 
 ## Proposed
 
@@ -61,7 +59,8 @@ lifecycle policy is defined in
 | [021](./done/021-no-std-alloc-feasibility.md) | no_std / alloc feasibility | 0.11.0 |
 | [024](./done/024-release-gate-integrity-toolchain-baseline.md) | Release gate integrity, toolchain baseline, and MSRV correction ([handoff](./handoffs/024-release-gate-integrity/implementation-handoff.md)) | 0.15.2 |
 | [025](./done/025-wasi-hardening-on-target-verification.md) | WASI hardening and on-target verification ([handoff](./handoffs/025-wasi-hardening/implementation-handoff.md)) | 0.16.0 |
-| [026](./done/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) ([handoff](./handoffs/026-anti-abuse-patterns/implementation-handoff.md)) | on `main`, next release |
+| [026](./done/026-anti-abuse-patterns-documentation.md) | Anti-abuse patterns at the application boundary (documentation) ([handoff](./handoffs/026-anti-abuse-patterns/implementation-handoff.md)) | 0.16.1 |
+| [027](./done/027-docs-publication-dependency-currency.md) | Documentation publication and dependency currency ([handoff](./handoffs/027-docs-publication-dependency-currency/implementation-handoff.md)) | 0.17.0 |
 
 ## Archive
 
@@ -69,4 +68,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–026 are implemented; 027 is accepted; 028 is proposed; 022–023 are drafts. The next RFC is **029**.
+RFC 000–021 and 024–027 are implemented; 028 is proposed; 022–023 are drafts. The next RFC is **029**.

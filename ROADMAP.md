@@ -430,12 +430,16 @@ Order is the owner's decision after the RFC 024 roadmap review.
    Turnstile-style challenges, rate limits, and honeypots at the
    request boundary, documented as application-layer patterns; no
    library integration.
-3. **Documentation publication and dependency currency** (RFC 027,
-   proposed 2026-09-12 from the owner's README review): publish the
-   mdBook to GitHub Pages; raise the rustls floor past the advisory
-   deps.rs flags; take the `mail-builder` and `wit-bindgen` majors;
-   refresh the lockfile.
-4. Further extension themes (channel binding, DSN, Component Model
+3. ✅ **Documentation publication and dependency currency** (RFC 027,
+   shipped 0.17.0): the book is published at
+   <https://nabbisen.github.io/wasm-smtp/>; the rustls floor is past the
+   advisory; `mail-builder` 0.5 and `wit-bindgen` 0.62 are taken; the
+   lockfile is current and deps.rs is clean.
+4. **WASI contract version alignment and component execution**
+   (RFC 028, proposed): the component declares WASI imports at a minor
+   a transitive caret range actually decides; align it, guard the drift
+   in the gate, and execute the component under a host.
+5. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 
 ## Phase 19 — WASI hardening and on-target verification *(0.16.0)*
