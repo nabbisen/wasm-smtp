@@ -66,6 +66,12 @@ jobs:
       - name: Check examples for the Workers target
         run: cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 
+      # Dependency versions in the documentation are constants that have to
+      # match a release, which is exactly what rots between them. Twice the
+      # owner found a stale one by hand before this check existed.
+      - name: Check documentation versions
+        run: ./tools/check-doc-versions.sh
+
       # Examples carry tests of their own (the contact-form header guard);
       # `cargo test --workspace` builds examples but does not run those.
       - name: Test examples
