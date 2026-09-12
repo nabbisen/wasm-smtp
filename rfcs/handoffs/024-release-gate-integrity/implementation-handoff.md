@@ -367,3 +367,36 @@ Refresh every log under `evidence/024/`; command 10 now includes the
 component and must pass. Write the re-review request to
 `.git-exclude/review-request/024-release-gate-integrity-2.md` with the
 same structure as request 1, listing only what changed since `b2cc145`.
+
+---
+
+# Revision 3 — 2026-09-12, after review 2
+
+Review: `.git-exclude/reviewed/024-release-gate-integrity-review-2.md`.
+Head `e6f6d65` is approved. Nothing below starts until the owner has
+(a) accepted RFC 024 D10 and (b) approved the v0.15.2 release. The
+architect will relay both.
+
+## S11 — Release execution
+
+1. `rfcs/done/010-security-baseline-secret-leakage-prevention.md`: add
+   under the Status line: "Amended by RFC 024 D10 (v0.15.2):
+   `unsafe_code = "forbid"` in every crate except generated Component
+   Model glue in `wasm-smtp-component`, which is `deny` with allowances
+   scoped to the generated modules." Body unedited.
+2. `CHANGELOG.md`: directly under the `[0.15.2]` heading, add a short
+   "Compatibility notes" paragraph naming the two compatibility-relevant
+   items: MSRV 1.88, and the component crate's `unsafe_code` level.
+3. Run the full RFC 024 §D3 gate once more on the pinned toolchain;
+   refresh `evidence/024/`.
+4. Commit as "Release 0.15.2". Tag `0.15.2` (no `v` prefix). Push the
+   branch and the tag.
+5. Publish in dependency order, each after the previous is visible on
+   crates.io: `wasm-smtp`, `wasm-smtp-test`, `wasm-smtp-tokio`,
+   `wasm-smtp-cloudflare`, `wasm-smtp-wasi`, `wasm-smtp-component`.
+   Use `cargo publish -p <crate>`; never `--all-features`. If any
+   publish is rejected, stop and report; do not retag.
+6. Report the tag commit hash and the six crates.io URLs to the
+   architect in `.git-exclude/review-request/024-release-gate-integrity-3.md`.
+   The architect then moves RFC 024 to `rfcs/done/` with
+   `Implemented (0.15.2)` and updates `rfcs/README.md`.

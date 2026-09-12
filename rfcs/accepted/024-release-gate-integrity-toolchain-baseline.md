@@ -210,6 +210,32 @@ selected (tokio: aws-lc-rs or ring per feature; WASI: ring). Test-side
 `install_default()` calls are removed; the workspace test run passing
 without them is the proof. No public API change.
 
+### D10. `unsafe_code` level in `wasm-smtp-component` — **pending owner decision**
+
+Building the component for `wasm32-wasip2` (D5, D8) revealed that
+wit-bindgen's generated canonical-ABI glue contains `unsafe` by
+construction (`#[unsafe(export_name)]` shims, `unsafe fn` lift and
+lower helpers). A crate that expands those macros cannot inherit the
+workspace's `unsafe_code = "forbid"`, because `forbid` cannot be lifted
+by any attribute inside the crate.
+
+Implemented shape: the component crate declares its own lint tables,
+identical to the workspace's except `unsafe_code = "deny"`, and exactly
+two modules containing only generated code carry
+`#[allow(unsafe_code)]`. Hand-written `unsafe` in that crate is still
+refused; every other crate keeps `forbid`.
+
+Security review: `.git-exclude/reviewed/024-release-gate-integrity-review-2.md` §3.
+Recommendation: accept, and reword the baseline rule (RFC 010, and
+DEC-002 / NF-2 in the June 2026 handoff) to "`forbid` in every crate,
+except generated Component Model glue in `wasm-smtp-component`, which
+is `deny` with allowances scoped to the generated modules only." The
+separate-bindings-crate alternative was rejected: it relocates the same
+unsafe surface without reducing it.
+
+This is a change to a documented security-baseline rule and therefore
+the owner's decision.
+
 ### D7. Release
 
 The implementation ships as **v0.15.2**, a patch release, after the
