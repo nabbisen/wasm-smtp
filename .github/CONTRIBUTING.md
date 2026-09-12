@@ -96,6 +96,12 @@ cargo audit
 
 A pull request that does not pass these is unlikely to be merged.
 
+The documentation book is built with **mdBook 0.5.4**, the version
+`.github/workflows/docs.yml` pins for the published site at
+<https://nabbisen.github.io/wasm-smtp/>. Build it locally with
+`mdbook build docs`; using a different version may render differently
+from the live site. Not a gate command.
+
 The toolchain comes from `rust-toolchain.toml` at the workspace root: it
 pins the channel (which is also the MSRV, currently 1.88), `rustfmt` and
 `clippy`, and the two wasm targets. Run `rustup show active-toolchain`

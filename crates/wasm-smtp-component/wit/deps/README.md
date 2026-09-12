@@ -2,8 +2,15 @@
 
 `wasi:io`, `wasi:sockets`, and `wasi:clocks` at **WASI 0.2.4**, copied
 unmodified from the WebAssembly WASI 0.2.4 release (as redistributed in
-the `wasip2 1.0.1+wasi-0.2.4` crate's `wit/deps/`). That is the version
-the `wasi 0.14` crate implements, which `wasm-smtp-wasi` already uses.
+the `wasip2 1.0.1+wasi-0.2.4` crate's `wit/deps/`).
+
+The `wasi` crate that `wasm-smtp-wasi` and this crate's `with:` mapping
+resolve against may implement a **later 0.2.x** than these packages
+declare: `wasi 0.14` depends on `wasip2` through a caret range, so which
+WASI minor a build gets is decided by the consumer's lockfile and is
+outside this project's control. That mismatch, and the fix for it — the
+annotations, a gate check so drift cannot be silent again, and executing
+the component under a host — is tracked in RFC 028.
 
 `wit/smtp.wit` imports these packages; `wit-bindgen` resolves them from
 here. `wasi:sockets` depends on `wasi:clocks`, which is why the latter is
