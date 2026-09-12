@@ -453,9 +453,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    proposed): the Component Model interface has no way to name a
    private CA, so a whole class of real caller cannot use it, and the
    component's happy path can only be tested through the Rust adapter.
-7. **Self-tests for the project's own checkers** (RFC 031, proposed):
-   the two shell version guards were each demonstrated failing once, by
-   hand, in a review request; pin those demonstrations as tests.
+7. **Verification coverage** (RFC 032, proposed; supersedes RFC 031):
+   the tokio adapter has never completed a send over a socket in a
+   test, the book's code compiles nowhere, advisories are scanned only
+   on push, and the smoke test's host is an unsupported wasmtime. Close
+   those, add fixture tests for the two shell guards, and tag a
+   release only after CI has passed on its commit.
 8. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 

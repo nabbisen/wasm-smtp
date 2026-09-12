@@ -25,7 +25,7 @@ lifecycle policy is defined in
 | ID | Title | Priority |
 |----|-------|----------|
 | [030](./proposed/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface | P2 |
-| [031](./proposed/031-self-tests-for-the-projects-checkers.md) | Self-tests for the project's own checkers | P3 |
+| [032](./proposed/032-verification-coverage.md) | Verification coverage: what the gate does not yet reach | P2 |
 
 ## Draft
 
@@ -68,8 +68,10 @@ lifecycle policy is defined in
 
 ## Archive
 
-_(empty)_
+| ID | Title | Reason |
+|----|-------|--------|
+| [031](./archive/031-self-tests-for-the-projects-checkers.md) | Self-tests for the project's own checkers | Superseded by RFC 032 |
 
 ---
 
-RFC 000–021, 024–027 and 029 are implemented; 028 is accepted; 030–031 are proposed; 022–023 are drafts. The next RFC is **032**.
+RFC 000–021, 024–027 and 029 are implemented; 028 is accepted; 030 and 032 are proposed; 031 is superseded by 032; 022–023 are drafts. The next RFC is **033**.

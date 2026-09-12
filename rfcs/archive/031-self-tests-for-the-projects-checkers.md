@@ -1,10 +1,12 @@
 # RFC 031 — Self-tests for the project's own checkers
 
-**Status.** Proposed
+**Status.** Superseded by RFC 032
 **Priority.** P3
 **Tracks.** Testing / CI
 **Touches.** `tools/check-doc-versions.sh`, `tools/check-wasi-version.sh`, a test harness for both, `.github/workflows/ci.yml`, `.github/CONTRIBUTING.md`
 **Origin.** Recorded as a follow-up after RFC 025, again after RFC 029, and again after RFC 028. Promoted to an RFC in `.git-exclude/reviewed/028-wasi-contract-alignment-review-1.md` §5 because prose follow-ups were not being picked up.
+
+> **Superseded.** Folded into [RFC 032](../proposed/032-verification-coverage.md) as D5, unchanged in substance, at the owner's direction on 2026-09-13. RFC 032 covers the wider verification review this RFC turned out to be one part of.
 
 ## Summary
 
