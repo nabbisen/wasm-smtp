@@ -230,3 +230,34 @@ consolidation, error chains, advisory job, release commit.
 
 None at acceptance. D6's Cloudflare outcome is an implementation
 finding to be reported, not a design choice left open.
+
+## Amendment log
+
+- 2026-09-12, after review 1 of the implementation
+  (`.git-exclude/reviewed/025-wasi-hardening-review-1.md`):
+  - **D2 premise corrected.** `blocking-read` can return an empty list
+    without the stream being closed; observed under wasmtime 27 on
+    every reply after the first. The adapter therefore treats an empty
+    result as "not ready", waits on the stream's pollable, and reads
+    again, without an iteration cap: a blocking read with neither data
+    nor close is a stalled peer, which is the caller's timeout to
+    impose.
+  - **D1 extended with a negative mode.** The smoke test also runs the
+    guest against a certificate it has no reason to trust and asserts
+    the handshake fails before any SMTP command is exchanged. This
+    verifies on a real host the certificate-validation property that
+    RFC 017's acceptance criteria state and that had never been
+    checked. A happy-path-only test cannot distinguish a validating
+    client from one that skips validation.
+  - **D6 outcome recorded.** `worker::Error` does satisfy
+    `Error + Send + Sync + 'static`; the Cloudflare adapter now
+    preserves error sources with `with_source`, contrary to the RFC's
+    expectation.
+  - **D7 detail.** `cargo audit` runs without `--deny warnings`; the
+    one warning present at implementation time (RUSTSEC-2026-0190,
+    `anyhow`, build-time tooling only) is resolved by updating the
+    dependency rather than tolerated.
+  - A third on-target defect, unpredictable from reading the code, was
+    found by the first smoke run: `WasiStream` dropped its socket before
+    the socket's child streams, which traps the guest under WASI 0.2.
+    Fixed by field order, documented in place.

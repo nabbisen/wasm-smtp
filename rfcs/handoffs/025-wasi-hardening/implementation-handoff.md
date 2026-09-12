@@ -202,3 +202,60 @@ RFC 025 §Acceptance criteria, verbatim.
 Same structure as the RFC 024 requests: summary per slice, changed
 files, decisions, deviations, gate outputs with the smoke tool's full
 log, the S6 Cloudflare finding, unresolved items, review focus.
+
+---
+
+# Revision 2 — 2026-09-12, after review 1
+
+Review: `.git-exclude/reviewed/025-wasi-hardening-review-1.md`.
+Everything through S8 is accepted; release commit `fcebfa9` is
+superseded by the one produced below. Three corrections, none touching
+the core crate.
+
+## C1 — Wait on the pollable when `blocking-read` returns empty
+
+`crates/wasm-smtp-wasi/src/wasi_impl/stream.rs::read`: in the
+`Ok(bytes) if bytes.is_empty()` arm, call `self.reader.subscribe()` and
+`poll(&[&pollable])` before continuing. No iteration cap. Extend the
+existing doc comment with one sentence: the poll is what turns a host
+that returns empty without blocking from a spin into a wait.
+Acceptance: smoke test still passes in both modes.
+
+## C2 — Negative smoke mode: untrusted certificate
+
+`tools/smoke`: add `Mode::Untrusted` (implicit TLS). The driver
+generates a second, unrelated CA and passes *that* PEM to the guest
+while the responder keeps serving the first certificate. Assert:
+
+- the guest exits non-zero;
+- its stderr contains a TLS or handshake failure (match on the adapter's
+  `Display` text, e.g. "handshake" or "certificate");
+- the responder recorded no SMTP command line at all (the TLS handshake
+  must fail before `220` is ever readable by the guest; if the responder
+  wrote the greeting into a socket the handshake then killed, that is
+  fine — assert on received lines, not sent ones).
+
+Run it as a third line of output: `PASS  untrusted`. Add a STARTTLS
+variant (`untrusted-starttls`: plaintext greeting, `EHLO`, `STARTTLS`,
+`220`, then the upgrade fails and nothing further arrives) only if it
+costs no new responder logic; otherwise leave it out and say so.
+Mention the negative mode in `docs/src/adapters/wasi.md`'s testing
+paragraph and in CONTRIBUTING's on-target comment. RFC 017 receives an
+amendment note under its Status line: "Amended by RFC 025 (0.16.0):
+the untrusted-certificate acceptance criterion is verified on-target by
+the smoke test."
+
+## C3 — Clear the advisory instead of tolerating it
+
+`cargo update -p anyhow` (1.0.102 → 1.0.104 is available). Confirm
+`cargo audit` prints no warnings. Include the lockfile change in the
+release commit and one line under the changelog's Changed section.
+
+## S8 (again) — Release commit
+
+Fold C1–C3, rerun the full gate (now sixteen commands: the fifteen plus
+the untrusted smoke mode counted inside command 14), refresh
+`evidence/025/`, commit as "Release 0.16.0" on top of the current tip
+(which includes the owner's `rust-toolchain.toml` commit), and stop.
+Review request 2: `.git-exclude/review-request/025-wasi-hardening-2.md`,
+listing only what changed since `fcebfa9`. Do not tag, push, or publish.
