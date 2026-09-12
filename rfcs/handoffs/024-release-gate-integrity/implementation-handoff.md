@@ -399,3 +399,64 @@ approved the v0.15.2 release on 2026-09-12. S11 is authorized; begin.**
    `wasm-smtp-wasi`, `wasm-smtp-component`). The architect then moves
    RFC 024 to `rfcs/done/` with `Implemented (0.15.2)` and updates
    `rfcs/README.md`.
+
+---
+
+# Revision 4 — 2026-09-12, after review 3 (release commit held)
+
+Review: `.git-exclude/reviewed/024-release-gate-integrity-review-3.md`.
+Release commit `4c53be3` is correct as far as it goes, but the component
+crate packages without its WIT (RFC 024 D11). Fix that first, then
+produce a new release commit. **Do not tag, push, or publish** — those
+steps are the owner's and the architect's. The previous local tag has
+already been removed.
+
+## S12 — Move the WIT contract into the component crate (D11)
+
+Scope: `wit/**` (moved), `crates/wasm-smtp-component/**`,
+`.github/workflows/ci.yml`, `.github/CONTRIBUTING.md`, `README.md`,
+`ROADMAP.md`, `CHANGELOG.md`, `docs/src/intro.md`,
+`docs/src/adapters/component-model.md`, `rfcs/done/018-*.md`
+(amendment note only).
+
+1. `git mv wit crates/wasm-smtp-component/wit`. The result is
+   `crates/wasm-smtp-component/wit/smtp.wit` and
+   `crates/wasm-smtp-component/wit/deps/{io,sockets,clocks,README.md}`.
+   No root `wit/` remains; no symlink.
+2. `crates/wasm-smtp-component/src/lib.rs`: `generate!` uses
+   `path: "wit"`.
+3. Update every reference to the old location. Known sites (from
+   `git grep "wit/"`): `.github/CONTRIBUTING.md` layout tree (the
+   `wit/` line moves under `wasm-smtp-component/`); `README.md` crate
+   table and adapter list; `ROADMAP.md` Phase 17; the crate's own
+   `README.md` (relative links become `wit/smtp.wit`, and the
+   `jco` / `wit-bindgen go` examples use `wit/smtp.wit` relative to the
+   crate directory); `crates/wasm-smtp-component/src/lib.rs` crate doc;
+   `docs/src/intro.md`; `docs/src/adapters/component-model.md`
+   (including the `jco`, `wit-bindgen go`, `componentize-py` commands);
+   the header comments inside `smtp.wit` itself; `wit/deps/README.md`
+   if it names the old path. Historical CHANGELOG entries for 0.14.0
+   stay as they were; the 0.15.2 entry gains one line under Fixed.
+4. `rfcs/done/018-component-model-wit-interface.md`: extend the
+   existing amendment line with "; contract relocated to
+   `crates/wasm-smtp-component/wit/` so the published crate carries it
+   (RFC 024 D11)."
+5. `.github/workflows/ci.yml`: after the real-targets step, add a step
+   "Check packaged contents" running the two `cargo package --list`
+   checks from RFC 024 D11. Mirror them in CONTRIBUTING's required
+   checks.
+6. Acceptance:
+   - `cargo package --list -p wasm-smtp-component` includes
+     `wit/smtp.wit` and every file under `wit/deps/`.
+   - All ten §D3 commands still pass; the two new checks pass.
+   - `git grep -n "\.\./\.\./wit\|^wit/" -- ':!CHANGELOG.md'` finds no
+     stale references.
+
+## S11 (revised) — Release commit
+
+1. Fold S12 in, then re-run the full gate (twelve commands now) on the
+   pinned toolchain and refresh `evidence/024/`.
+2. Commit as "Release 0.15.2" (a new commit; the old one is superseded).
+3. Report the commit hash in
+   `.git-exclude/review-request/024-release-gate-integrity-4.md` with
+   the gate summary and the component's packaged file list. Stop there.

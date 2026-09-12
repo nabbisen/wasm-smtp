@@ -237,6 +237,35 @@ This is a change to a documented security-baseline rule; the owner
 accepted it on 2026-09-12. RFC 010 receives the amendment note in the
 release commit (handoff S11).
 
+### D11. The WIT contract lives inside the component crate
+
+Verifying the release candidate showed that
+`cargo package -p wasm-smtp-component` produces a package with no WIT
+files: the contract lived at the workspace root and the crate reached
+it through `path: "../../wit"`, which cargo cannot include. Every
+previously published version of the crate had the same hole; it went
+unnoticed because the crate never built for its target. A consumer
+building the published crate for `wasm32-wasip2` would fail at the
+binding macro.
+
+Decision: the canonical location of the contract is
+`crates/wasm-smtp-component/wit/` (`smtp.wit` plus `deps/`). The
+workspace-root `wit/` directory is removed rather than symlinked, so
+that packaging needs no assumptions about how cargo treats symlinks
+and so that the repository has one copy. All references are updated.
+RFC 018's "Touches" location is amended accordingly.
+
+The release gate (D3) gains a packaging check:
+
+```bash
+# The published component must carry its contract.
+cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
+cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
+```
+
+`cargo package --list` needs a clean tree, which CI has; locally add
+`--allow-dirty` when checking uncommitted work.
+
 ### D7. Release
 
 The implementation ships as **v0.15.2**, a patch release, after the
@@ -324,3 +353,7 @@ of the version offset.
   implementation (see `.git-exclude/reviewed/024-release-gate-integrity-review-1.md`).
 - 2026-09-12: D10 added after review 2 and accepted by the owner; the
   owner approved the v0.15.2 release on the same day (D7).
+- 2026-09-12: D11 added after review 3 of the release commit: the
+  component crate packaged without its WIT; the contract moves inside
+  the crate and a packaging check joins the gate. Release held until
+  a corrected release commit is verified.
