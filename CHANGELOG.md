@@ -16,6 +16,13 @@ changes is what the gate reaches, and the order releases happen in.
   component harness, and the tokio test now hold their recordings to the
   same `check_session` / `check_refused` in `tools/smoke`'s library, each
   with self-tests showing it rejects the sessions it exists to reject.
+- **The core's feature-gated tests run in the gate.** The gate compiled
+  `wasm-smtp` with `smtputf8`, `mail-builder`, and `tracing` but only
+  `cargo check`ed it, so the tests behind those features ran nowhere: 309
+  unit tests with the features against 279 without, **30 that had never
+  run** — among them the SMTPUTF8 negotiation and mail-builder
+  integration. That gate command is now `cargo test`, scoped with `-p` so
+  the features stay out of the workspace-wide run.
 - **The shell guards are tested.** `tools/guard-tests/run.sh` points
   `check-doc-versions.sh` and `check-wasi-version.sh` at thirteen fixture
   trees, one per branch, and compares exit status and output byte for

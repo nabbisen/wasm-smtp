@@ -71,7 +71,7 @@ cargo test --locked --workspace                       # lib + integration + doct
 # Feature combinations. Never use --all-features: the tokio adapter has a
 # deliberate compile_error! on aws-lc-rs + ring.
 cargo check --locked -p wasm-smtp --no-default-features
-cargo check --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
+cargo test --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
 cargo check --locked -p wasm-smtp-wasi --no-default-features --features native-roots
 cargo check --locked -p wasm-smtp-wasi --features plaintext-only
 cargo check --locked -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring

@@ -46,11 +46,13 @@ jobs:
 
       # Feature combinations. Never --all-features: the tokio adapter has a
       # deliberate compile_error! on aws-lc-rs + ring (DEC-009), so the sets
-      # are enumerated instead.
+      # are enumerated instead. The core's feature set is `test`, not `check`:
+      # its smtputf8, mail-builder and tracing tests run nowhere else, and
+      # `-p` keeps those features out of the workspace run (RFC 032 A6).
       - name: Check feature combinations
         run: |
           cargo check --locked -p wasm-smtp --no-default-features
-          cargo check --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
+          cargo test --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
           cargo check --locked -p wasm-smtp-wasi --no-default-features --features native-roots
           cargo check --locked -p wasm-smtp-wasi --features plaintext-only
           cargo check --locked -p wasm-smtp-tokio --no-default-features --features webpki-roots,ring
