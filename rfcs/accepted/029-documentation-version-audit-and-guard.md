@@ -174,3 +174,14 @@ None. The owner authorized the 0.17.1 patch on 2026-09-13.
 
 - 2026-09-13: accepted by the owner, who opened 0.17.1 as the release
   for it (D5).
+- 2026-09-13, after review 1: approved at `d13a212`. D2 confirmed as
+  major.minor after the guard was seen to behave; the handoff's §S4.1
+  expectation that a patch bump would invalidate the documentation was
+  the architect's error and contradicted D2. The `tokio.md` TOML block
+  is retained deliberately: it is the only content the guard exercises
+  for own-crate versions, so converting it would leave the check
+  permanently green with nothing to compare.
+  **Follow-up, with the RFC 025 smoke-driver item:** the guard needs a
+  self-test (its `mail-builder` branch has no live coverage) and its
+  header should name its deliberate exclusions, `CHANGELOG.md` and
+  `rfcs/`, so an exclusion cannot be mistaken for an oversight.
