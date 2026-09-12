@@ -20,6 +20,7 @@ lifecycle policy is defined in
 |----|-------|----------|---------|
 | [032](./accepted/032-verification-coverage.md) | Verification coverage: what the gate does not yet reach | P2 | [yes](./handoffs/032-verification-coverage/implementation-handoff.md) |
 | [030](./accepted/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface | P2 | [yes](./handoffs/030-component-trust-anchor-configuration/implementation-handoff.md) |
+| [033](./accepted/033-stable-toolchain-lint-currency.md) | Stable-toolchain lint currency | P3 | [yes](./handoffs/033-stable-toolchain-lint-currency/implementation-handoff.md) |
 
 ## Proposed
 
@@ -73,4 +74,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–029 are implemented; 030 and 032 are accepted; 031 is superseded by 032; 022–023 are drafts. The next RFC is **033**.
+RFC 000–021 and 024–029 are implemented; 030, 032 and 033 are accepted; 031 is superseded by 032; 022–023 are drafts. The next RFC is **034**.

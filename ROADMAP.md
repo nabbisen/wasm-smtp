@@ -460,7 +460,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    on push, and the smoke test's host is an unsupported wasmtime. Close
    those, add fixture tests for the two shell guards, and tag a
    release only after CI has passed on its commit.
-8. Further extension themes (channel binding, DSN, Component Model
+8. **Stable-toolchain lint currency** (RFC 033, accepted): the
+   advisory stable Clippy job has been red on 22 lints the pinned 1.88
+   does not know. Fix six, allow one pedantic lint at the impl block where
+   no rewrite works on both toolchains, and make the job report every
+   crate. No API or behaviour change.
+9. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 
 ## Phase 19 — WASI hardening and on-target verification *(0.16.0)*
