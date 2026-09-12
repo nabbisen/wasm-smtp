@@ -29,7 +29,15 @@ use std::sync::mpsc;
 use std::thread;
 
 use wasm_smtp_smoke::{
-    Leg, Recording, generate_cert, serve_implicit, serve_starttls, server_config,
+    Expected, Recording, check_refused, check_session, generate_cert, serve_implicit,
+    serve_starttls, server_config,
+};
+
+/// The session the `smoke` guest is written to send.
+const SMOKE: Expected<'static> = Expected {
+    ehlo: "smoke.example.com",
+    from: "smoke@example.com",
+    rcpt: "rcpt@example.org",
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -300,100 +308,15 @@ fn check_untrusted(
         ));
     }
 
-    // What may legitimately have been spoken before the handshake failed:
-    // nothing at all for implicit TLS, and exactly the plaintext EHLO and
-    // STARTTLS for the upgrade path.
-    let allowed: &[&str] = if mode.speaks_starttls() {
-        &["EHLO smoke.example.com", "STARTTLS"]
-    } else {
-        &[]
-    };
-    if rec.commands() != allowed {
-        return Err(format!(
-            "after a refused certificate the responder should have seen \
-             {allowed:?}, but it received {:?}",
-            rec.commands()
-        ));
-    }
-    // Nothing may arrive over the channel that was never protected.
-    if rec.lines.iter().any(|(leg, _)| *leg == Leg::Tls) {
-        return Err("no command may arrive after a failed handshake".to_owned());
-    }
-
-    Ok(())
+    // And the transcript: nothing, or exactly the plaintext leg, and nothing
+    // inside TLS. Shared with the component and tokio harnesses.
+    check_refused(rec, mode.speaks_starttls(), SMOKE.ehlo)
 }
 
-/// Assert the recorded session is the one SMTP requires.
+/// Assert the recorded session is the one SMTP requires. The assertions
+/// themselves live in the library, shared with the other harnesses.
 fn check(mode: Mode, rec: &Recording) -> Result<(), String> {
-    let cmds = rec.commands();
-    let mut expected: Vec<&str> = Vec::new();
-    if mode == Mode::StartTls {
-        expected.push("EHLO smoke.example.com");
-        expected.push("STARTTLS");
-    }
-    expected.extend([
-        "EHLO smoke.example.com",
-        "AUTH PLAIN",
-        "MAIL FROM:<smoke@example.com>",
-        "RCPT TO:<rcpt@example.org>",
-        "DATA",
-        "QUIT",
-    ]);
-
-    if cmds.len() != expected.len() {
-        return Err(format!(
-            "expected {} commands, saw {}: {:?}",
-            expected.len(),
-            cmds.len(),
-            cmds
-        ));
-    }
-    for (i, (want, got)) in expected.iter().zip(cmds.iter()).enumerate() {
-        // AUTH PLAIN carries a base64 payload; match the command only.
-        let ok = if *want == "AUTH PLAIN" {
-            got.starts_with("AUTH PLAIN ")
-        } else {
-            got == want
-        };
-        if !ok {
-            return Err(format!(
-                "command {i}: expected {want:?}, saw {got:?} (full: {cmds:?})"
-            ));
-        }
-    }
-
-    // Dot-stuffing must have happened on the client side: the body line the
-    // guest wrote as `.leading-dot` has to arrive as `..leading-dot`.
-    if !rec.body.contains("..leading-dot\r\n") {
-        return Err(format!(
-            "DATA body is not dot-stuffed; expected a `..leading-dot` line, body was:\n{:?}",
-            rec.body
-        ));
-    }
-    // And the terminator must not have been swallowed into the body.
-    if rec.body.contains("\r\n.\r\n") {
-        return Err("DATA body contains the end-of-data terminator".to_owned());
-    }
-
-    if mode == Mode::StartTls {
-        // The upgrade must be real: everything from the second EHLO on has
-        // to have arrived inside TLS.
-        let legs: Vec<Leg> = rec.lines.iter().map(|(leg, _)| *leg).collect();
-        if legs[0] != Leg::Plain || legs[1] != Leg::Plain {
-            return Err(format!(
-                "expected EHLO and STARTTLS in plaintext, legs: {legs:?}"
-            ));
-        }
-        if legs[2..].iter().any(|l| *l != Leg::Tls) {
-            return Err(format!(
-                "everything after STARTTLS must arrive over TLS, legs: {legs:?}"
-            ));
-        }
-    } else if rec.lines.iter().any(|(leg, _)| *leg != Leg::Tls) {
-        return Err("implicit-TLS mode saw plaintext commands".to_owned());
-    }
-
-    Ok(())
+    check_session(rec, mode == Mode::StartTls, &SMOKE)
 }
 
 // ---------------------------------------------------------------------------

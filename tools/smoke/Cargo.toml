@@ -35,5 +35,31 @@ rustls-pki-types = { workspace = true, features = ["std"] }
 # committed.
 rcgen = "0.14"
 
+# The tokio adapter's end-to-end test (RFC 032 D1) drives the same
+# responder over a real loopback socket.
+#
+# The adapter is taken at its DEFAULT features, deliberately. RFC 032 D1
+# specified `default-features = false, features = ["webpki-roots", "ring"]`
+# so the test binary would compile one provider, but that cannot build:
+# `cargo test --workspace` also selects `wasm-smtp-tokio` itself, cargo
+# unifies a package's features across everything selected, and the union
+# — native-roots + webpki-roots, aws-lc-rs + ring — trips both of the
+# adapter's mutual-exclusion `compile_error!`s. Only the adapter's own
+# default set unifies with the adapter's own default set.
+#
+# What that leaves is still inside RFC 024 D9's actual rule, which is that
+# nothing may rely on rustls's process-wide default provider: the adapter
+# builds its client with `builder_with_provider(aws-lc-rs)` and the
+# responder above with `builder_with_provider(ring)`. The workspace test
+# run already compiles rustls with both, because the WASI adapter selects
+# ring. So this test is also a live check of D9: any code path that fell
+# back to the default provider would panic here. The trust anchors are
+# unaffected — `with_root_store` replaces the root set entirely, so
+# `native-roots` never reads the host's store in these tests.
+[dev-dependencies]
+wasm-smtp = { path = "../../crates/wasm-smtp" }
+wasm-smtp-tokio = { path = "../../crates/wasm-smtp-tokio" }
+tokio = { workspace = true, features = ["rt", "macros", "time"] }
+
 [lints]
 workspace = true

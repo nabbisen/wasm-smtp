@@ -51,7 +51,7 @@ use std::sync::mpsc;
 use std::thread;
 use std::time::Duration;
 
-use wasm_smtp_smoke::{Recording, generate_cert, serve_implicit, server_config};
+use wasm_smtp_smoke::{Recording, check_refused, generate_cert, serve_implicit, server_config};
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
@@ -75,6 +75,9 @@ use bindings::exports::wasm_smtp::smtp::smtp_send;
 /// How long the responder waits for the guest to connect before giving up.
 /// Generous, because a debug-build guest under a cold host is not fast.
 const ACCEPT_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// The domain the component is told to announce.
+const EHLO: &str = "component.example.com";
 
 /// Host state: WASI plus the resource table the component model needs.
 struct Host {
@@ -247,7 +250,7 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
     let config = smtp_send::SmtpConfig {
         host: "127.0.0.1".to_owned(),
         port,
-        ehlo_domain: "component.example.com".to_owned(),
+        ehlo_domain: EHLO.to_owned(),
         tls_mode: smtp_send::TlsMode::Implicit,
     };
     let credentials = smtp_send::SmtpCredentials {
@@ -318,14 +321,11 @@ fn check(outcome: &Outcome, rec: &Recording) -> Result<(), String> {
     }
 
     // And nothing may have been spoken over a channel that was never
-    // authenticated.
-    if !rec.lines.is_empty() {
-        return Err(format!(
-            "no SMTP command may cross an unvalidated channel, but the \
-             responder received {:?}",
-            rec.commands()
-        ));
-    }
+    // authenticated. The same assertion the adapter smoke test's untrusted
+    // mode and the tokio adapter's refused case make, from the shared
+    // library; implicit TLS, so nothing at all is allowed.
+    check_refused(rec, false, EHLO)
+        .map_err(|e| format!("no SMTP command may cross an unvalidated channel: {e}"))?;
 
     Ok(())
 }

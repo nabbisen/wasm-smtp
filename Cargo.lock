@@ -2517,6 +2517,9 @@ dependencies = [
  "rcgen",
  "rustls",
  "rustls-pki-types",
+ "tokio",
+ "wasm-smtp",
+ "wasm-smtp-tokio",
 ]
 
 [[package]]
