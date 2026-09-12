@@ -1,6 +1,6 @@
 # RFC 006 — SMTP session state machine
 
-**Status.** Implemented (v0.1.0)
+**Status.** Implemented (0.1.0)
 **Priority.** P0
 **Tracks.** Core session
 **Touches.** `crates/wasm-smtp/src/session.rs`, `crates/wasm-smtp/src/client.rs`, `crates/wasm-smtp/src/protocol.rs`

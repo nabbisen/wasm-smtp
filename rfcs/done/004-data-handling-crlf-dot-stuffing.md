@@ -1,6 +1,6 @@
 # RFC 004 — DATA handling, CRLF normalization, and dot-stuffing
 
-**Status.** Implemented (v0.1.0)
+**Status.** Implemented (0.1.0)
 **Priority.** P0
 **Tracks.** Core protocol / DATA
 **Touches.** `crates/wasm-smtp/src/protocol.rs`, `crates/wasm-smtp/src/session.rs`, `crates/wasm-smtp/src/tests/`

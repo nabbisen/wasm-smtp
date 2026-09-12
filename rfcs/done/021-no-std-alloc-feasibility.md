@@ -1,6 +1,6 @@
 # RFC 021 — no_std / alloc feasibility
 
-**Status.** Implemented (v0.11.0)
+**Status.** Implemented (0.11.0)
 **Priority.** P3
 **Tracks.** Future / Embedded
 **Touches.** `crates/wasm-smtp/` (investigation only — no code changes)

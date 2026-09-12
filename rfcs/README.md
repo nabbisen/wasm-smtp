@@ -33,28 +33,28 @@ _(empty)_
 
 | ID | Title | Shipped in |
 |----|-------|-----------|
-| [000](./done/000-rfc-lifecycle-policy.md) | RFC lifecycle policy | v0.10.0 |
-| [001](./done/001-workspace-crate-boundaries-release-structure.md) | Workspace, crate boundaries, and release structure | v0.10.0 |
-| [002](./done/002-rfc-lifecycle-adoption.md) | RFC lifecycle adoption and repository documentation policy | v0.10.0 |
-| [003](./done/003-smtp-response-parser-protocol-model.md) | SMTP response parser and protocol model | v0.1.0 |
-| [004](./done/004-data-handling-crlf-dot-stuffing.md) | DATA handling, CRLF normalization, and dot-stuffing | v0.1.0 |
-| [005](./done/005-core-transport-abstraction.md) | Core transport abstraction | v0.1.0 |
-| [006](./done/006-smtp-session-state-machine.md) | SMTP session state machine | v0.1.0 |
-| [007](./done/007-authentication-mechanisms.md) | Authentication mechanisms | v0.9.0 |
-| [008](./done/008-test-transport-deterministic-tests.md) | Test transport and deterministic protocol tests | v0.1.0 |
-| [009](./done/009-error-model-failure-classification.md) | Error model and failure classification | v0.1.0 |
-| [010](./done/010-security-baseline-secret-leakage-prevention.md) | Security baseline and secret leakage prevention | v0.5.0 |
-| [011](./done/011-policy-hook-anti-abuse-guard.md) | Policy hook and anti-abuse guard | v0.10.0 |
-| [012](./done/012-audit-event-model.md) | Audit event model | v0.10.0 |
-| [013](./done/013-cloudflare-adapter-design.md) | Cloudflare adapter design | v0.3.0 |
-| [014](./done/014-cloudflare-tls-starttls-strategy.md) | Cloudflare TLS and STARTTLS strategy | v0.5.0 |
-| [015](./done/015-cloudflare-integration-example-limitations.md) | Cloudflare integration example and runtime limitations | v0.3.0 |
-| [016](./done/016-wasi-adapter-design.md) | WASI adapter design | v0.12.0 |
-| [017](./done/017-wasi-tls-strategy.md) | WASI TLS strategy | v0.12.0 |
-| [018](./done/018-component-model-wit-interface.md) | Component Model and WIT interface | v0.14.0 |
-| [019](./done/019-streaming-data-bounded-memory.md) | Streaming DATA and bounded memory | v0.13.0 |
-| [020](./done/020-large-message-handling-memory-tests.md) | Large message handling and memory behavior tests | v0.11.0 |
-| [021](./done/021-no-std-alloc-feasibility.md) | no_std / alloc feasibility | v0.11.0 |
+| [000](./done/000-rfc-lifecycle-policy.md) | RFC lifecycle policy | 0.10.0 |
+| [001](./done/001-workspace-crate-boundaries-release-structure.md) | Workspace, crate boundaries, and release structure | 0.10.0 |
+| [002](./done/002-rfc-lifecycle-adoption.md) | RFC lifecycle adoption and repository documentation policy | 0.10.0 |
+| [003](./done/003-smtp-response-parser-protocol-model.md) | SMTP response parser and protocol model | 0.1.0 |
+| [004](./done/004-data-handling-crlf-dot-stuffing.md) | DATA handling, CRLF normalization, and dot-stuffing | 0.1.0 |
+| [005](./done/005-core-transport-abstraction.md) | Core transport abstraction | 0.1.0 |
+| [006](./done/006-smtp-session-state-machine.md) | SMTP session state machine | 0.1.0 |
+| [007](./done/007-authentication-mechanisms.md) | Authentication mechanisms | 0.9.0 |
+| [008](./done/008-test-transport-deterministic-tests.md) | Test transport and deterministic protocol tests | 0.1.0 |
+| [009](./done/009-error-model-failure-classification.md) | Error model and failure classification | 0.1.0 |
+| [010](./done/010-security-baseline-secret-leakage-prevention.md) | Security baseline and secret leakage prevention | 0.5.0 |
+| [011](./done/011-policy-hook-anti-abuse-guard.md) | Policy hook and anti-abuse guard | 0.10.0 |
+| [012](./done/012-audit-event-model.md) | Audit event model | 0.10.0 |
+| [013](./done/013-cloudflare-adapter-design.md) | Cloudflare adapter design | 0.3.0 |
+| [014](./done/014-cloudflare-tls-starttls-strategy.md) | Cloudflare TLS and STARTTLS strategy | 0.5.0 |
+| [015](./done/015-cloudflare-integration-example-limitations.md) | Cloudflare integration example and runtime limitations | 0.3.0 |
+| [016](./done/016-wasi-adapter-design.md) | WASI adapter design | 0.12.0 |
+| [017](./done/017-wasi-tls-strategy.md) | WASI TLS strategy | 0.12.0 |
+| [018](./done/018-component-model-wit-interface.md) | Component Model and WIT interface | 0.14.0 |
+| [019](./done/019-streaming-data-bounded-memory.md) | Streaming DATA and bounded memory | 0.13.0 |
+| [020](./done/020-large-message-handling-memory-tests.md) | Large message handling and memory behavior tests | 0.11.0 |
+| [021](./done/021-no-std-alloc-feasibility.md) | no_std / alloc feasibility | 0.11.0 |
 | [024](./done/024-release-gate-integrity-toolchain-baseline.md) | Release gate integrity, toolchain baseline, and MSRV correction ([handoff](./handoffs/024-release-gate-integrity/implementation-handoff.md)) | 0.15.2 |
 
 ## Archive

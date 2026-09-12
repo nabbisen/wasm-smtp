@@ -1,6 +1,6 @@
 # RFC 013 — Cloudflare adapter design
 
-**Status.** Implemented (v0.3.0)
+**Status.** Implemented (0.3.0)
 **Priority.** P1
 **Tracks.** Adapter / Cloudflare
 **Touches.** `crates/wasm-smtp-cloudflare/`, `docs/src/cloudflare-adapter.md`

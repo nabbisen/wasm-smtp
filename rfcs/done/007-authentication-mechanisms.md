@@ -1,6 +1,6 @@
 # RFC 007 — Authentication mechanisms
 
-**Status.** Implemented (v0.9.0)
+**Status.** Implemented (0.9.0)
 **Priority.** P1
 **Tracks.** Core auth / Security
 **Touches.** `crates/wasm-smtp/src/session.rs`, `crates/wasm-smtp/src/scram.rs`, `crates/wasm-smtp/src/error.rs`

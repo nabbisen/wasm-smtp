@@ -1,6 +1,6 @@
 # RFC 014 — Cloudflare TLS and STARTTLS strategy
 
-**Status.** Implemented (v0.5.0)
+**Status.** Implemented (0.5.0)
 **Priority.** P1
 **Tracks.** Adapter / Security / TLS
 **Touches.** `crates/wasm-smtp-cloudflare/src/socket.rs`, `docs/src/cloudflare-adapter.md`

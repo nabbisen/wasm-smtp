@@ -1,7 +1,7 @@
 # RFC 010 — Security baseline and secret leakage prevention
 
-**Status.** Implemented (v0.5.0)
-Amended by RFC 024 D10 (v0.15.2): `unsafe_code = "forbid"` in every crate
+**Status.** Implemented (0.5.0)
+Amended by RFC 024 D10 (0.15.2): `unsafe_code = "forbid"` in every crate
 except generated Component Model glue in `wasm-smtp-component`, which is
 `deny` with allowances scoped to the generated modules.
 **Priority.** P0

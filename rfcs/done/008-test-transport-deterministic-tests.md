@@ -1,6 +1,6 @@
 # RFC 008 — Test transport and deterministic protocol tests
 
-**Status.** Implemented (v0.1.0)
+**Status.** Implemented (0.1.0)
 **Priority.** P1
 **Tracks.** Testing
 **Touches.** `crates/wasm-smtp/src/tests/`, `crates/wasm-smtp-cloudflare/src/tests/`, `crates/wasm-smtp-tokio/src/tests/`

@@ -1,6 +1,6 @@
 # RFC 002 — RFC lifecycle adoption and repository documentation policy
 
-**Status.** Implemented (v0.10.0)
+**Status.** Implemented (0.10.0)
 **Priority.** P0
 **Tracks.** Documentation / Governance / RFC process
 **Touches.** `rfcs/`, `rfcs/README.md`, `docs/src/`, `README.md`
@@ -84,8 +84,8 @@ updated in the same commit. Examples:
 ```markdown
 **Status.** Draft
 **Status.** Proposed
-**Status.** Implemented (v0.10.0)
-**Status.** Implemented (v0.11.0)
+**Status.** Implemented (0.10.0)
+**Status.** Implemented (0.11.0)
 **Status.** Withdrawn — scope absorbed by RFC 005.
 **Status.** Superseded by RFC 042.
 ```
@@ -106,7 +106,7 @@ Every new RFC must include at minimum:
 ```markdown
 # RFC NNN — Title
 
-**Status.** Draft | Proposed | Accepted | Implemented (vX.Y.Z) | Withdrawn | Superseded
+**Status.** Draft | Proposed | Accepted | Implemented (X.Y.Z) | Withdrawn | Superseded
 **Priority.** P0 | P1 | P2 | P3
 **Tracks.** (e.g. Core protocol / Adapter / Security / Docs / Release)
 **Touches.** (e.g. crates/..., docs/..., rfcs/...)

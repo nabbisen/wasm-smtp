@@ -1,7 +1,7 @@
 # Developer Handoff — RFC 024: Release gate integrity, toolchain baseline, and MSRV correction
 
 **Governing RFC.** [`../../done/024-release-gate-integrity-toolchain-baseline.md`](../../done/024-release-gate-integrity-toolchain-baseline.md)
-**Target release.** v0.15.2 (patch). Release approval is the owner's; this handoff produces the release candidate.
+**Target release.** 0.15.2 (patch). Release approval is the owner's; this handoff produces the release candidate.
 **Prepared.** 2026-09-12 by the architect. Baseline commit `04696b1`.
 **Review request goes to.** `.git-exclude/review-request/024-release-gate-integrity.md`
 
@@ -180,7 +180,7 @@ Correct every statement below; keep wording concise and in English.
 | `crates/wasm-smtp/src/audit.rs` module doc | `AuthCompleted` carries `"SCRAM-SHA-256"`, not `"AUTH SCRAM-SHA-256"`. |
 | `rfcs/done/019-*.md` | Add a one-line note under Status that Phase 3 shipped in v0.13.0; do not rewrite the body. |
 | `CHANGELOG.md` | (a) Translate the `[0.15.1]` entry to English, preserving content. (b) Merge the two `[0.9.4]` sections (lines ~282 and ~400) into one heading with both blocks kept verbatim and a one-line note that both shipped under tag `0.9.4`. (c) Add comparison links for 0.10.0 through 0.15.2 in the existing style but with the project's tag format (`0.15.1`, no `v` prefix); fix the existing `v`-prefixed links likewise. (d) Add the `[0.15.2]` entry (see S8). |
-| `ROADMAP.md` | Add "Phase 18 — Release gate integrity *(v0.15.2)*" summarizing RFC 024. |
+| `ROADMAP.md` | Add "Phase 18 — Release gate integrity *(0.15.2)*" summarizing RFC 024. |
 
 ### S7. Publish `wasm-smtp-test` — **conditional on owner confirmation**
 
@@ -191,7 +191,7 @@ answered or the architect tells you D6 is confirmed.
    `wasm-smtp = { path = "../wasm-smtp", version = "0.15.2" }` (the
    workspace version at release time).
 2. Add an amendment note to `rfcs/done/001-workspace-crate-boundaries-release-structure.md`
-   directly under the Status line: "Amended by RFC 024 (v0.15.2):
+   directly under the Status line: "Amended by RFC 024 (0.15.2):
    `wasm-smtp-test` is published." Do not edit the body.
 3. CHANGELOG 0.15.2 entry gains a line.
 
@@ -330,7 +330,7 @@ comment once green).
    `generate_all` with the vendored deps and say so in the review
    request; do not move the pin unreported.
 5. `rfcs/done/018-component-model-wit-interface.md`: add under the
-   Status line: "Amended by RFC 024 D8 (v0.15.2): field `from` escaped
+   Status line: "Amended by RFC 024 D8 (0.15.2): field `from` escaped
    as `%from`; WASI imports at 0.2.4 with packages vendored under
    `wit/deps/`."
 6. Acceptance: `cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm32-wasip2`
@@ -374,12 +374,12 @@ same structure as request 1, listing only what changed since `b2cc145`.
 
 Review: `.git-exclude/reviewed/024-release-gate-integrity-review-2.md`.
 Head `e6f6d65` is approved. **The owner accepted RFC 024 D10 and
-approved the v0.15.2 release on 2026-09-12. S11 is authorized; begin.**
+approved the 0.15.2 release on 2026-09-12. S11 is authorized; begin.**
 
 ## S11 — Release execution
 
 1. `rfcs/done/010-security-baseline-secret-leakage-prevention.md`: add
-   under the Status line: "Amended by RFC 024 D10 (v0.15.2):
+   under the Status line: "Amended by RFC 024 D10 (0.15.2):
    `unsafe_code = "forbid"` in every crate except generated Component
    Model glue in `wasm-smtp-component`, which is `deny` with allowances
    scoped to the generated modules." Body unedited.

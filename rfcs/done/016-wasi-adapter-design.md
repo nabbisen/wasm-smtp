@@ -1,6 +1,6 @@
 # RFC 016 — WASI adapter design
 
-**Status.** Implemented (v0.12.0)
+**Status.** Implemented (0.12.0)
 **Priority.** P2
 **Tracks.** Adapter / WASI
 **Touches.** `crates/wasm-smtp-wasi/` (new), `docs/src/wasi-adapter.md`

@@ -1,6 +1,6 @@
 # RFC 009 — Error model and failure classification
 
-**Status.** Implemented (v0.1.0)
+**Status.** Implemented (0.1.0)
 **Priority.** P0
 **Tracks.** Core error / Security
 **Touches.** `crates/wasm-smtp/src/error.rs`

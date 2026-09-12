@@ -1,6 +1,6 @@
 # RFC 005 — Core transport abstraction
 
-**Status.** Implemented (v0.1.0)
+**Status.** Implemented (0.1.0)
 **Priority.** P0
 **Tracks.** Core architecture / Transport
 **Touches.** `crates/wasm-smtp/src/transport.rs`, `crates/wasm-smtp/src/error.rs`

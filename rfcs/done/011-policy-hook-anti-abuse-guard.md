@@ -1,6 +1,6 @@
 # RFC 011 — Policy hook and anti-abuse guard
 
-**Status.** Implemented (v0.10.0)
+**Status.** Implemented (0.10.0)
 **Priority.** P1
 **Tracks.** Security / Policy
 **Touches.** `crates/wasm-smtp/src/policy.rs`, `crates/wasm-smtp/src/client.rs`, `TERMS_OF_USE.md`

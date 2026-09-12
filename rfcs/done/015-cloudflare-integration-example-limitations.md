@@ -1,6 +1,6 @@
 # RFC 015 — Cloudflare integration example and runtime limitations
 
-**Status.** Implemented (v0.3.0)
+**Status.** Implemented (0.3.0)
 **Priority.** P2
 **Tracks.** Docs / Adapter / Integration
 **Touches.** `docs/src/cloudflare-adapter.md`, `docs/src/usage.md`

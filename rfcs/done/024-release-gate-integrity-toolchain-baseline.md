@@ -17,7 +17,7 @@ change. It also settles how the Component Model crate drives async
 code on `wasm32-wasip2`, a gap that has prevented that crate from ever
 building for its real target.
 
-The implementation ships as the v0.15.2 patch release, subject to the
+The implementation ships as the 0.15.2 patch release, subject to the
 owner's release approval.
 
 ## Motivation
@@ -53,7 +53,7 @@ security invariants. No CI has ever existed. This RFC closes that gap.
   non-blocking latest-stable job.
 - Get every crate building for its real target, including
   `wasm-smtp-component` on `wasm32-wasip2`.
-- Ship the accumulated fixes as v0.15.2 and bring the documentation
+- Ship the accumulated fixes as 0.15.2 and bring the documentation
   back in line with the code.
 
 ## Non-goals
@@ -268,7 +268,7 @@ cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit
 
 ### D7. Release
 
-The implementation ships as **v0.15.2**, a patch release, after the
+The implementation ships as **0.15.2**, a patch release, after the
 architect's review and the owner's approval. The changelog gets an
 English 0.15.2 entry, the 0.15.1 entry is translated to English per
 project rules, the duplicated `[0.9.4]` headings are merged into one
@@ -352,7 +352,7 @@ of the version offset.
 - 2026-09-12: D6 confirmed; D8 and D9 added after review 1 of the
   implementation (see `.git-exclude/reviewed/024-release-gate-integrity-review-1.md`).
 - 2026-09-12: D10 added after review 2 and accepted by the owner; the
-  owner approved the v0.15.2 release on the same day (D7).
+  owner approved the 0.15.2 release on the same day (D7).
 - 2026-09-12: released as 0.15.2 (tag at `8a46d22`; six crates published).
 - 2026-09-12: D11 added after review 3 of the release commit: the
   component crate packaged without its WIT; the contract moves inside
