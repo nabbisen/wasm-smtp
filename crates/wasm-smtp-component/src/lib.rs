@@ -44,15 +44,15 @@ mod bindings {
         // rather than two. `wasm-smtp-wasi` does the actual socket work
         // through the same bindings.
         with: {
-            "wasi:clocks/monotonic-clock@0.2.4": wasi::clocks::monotonic_clock,
-            "wasi:io/error@0.2.4": wasi::io::error,
-            "wasi:io/poll@0.2.4": wasi::io::poll,
-            "wasi:io/streams@0.2.4": wasi::io::streams,
-            "wasi:sockets/instance-network@0.2.4": wasi::sockets::instance_network,
-            "wasi:sockets/ip-name-lookup@0.2.4": wasi::sockets::ip_name_lookup,
-            "wasi:sockets/network@0.2.4": wasi::sockets::network,
-            "wasi:sockets/tcp@0.2.4": wasi::sockets::tcp,
-            "wasi:sockets/tcp-create-socket@0.2.4": wasi::sockets::tcp_create_socket,
+            "wasi:clocks/monotonic-clock@0.2.12": wasi::clocks::monotonic_clock,
+            "wasi:io/error@0.2.12": wasi::io::error,
+            "wasi:io/poll@0.2.12": wasi::io::poll,
+            "wasi:io/streams@0.2.12": wasi::io::streams,
+            "wasi:sockets/instance-network@0.2.12": wasi::sockets::instance_network,
+            "wasi:sockets/ip-name-lookup@0.2.12": wasi::sockets::ip_name_lookup,
+            "wasi:sockets/network@0.2.12": wasi::sockets::network,
+            "wasi:sockets/tcp@0.2.12": wasi::sockets::tcp,
+            "wasi:sockets/tcp-create-socket@0.2.12": wasi::sockets::tcp_create_socket,
         },
     });
 }

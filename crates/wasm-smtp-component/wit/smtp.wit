@@ -163,13 +163,13 @@ interface smtp-send {
 /// and exports the `smtp-send` interface.
 world smtp-client {
     /// DNS lookup, TCP sockets, and byte streams.
-    import wasi:sockets/instance-network@0.2.4;
-    import wasi:sockets/network@0.2.4;
-    import wasi:sockets/tcp@0.2.4;
-    import wasi:sockets/tcp-create-socket@0.2.4;
-    import wasi:sockets/ip-name-lookup@0.2.4;
-    import wasi:io/streams@0.2.4;
-    import wasi:io/poll@0.2.4;
+    import wasi:sockets/instance-network@0.2.12;
+    import wasi:sockets/network@0.2.12;
+    import wasi:sockets/tcp@0.2.12;
+    import wasi:sockets/tcp-create-socket@0.2.12;
+    import wasi:sockets/ip-name-lookup@0.2.12;
+    import wasi:io/streams@0.2.12;
+    import wasi:io/poll@0.2.12;
 
     export smtp-send;
 }
