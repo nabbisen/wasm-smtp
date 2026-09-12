@@ -51,6 +51,8 @@ impl TestTransport {
     }
 }
 
+// A test double that replays and records in memory instead of doing I/O, so nothing awaits.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 impl Transport for TestTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         let Some(chunk) = self.incoming.front_mut() else {

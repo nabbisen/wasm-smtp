@@ -113,6 +113,8 @@ impl Transport for CloudflareTransport {
     }
 }
 
+// `worker::Socket::start_tls` is synchronous and the handshake runs on the next I/O, so nothing awaits here.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 impl StartTlsCapable for CloudflareTransport {
     async fn upgrade_to_tls(&mut self) -> Result<(), IoError> {
         // `Socket::start_tls(self) -> Socket` consumes the original

@@ -61,6 +61,8 @@ impl<S: AsyncRead + AsyncWrite + Unpin> Transport for StreamTransport<S> {
 /// the same plaintext stream — which is fine: the SMTP byte
 /// sequence after STARTTLS is identical regardless of whether
 /// the underlying bytes are actually encrypted on the wire.
+// The mock counts the upgrade instead of performing a handshake, so nothing awaits.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 impl<S: AsyncRead + AsyncWrite + Unpin> StartTlsCapable for StreamTransport<S> {
     async fn upgrade_to_tls(&mut self) -> Result<(), IoError> {
         self.upgrades.set(self.upgrades.get() + 1);

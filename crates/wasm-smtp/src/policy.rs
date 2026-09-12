@@ -153,24 +153,24 @@ impl SendPolicy for BoundedPolicy {
     }
 
     fn check_recipients(&self, recipients: &[&str]) -> Result<(), PolicyError> {
-        if let Some(max) = self.max_recipients {
-            if recipients.len() > max {
-                return Err(PolicyError::new(format!(
-                    "too many recipients: {actual} exceeds limit of {max}",
-                    actual = recipients.len(),
-                )));
-            }
+        if let Some(max) = self.max_recipients
+            && recipients.len() > max
+        {
+            return Err(PolicyError::new(format!(
+                "too many recipients: {actual} exceeds limit of {max}",
+                actual = recipients.len(),
+            )));
         }
         Ok(())
     }
 
     fn check_message_size(&self, bytes: usize) -> Result<(), PolicyError> {
-        if let Some(max) = self.max_message_bytes {
-            if bytes > max {
-                return Err(PolicyError::new(format!(
-                    "message too large: {bytes} bytes exceeds limit of {max} bytes",
-                )));
-            }
+        if let Some(max) = self.max_message_bytes
+            && bytes > max
+        {
+            return Err(PolicyError::new(format!(
+                "message too large: {bytes} bytes exceeds limit of {max} bytes",
+            )));
         }
         Ok(())
     }

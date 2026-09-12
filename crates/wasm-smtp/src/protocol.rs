@@ -549,8 +549,7 @@ const BASE64_ALPHABET: &[u8; 64] =
 /// base64 dependency; the implementation is small and easy to audit.
 pub fn base64_encode(input: &[u8]) -> String {
     let mut out = String::with_capacity(input.len().div_ceil(3) * 4);
-    let chunks = input.chunks_exact(3);
-    let rem = chunks.remainder();
+    let (chunks, rem) = input.as_chunks::<3>();
     for chunk in chunks {
         let n = (u32::from(chunk[0]) << 16) | (u32::from(chunk[1]) << 8) | u32::from(chunk[2]);
         push_b64(&mut out, n, 4);
@@ -602,12 +601,13 @@ pub fn base64_decode(input: &str) -> Result<Vec<u8>, &'static str> {
     if bytes.is_empty() {
         return Ok(Vec::new());
     }
-    if bytes.len() % 4 != 0 {
+    if !bytes.len().is_multiple_of(4) {
         return Err("invalid base64");
     }
 
     let mut out = Vec::with_capacity(bytes.len() / 4 * 3);
-    for (chunk_idx, chunk) in bytes.chunks_exact(4).enumerate() {
+    // The length check above guarantees `as_chunks` leaves no remainder.
+    for (chunk_idx, chunk) in bytes.as_chunks::<4>().0.iter().enumerate() {
         let is_last = chunk_idx == (bytes.len() / 4) - 1;
         let mut buf = [0u8; 4];
         let mut pad = 0usize;

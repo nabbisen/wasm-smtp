@@ -108,6 +108,8 @@ impl<'a> SliceBody<'a> {
     }
 }
 
+// Reads from a slice already in memory, so nothing awaits; streaming bodies do.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 impl MessageBody for SliceBody<'_> {
     async fn read_chunk(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         if self.pos >= self.data.len() {

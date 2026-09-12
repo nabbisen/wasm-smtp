@@ -50,6 +50,17 @@ changes is what the gate reaches, and the order releases happen in.
   example in *Usage* did not compile because it had no arm for
   `SmtpError::Policy` — the example a reader copies into production.
 
+### Code quality
+
+- **Clean under the current stable Clippy** (RFC 033). Six lints fixed as
+  the code improvements they are — among them the base64 encoder and
+  decoder, now on `as_chunks`, with a new round-trip test over every
+  input length from 0 to 7. One lint, `unused_async_trait_impl`, is
+  allowed on the eight trait impls that are async by contract but have
+  nothing to await, each with its reason. No API or behaviour change; the
+  pinned 1.88 gate is unaffected, and the advisory `stable` job reports
+  every crate's lints rather than stopping at the first.
+
 ### Not in this release
 
 - **Compiling the book's Rust code blocks (RFC 032 D2) did not land.**

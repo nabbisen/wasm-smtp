@@ -547,7 +547,7 @@ impl fmt::Display for ProtocolError {
             Self::UnexpectedClose => f.write_str("server closed connection unexpectedly"),
             Self::LineTooLong => f.write_str("server reply line exceeded SMTP line-length limit"),
             Self::InconsistentMultiline { first, later } => {
-                write!(f, "multi-line reply mixed codes {first} and {later}",)
+                write!(f, "multi-line reply mixed codes {first} and {later}")
             }
             Self::ExtensionUnavailable { name } => {
                 write!(f, "server did not advertise the {name} extension")

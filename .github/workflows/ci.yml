@@ -146,7 +146,9 @@ jobs:
         run: cargo +stable test --workspace
 
       - name: Clippy
-        run: cargo +stable clippy --workspace --all-targets -- -D warnings
+        # --keep-going: without it Cargo stops scheduling after the first
+        # crate fails, so one crate's lints hid the rest (RFC 033 D3).
+        run: cargo +stable clippy --keep-going --workspace --all-targets -- -D warnings
 
   # Dependency advisories. Blocking: a vulnerability against anything in
   # the lockfile should turn the build red. cargo audit exits non-zero on

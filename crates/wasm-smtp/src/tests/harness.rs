@@ -163,6 +163,8 @@ impl MockTransport {
     }
 }
 
+// A test double that replays and records in memory instead of doing I/O, so nothing awaits.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 impl Transport for MockTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         let Some(chunk) = self.incoming.front_mut() else {
@@ -189,6 +191,8 @@ impl Transport for MockTransport {
     }
 }
 
+// The mock counts the upgrade instead of performing a handshake, so nothing awaits.
+#[allow(unknown_lints, clippy::unused_async_trait_impl)]
 impl StartTlsCapable for MockTransport {
     async fn upgrade_to_tls(&mut self) -> Result<(), IoError> {
         *self.upgrades.borrow_mut() += 1;

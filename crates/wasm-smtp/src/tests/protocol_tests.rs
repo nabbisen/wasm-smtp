@@ -219,6 +219,29 @@ fn base64_encode_auth_login_canonical_examples() {
 }
 
 #[test]
+fn base64_round_trips_every_remainder_across_a_block_boundary() {
+    // Lengths 0 through 7 reach every remainder of the encoder's 3-byte
+    // chunks and both padding forms of the decoder's 4-byte chunks, on
+    // both sides of a full block. The bytes run down from 0xFF, so high
+    // bits are covered too. Base64 carries AUTH credentials.
+    let data: Vec<u8> = (0u8..=255).rev().collect();
+    for len in 0..=7 {
+        let input = &data[..len];
+        let encoded = base64_encode(input);
+        assert_eq!(
+            encoded.len(),
+            len.div_ceil(3) * 4,
+            "encoded length for {len} bytes"
+        );
+        assert_eq!(
+            crate::protocol::base64_decode(&encoded).as_deref(),
+            Ok(input),
+            "round trip for {len} bytes"
+        );
+    }
+}
+
+#[test]
 fn base64_encode_handles_high_bytes() {
     let out = base64_encode(&[0xFF, 0x00, 0xAA]);
     assert_eq!(out, "/wCq");
@@ -485,7 +508,7 @@ fn reply_parses_enhanced_status_class_2_and_4() {
 #[test]
 fn reply_rejects_invalid_enhanced_class_digits() {
     // Class 1, 3, 6, etc. must not be parsed: RFC 3463 only defines 2/4/5.
-    for bad in [b'0', b'1', b'3', b'6', b'9'] {
+    for bad in *b"01369" {
         let line = format!("{}.0.0 something", bad as char);
         let reply = Reply::new(250, vec![line]);
         assert!(

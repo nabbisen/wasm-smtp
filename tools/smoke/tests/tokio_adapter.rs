@@ -194,12 +194,12 @@ async fn implicit_tls_refuses_a_certificate_it_cannot_chain() {
         TokioTlsTransport::connect_with("127.0.0.1", port, trusting(&other_cert)),
     )
     .await;
-    if let Ok(transport) = connected {
-        if let Ok(mut client) = within("EHLO", SmtpClient::connect(transport, EXP.ehlo)).await {
-            let _ = within("AUTH", client.login(EXP.from, "secret")).await;
-            let _ = within("send", client.send_mail(EXP.from, &[EXP.rcpt], BODY)).await;
-            let _ = within("QUIT", client.quit()).await;
-        }
+    if let Ok(transport) = connected
+        && let Ok(mut client) = within("EHLO", SmtpClient::connect(transport, EXP.ehlo)).await
+    {
+        let _ = within("AUTH", client.login(EXP.from, "secret")).await;
+        let _ = within("send", client.send_mail(EXP.from, &[EXP.rcpt], BODY)).await;
+        let _ = within("QUIT", client.quit()).await;
     }
 
     // A responder-side error is the expected outcome: the handshake dies
