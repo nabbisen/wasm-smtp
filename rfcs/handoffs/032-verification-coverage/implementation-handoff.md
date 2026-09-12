@@ -285,3 +285,61 @@ One commit, before any D2 work.
 before/after `cargo tree` outputs (or the stop report), S4a's three
 diffs, the fence-by-fence result against the inventory table, the four
 failure demonstrations, changed files, and the full gate.
+
+---
+
+# Revision 3 — 2026-09-13, after review 2
+
+Review: `.git-exclude/reviewed/032-verification-coverage-review-2.md`.
+S4a is approved. Read RFC 032 amendments **A5** and **A6** first. S4b
+resumes under them; Revision 2's S4b steps still apply except where this
+section replaces them.
+
+## S4c — Run the core's feature-gated tests (A6)
+
+Its own commit, before S4b. It is independent of the book.
+
+1. Gate command 5, in `ci.yml` and in the `CONTRIBUTING.md` block:
+   `cargo check --locked -p wasm-smtp --features smtputf8,mail-builder,tracing`
+   becomes
+   `cargo test --locked -p wasm-smtp --features smtputf8,mail-builder,tracing`.
+2. Paste its unit-test count next to `cargo test --locked -p wasm-smtp`'s at
+   defaults. The architect measured 309 against 279. If yours differ, say
+   why.
+3. **Demonstrate failure:** break one assertion in `smtputf8_tests.rs`.
+   Command 5 must go red and command 3 must stay green, which is the gap
+   this closes. Revert.
+4. `CHANGELOG.md` under `[Unreleased]`: the feature-gated core tests
+   now run in the gate, with the count.
+
+## S4b — resumed, with the shape changed by A5
+
+1. **Measure first**, as Revision 2 S4b.1, with the crate shaped as
+   below: `wasm-smtp-book` in `members`, its dependencies at defaults,
+   and `book` declared but **not** enabled. Normalized feature sets, as in
+   your request 2, raw files kept. **Stop if any set changes.**
+2. The crate: `tools/book/` (or the name you argue for),
+   `publish = false`, feature `book = ["wasm-smtp/smtputf8"]`, and nothing
+   else unless a fence proves it needs more. Every chapter item is
+   `#[cfg(all(doctest, feature = "book"))]`. The coverage test is **not**
+   feature-gated, so it also runs under command 3.
+3. Fences, listings, notes, `docs.yml` pull-request trigger with its own
+   concurrency group, and the changelog: as in Revision 2 S4b.2–S4b.5.
+4. Gate command 22, new, after command 21, in both places:
+   `cargo test --locked -p wasm-smtp-book --features book`.
+5. **Demonstrate failure**, all in command 22:
+   - a renamed API in a compiled fence goes red;
+   - fence 29's S4a fix undone goes red with `E0004`;
+   - the coverage test names a chapter removed from the crate, and names
+     an added scratch chapter;
+   - and **command 3 stays green** for the renamed-API case, which shows the
+     chapters really are outside the workspace run.
+
+   Revert each.
+
+## Review request
+
+`.git-exclude/review-request/032-verification-coverage-3.md`: S4c's counts
+and demonstration; S4b's normalized before/after sets (or the stop
+report); the fence-by-fence result; the demonstrations; the gate list as
+22 commands with changes marked; the full gate.

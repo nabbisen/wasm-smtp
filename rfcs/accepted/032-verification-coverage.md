@@ -286,6 +286,42 @@ workspace's feature resolution unchanged, measured before and after. If
 it cannot, the choice between excluding it from the workspace and
 another shape is the architect's.
 
+## Amendment — 2026-09-13, after review 2
+
+**A5. How the book crate avoids A4.** A measurement showed that exactly
+one fence needs a non-default feature (`smtputf8`, for
+`send_mail_smtputf8`), so a book crate compiling everything would change
+the workspace's resolution. The resolution is a workspace member with a
+**non-default** feature, `book = ["wasm-smtp/smtputf8"]`. Every chapter
+include is `#[cfg(all(doctest, feature = "book"))]`, and a dedicated gate
+command compiles them:
+
+```
+cargo test --locked -p wasm-smtp-book --features book
+```
+
+`cargo test --workspace` never enables a member's non-default feature,
+and `-p` scopes that command's unification to the book crate's graph.
+The architect verified each property on 1.88 in a scratch workspace
+before ruling: chapters are off in the workspace run and on in the
+dedicated one, drift in a chapter fails only there, and neither the
+optional feature nor the dedicated run changes later workspace
+resolution. This replaces D2's "`cargo test --workspace` then compiles
+every fence": the dedicated command does.
+
+**A6. The core's feature-gated tests.** The same measurement showed the
+gate never *runs* the core's tests behind `smtputf8`, `mail-builder`, or
+`tracing`: gate command 5 was `cargo check`. On 2026-09-13 that was 30
+unit tests (309 with the features against 279 without), all passing,
+none ever run by the gate. Command 5 becomes
+
+```
+cargo test --locked -p wasm-smtp --features smtputf8,mail-builder,tracing
+```
+
+which compiles everything the `check` did and then runs it, with `-p`
+keeping the features out of the workspace run.
+
 ## Gate changes
 
 The gate command list is the architect's artifact (RFC 024 D3). D1, D2,

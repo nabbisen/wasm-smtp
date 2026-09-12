@@ -10,7 +10,7 @@
 ## Summary
 
 Clippy 0.1.98 reports 22 lints the pinned 1.88 Clippy does not. Six are
-ordinary code improvements that also compile on 1.88: fix them. Sixteen
+ordinary code improvements that also compile on 1.88: fix them. Fourteen
 are one pedantic lint, `clippy::unused_async_trait_impl`, which fires on
 `async fn` trait implementations that have nothing to await: allow it,
 at the impl block, with its reason. Make the advisory job list every
@@ -32,12 +32,20 @@ across the whole workspace, stable reports **22**:
 
 | Lint | Sites | Where |
 |---|---|---|
-| `unused_async_trait_impl` | 16 | 8 impl blocks: core's `SliceBody` and test harness, `public_api.rs`, `wasm-smtp-test`'s `MockTransport`, the Cloudflare adapter and its test transport |
+| `unused_async_trait_impl` | 14 | 8 impl blocks: core's `SliceBody` and test harness, `public_api.rs`, `wasm-smtp-test`'s `MockTransport`, the Cloudflare adapter and its test transport |
 | `collapsible_if` | 3 | `policy.rs` ×2, `tools/smoke/tests/tokio_adapter.rs` |
 | chunks_exact with constant size (`as_chunks`) | 2 | `protocol.rs` base64 encode and decode |
 | manual `is_multiple_of` | 1 | `protocol.rs` base64 decode |
 | unnecessary trailing comma | 1 | `error.rs` `Display` |
 | byte char slice | 1 | `tests/protocol_tests.rs` |
+
+## Amendment — 2026-09-13, after review 1
+
+**A1. The count.** As accepted, this RFC said 16 `unused_async_trait_impl`
+sites, and its table summed to 24 against a stated total of 22. The
+implementer counted 14, and the architect's own Clippy output confirms
+it. The total of 22 and the eight impl blocks were right. Corrected
+above; nothing in the design depended on the number.
 
 ## Design
 
