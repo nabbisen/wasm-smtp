@@ -49,6 +49,10 @@ wasi = { version = "0.14", default-features = false }
 
 [dev-dependencies]
 wasm-smtp-test = { path = "../wasm-smtp-test" }
+# The `smoke` example loads a run-generated CA from a PEM file, which needs
+# the `std` feature's PEM reader. Dev-only: the published crate's dependency
+# on rustls-pki-types is unchanged.
+rustls-pki-types = { workspace = true, features = ["std"] }
 
 [lints]
 workspace = true

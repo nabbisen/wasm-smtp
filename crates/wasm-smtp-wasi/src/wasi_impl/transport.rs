@@ -22,11 +22,18 @@ use crate::tls::{ConnectOptions, make_tls_config, server_name};
 // Internal state
 // ---------------------------------------------------------------------------
 
+/// Message for I/O attempted after the transport has been closed.
+const CLOSED: &str = "transport is closed";
+
 enum Inner {
     /// Plaintext WASI stream (used before STARTTLS upgrade).
     Plain(WasiStream),
     /// rustls-wrapped TLS stream.
     Tls(StreamOwned<ClientConnection, WasiStreamIo>),
+    /// No usable stream: either `close` ran, or a STARTTLS handshake was
+    /// started and failed. Every I/O method reports this rather than
+    /// operating on a placeholder.
+    Closed,
 }
 
 /// Newtype that implements `std::io::Read + Write` over `WasiStream`,
@@ -91,11 +98,15 @@ impl WasiTlsTransport {
     }
 
     /// Connect as plaintext (for STARTTLS). TLS is deferred to
-    /// `upgrade_to_tls`.
-    pub(crate) async fn connect_plain(host: &str, port: u16) -> Result<Self, WasiSmtpError> {
-        let opts = ConnectOptions::default();
+    /// `upgrade_to_tls`, which is why `opts` is retained rather than used
+    /// here.
+    pub(crate) async fn connect_plain(
+        host: &str,
+        port: u16,
+        opts: ConnectOptions,
+    ) -> Result<Self, WasiSmtpError> {
         let stream = tcp_connect(host, port)?;
-        let sni = server_name(host)?;
+        let sni = server_name(opts.server_name.as_deref().unwrap_or(host))?;
         let tls_config = make_tls_config(&opts)?;
         Ok(Self {
             inner: Inner::Plain(stream),
@@ -112,35 +123,39 @@ impl WasiTlsTransport {
 impl Transport for WasiTlsTransport {
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, IoError> {
         match &mut self.inner {
-            Inner::Plain(s) => s.read(buf).map_err(|e| IoError::new(e.to_string())),
-            Inner::Tls(s) => s.read(buf).map_err(|e| IoError::new(e.to_string())),
+            Inner::Plain(s) => s.read(buf).map_err(IoError::from),
+            Inner::Tls(s) => s
+                .read(buf)
+                .map_err(|e| IoError::with_source("TLS read failed", e)),
+            Inner::Closed => Err(IoError::new(CLOSED)),
         }
     }
 
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError> {
         match &mut self.inner {
-            Inner::Plain(s) => s.write_all(buf).map_err(|e| IoError::new(e.to_string())),
-            Inner::Tls(s) => {
-                s.write_all(buf).map_err(|e| IoError::new(e.to_string()))?;
-                Ok(())
-            }
+            Inner::Plain(s) => s.write_all(buf).map_err(IoError::from),
+            Inner::Tls(s) => s
+                .write_all(buf)
+                .map_err(|e| IoError::with_source("TLS write failed", e)),
+            Inner::Closed => Err(IoError::new(CLOSED)),
         }
     }
 
     async fn flush(&mut self) -> Result<(), IoError> {
         match &mut self.inner {
-            Inner::Plain(s) => s.flush().map_err(|e| IoError::new(e.to_string())),
-            Inner::Tls(s) => {
-                s.flush().map_err(|e| IoError::new(e.to_string()))?;
-                Ok(())
-            }
+            Inner::Plain(s) => s.flush().map_err(IoError::from),
+            Inner::Tls(s) => s
+                .flush()
+                .map_err(|e| IoError::with_source("TLS flush failed", e)),
+            Inner::Closed => Err(IoError::new(CLOSED)),
         }
     }
 
     async fn close(&mut self) -> Result<(), IoError> {
-        match &mut self.inner {
-            Inner::Plain(s) => s.close().map_err(|e| IoError::new(e.to_string())),
-            Inner::Tls(s) => {
+        // Whatever happens below, the transport is finished afterwards.
+        match std::mem::replace(&mut self.inner, Inner::Closed) {
+            Inner::Plain(mut s) => s.close().map_err(IoError::from),
+            Inner::Tls(mut s) => {
                 // Flush and send TLS close_notify.
                 s.flush().ok();
                 s.conn.send_close_notify();
@@ -148,8 +163,10 @@ impl Transport for WasiTlsTransport {
                 let mut buf = Vec::new();
                 s.conn.write_tls(&mut buf).ok();
                 s.sock.0.write_all(&buf).ok();
-                s.sock.0.close().map_err(|e| IoError::new(e.to_string()))
+                s.sock.0.close().map_err(IoError::from)
             }
+            // Closing twice is not an error.
+            Inner::Closed => Ok(()),
         }
     }
 }
@@ -165,18 +182,24 @@ impl StartTlsCapable for WasiTlsTransport {
             .take()
             .ok_or_else(|| IoError::new("upgrade_to_tls called on an already-TLS transport"))?;
 
-        // Extract the plain stream.
-        let plain = match std::mem::replace(&mut self.inner, Inner::Plain(dummy_stream())) {
+        // Take the plaintext stream out, leaving `Closed` behind. If the
+        // handshake fails the transport stays `Closed`, which is the correct
+        // state: the plaintext stream has been consumed and a failed STARTTLS
+        // must never fall back to plaintext (RFC 3207; DEC-015).
+        let plain = match std::mem::replace(&mut self.inner, Inner::Closed) {
             Inner::Plain(s) => s,
-            Inner::Tls(_) => {
+            Inner::Tls(s) => {
+                // Put it back: this is a caller error, not a broken session.
+                self.inner = Inner::Tls(s);
                 return Err(IoError::new(
                     "upgrade_to_tls called on a transport that is already TLS",
                 ));
             }
+            Inner::Closed => return Err(IoError::new(CLOSED)),
         };
 
         let tls_stream = tls_handshake(plain, self.sni.clone(), tls_config)
-            .map_err(|e| IoError::new(e.to_string()))?;
+            .map_err(|e| IoError::with_source("STARTTLS handshake failed", e))?;
         self.inner = Inner::Tls(tls_stream);
         Ok(())
     }
@@ -210,10 +233,4 @@ fn tls_handshake(
     tls.flush()
         .map_err(|e| WasiSmtpError::new(format!("TLS handshake failed: {e}")))?;
     Ok(tls)
-}
-
-/// Construct a placeholder `WasiStream` for `mem::replace`. Never used.
-#[cold]
-fn dummy_stream() -> WasiStream {
-    panic!("dummy_stream must never be used for I/O")
 }

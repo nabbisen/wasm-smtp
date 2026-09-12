@@ -150,7 +150,31 @@ pub async fn connect_smtp_starttls(
     port: u16,
     ehlo_domain: &str,
 ) -> Result<SmtpClient<WasiTlsTransport>, SmtpError> {
-    let transport = WasiTlsTransport::connect_plain(host, port)
+    connect_smtp_starttls_with(host, port, ehlo_domain, ConnectOptions::default()).await
+}
+
+/// Connect with STARTTLS using custom [`ConnectOptions`].
+///
+/// The options apply to the TLS upgrade that follows the `STARTTLS`
+/// command, so this is the entry point to use when the server's
+/// certificate must be validated against a private CA, or when the SNI
+/// name differs from the connect host.
+///
+/// # Errors
+///
+/// - [`SmtpError::Io`] on DNS lookup failure, TCP connect failure, or TLS
+///   handshake failure during the upgrade.
+/// - [`SmtpError::Protocol`] if the greeting, either `EHLO`, or the
+///   `STARTTLS` reply is unexpected, or if the server did not advertise
+///   `STARTTLS`.
+#[cfg(target_arch = "wasm32")]
+pub async fn connect_smtp_starttls_with(
+    host: &str,
+    port: u16,
+    ehlo_domain: &str,
+    options: ConnectOptions,
+) -> Result<SmtpClient<WasiTlsTransport>, SmtpError> {
+    let transport = WasiTlsTransport::connect_plain(host, port, options)
         .await
         .map_err(|e| SmtpError::Io(e.into()))?;
     SmtpClient::connect_starttls(transport, ehlo_domain).await

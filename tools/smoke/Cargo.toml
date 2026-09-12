@@ -1,0 +1,33 @@
+[package]
+name = "wasm-smtp-smoke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "On-target smoke-test driver for wasm-smtp-wasi (dev-only, never published)."
+# Test tooling, not a library. Never goes to crates.io.
+publish = false
+
+[[bin]]
+name = "wasm-smtp-smoke"
+path = "src/main.rs"
+
+[dependencies]
+# Scripted TLS responders. `ring` matches what the WASI adapter selects,
+# so one provider is compiled in and the choice stays unambiguous.
+rustls = { version = "0.23", default-features = false, features = [
+    "ring",
+    "std",
+    "tls12",
+    "logging",
+] }
+rustls-pki-types = { workspace = true, features = ["std"] }
+# Generates the throwaway certificate for each run; no key material is
+# committed.
+rcgen = "0.14"
+
+[lints]
+workspace = true
