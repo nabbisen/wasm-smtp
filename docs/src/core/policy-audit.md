@@ -16,7 +16,8 @@ transaction on the basis of the sender address, recipient list, or
 estimated message size.
 
 ```rust
-use wasm_smtp::policy::{SendPolicy, PolicyError};
+use wasm_smtp::PolicyError;
+use wasm_smtp::policy::SendPolicy;
 
 struct BlockBigMessages;
 

@@ -354,6 +354,11 @@ match client.send_mail(from, recipients, body).await {
         // address or an out-of-order call.
         unreachable!("client bug: {i}");
     }
+    Err(wasm_smtp::SmtpError::Policy(p)) => {
+        log::warn!("refused by our own send policy: {p}");
+        // Our policy rejected the message before it reached the server.
+        // Not retryable as-is: the same message will be refused again.
+    }
 }
 ```
 

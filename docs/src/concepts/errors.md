@@ -160,13 +160,13 @@ failures. The standard pattern is:
 ```rust
 match client.send_mail(from, &[to], body).await {
     Ok(_) => {}
-    Err(SmtpError::Io(_))                           => /* retry later */,
+    Err(SmtpError::Io(_))                           => { /* retry later */ }
     Err(SmtpError::Protocol(ProtocolError::UnexpectedCode { actual, .. }))
-        if (400..500).contains(&actual)             => /* retry later */,
-    Err(SmtpError::Protocol(_))                     => /* permanent: log + skip */,
-    Err(SmtpError::Auth(_))                         => /* fix credentials */,
-    Err(SmtpError::InvalidInput(_))                 => /* programmer error */,
-    Err(SmtpError::Policy(_))                       => /* your own policy refused it */,
+        if (400..500).contains(&actual)             => { /* retry later */ }
+    Err(SmtpError::Protocol(_))                     => { /* permanent: log + skip */ }
+    Err(SmtpError::Auth(_))                         => { /* fix credentials */ }
+    Err(SmtpError::InvalidInput(_))                 => { /* programmer error */ }
+    Err(SmtpError::Policy(_))                       => { /* your own policy refused it */ }
 }
 ```
 
