@@ -212,11 +212,15 @@ impl<T: Transport> SmtpClient<T> {
 
     pub(super) async fn fill_buf(&mut self) -> Result<usize, SmtpError> {
         let mut tmp = [0u8; READ_CHUNK];
-        let n = self.transport.read(&mut tmp).await.map_err(|e| {
-            // I/O failure is fatal; transition to Closed.
-            self.state = SessionState::Closed;
-            SmtpError::Io(e)
-        })?;
+        let n = match self.transport.read(&mut tmp).await {
+            Ok(n) => n,
+            Err(e) => {
+                // I/O failure is fatal. Go through the one choke point so the
+                // abort is audited like every other fatal failure.
+                self.mark_closed_on_logical_failure();
+                return Err(SmtpError::Io(e));
+            }
+        };
         self.rx_buf.extend_from_slice(&tmp[..n]);
         Ok(n)
     }

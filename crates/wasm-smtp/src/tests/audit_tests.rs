@@ -286,3 +286,148 @@ fn vec_sink_is_empty_before_session() {
     assert!(sink.is_empty());
     assert_eq!(sink.len(), 0);
 }
+
+// ---------------------------------------------------------------------------
+// RecipientRejected and SessionAborted (RFC 025 D4)
+// ---------------------------------------------------------------------------
+//
+// Both events were defined by RFC 012 but never emitted: `RecipientRejected`
+// from nowhere, `SessionAborted` only from `quit`, so a failure during a
+// transaction left no abort record — precisely the case audit exists for.
+
+/// Count how many recorded events start with `label`.
+fn count(events: &[String], label: &str) -> usize {
+    events.iter().filter(|e| e.starts_with(label)).count()
+}
+
+#[test]
+fn rcpt_rejection_emits_recipient_rejected_then_one_session_aborted() {
+    let script = flatten(&[
+        b"220 mail.example.com ESMTP\r\n",
+        b"250-mail.example.com\r\n250 AUTH PLAIN LOGIN\r\n",
+        b"235 2.7.0 Authentication successful\r\n",
+        b"250 2.1.0 OK\r\n",
+        // The recipient is refused permanently.
+        b"550 5.1.1 <to@example.com>: Recipient address rejected\r\n",
+    ]);
+    let sink = Arc::new(VecAuditSink::default());
+    let opts = SmtpClientOptions::new().with_audit(Box::new(Arc::clone(&sink)));
+
+    let (transport, _written, _closed) = MockTransport::new(&[&script]);
+    let mut client = block_on(SmtpClient::connect_with(
+        transport,
+        "client.example.com",
+        opts,
+    ))
+    .expect("connect");
+    block_on(client.login("user@example.com", "pass")).expect("login");
+    let err = block_on(client.send_mail(
+        "from@example.com",
+        &["to@example.com"],
+        "Subject: test\r\n\r\nbody\r\n",
+    ))
+    .expect_err("550 on RCPT TO must fail the send");
+    assert!(
+        matches!(err, crate::error::SmtpError::Protocol(_)),
+        "expected a protocol error, got {err:?}"
+    );
+
+    let events = sink.events();
+    assert_eq!(
+        count(&events, "RecipientRejected"),
+        1,
+        "exactly one RecipientRejected: {events:?}"
+    );
+    assert!(
+        events
+            .iter()
+            .any(|e| e.starts_with("RecipientRejected") && e.contains("550")),
+        "RecipientRejected must carry the reply code: {events:?}"
+    );
+    assert_eq!(
+        count(&events, "SessionAborted"),
+        1,
+        "exactly one SessionAborted: {events:?}"
+    );
+    // Order matters to a reader of the log: the rejection explains the abort.
+    let rejected = events
+        .iter()
+        .position(|e| e.starts_with("RecipientRejected"))
+        .unwrap();
+    let aborted = events
+        .iter()
+        .position(|e| e.starts_with("SessionAborted"))
+        .unwrap();
+    assert!(
+        rejected < aborted,
+        "RecipientRejected must precede SessionAborted: {events:?}"
+    );
+    assert_eq!(
+        count(&events, "RecipientAccepted"),
+        0,
+        "a rejected recipient must not also be recorded as accepted: {events:?}"
+    );
+}
+
+#[test]
+fn io_failure_mid_session_emits_exactly_one_session_aborted() {
+    // The script runs out mid-transaction, so the next read reports a clean
+    // close: the transport-level failure path in `fill_buf`.
+    let script = flatten(&[
+        b"220 mail.example.com ESMTP\r\n",
+        b"250-mail.example.com\r\n250 AUTH PLAIN LOGIN\r\n",
+        b"235 2.7.0 Authentication successful\r\n",
+        b"250 2.1.0 OK\r\n",
+    ]);
+    let sink = Arc::new(VecAuditSink::default());
+    let opts = SmtpClientOptions::new().with_audit(Box::new(Arc::clone(&sink)));
+
+    let (transport, _written, _closed) = MockTransport::new(&[&script]);
+    let mut client = block_on(SmtpClient::connect_with(
+        transport,
+        "client.example.com",
+        opts,
+    ))
+    .expect("connect");
+    block_on(client.login("user@example.com", "pass")).expect("login");
+    let _ = block_on(client.send_mail(
+        "from@example.com",
+        &["to@example.com"],
+        "Subject: test\r\n\r\nbody\r\n",
+    ))
+    .expect_err("the peer went away mid-transaction");
+
+    // `quit` on an already-closed session must not add a second abort.
+    block_on(client.quit()).expect("quit on a closed session is a no-op");
+
+    let events = sink.events();
+    assert_eq!(
+        count(&events, "SessionAborted"),
+        1,
+        "exactly one SessionAborted, including after quit: {events:?}"
+    );
+}
+
+#[test]
+fn successful_session_emits_no_session_aborted() {
+    let sink = Arc::new(VecAuditSink::default());
+    let opts = SmtpClientOptions::new().with_audit(Box::new(Arc::clone(&sink)));
+    run_full_session(opts);
+
+    let events = sink.events();
+    assert_eq!(
+        count(&events, "SessionAborted"),
+        0,
+        "a clean session must not report an abort: {events:?}"
+    );
+    assert_eq!(
+        count(&events, "RecipientRejected"),
+        0,
+        "no recipient was rejected: {events:?}"
+    );
+    assert_eq!(
+        count(&events, "QuitCompleted"),
+        1,
+        "a clean session ends with QuitCompleted: {events:?}"
+    );
+}

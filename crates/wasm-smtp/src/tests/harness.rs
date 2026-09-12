@@ -72,6 +72,9 @@ pub struct MockTransport {
     /// has been called. Empty for non-STARTTLS tests.
     pending_post: VecDeque<Vec<u8>>,
     written: Rc<RefCell<Vec<u8>>>,
+    /// One entry per `write_all` call, so tests can tell a batched
+    /// envelope from the same bytes written command by command.
+    write_calls: Rc<RefCell<Vec<Vec<u8>>>>,
     closed: Rc<RefCell<bool>>,
     /// Number of times `upgrade_to_tls()` has been called. Incremented
     /// whether the call succeeds or fails.
@@ -117,6 +120,16 @@ impl MockTransport {
         Self::build(pre_chunks, post_chunks, behavior)
     }
 
+    /// Handle to the per-call write log.
+    ///
+    /// Take this before the transport is moved into the client. Unlike the
+    /// concatenated `written` handle, this preserves the boundary between
+    /// `write_all` calls, which is what distinguishes a pipelined envelope
+    /// (one call) from a sequential one (several).
+    pub fn write_calls(&self) -> Rc<RefCell<Vec<Vec<u8>>>> {
+        Rc::clone(&self.write_calls)
+    }
+
     fn build(
         pre_chunks: &[&[u8]],
         post_chunks: &[&[u8]],
@@ -138,6 +151,7 @@ impl MockTransport {
                 incoming: q,
                 pending_post,
                 written: Rc::clone(&written),
+                write_calls: Rc::new(RefCell::new(Vec::new())),
                 closed: Rc::clone(&closed),
                 upgrades: Rc::clone(&upgrades),
                 upgrade_behavior: behavior,
@@ -165,6 +179,7 @@ impl Transport for MockTransport {
 
     async fn write_all(&mut self, buf: &[u8]) -> Result<(), IoError> {
         self.written.borrow_mut().extend_from_slice(buf);
+        self.write_calls.borrow_mut().push(buf.to_vec());
         Ok(())
     }
 

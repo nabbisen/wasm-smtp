@@ -220,6 +220,15 @@ impl<T: Transport> SmtpClient<T> {
         }
     }
 
+    /// Poison the session after an unrecoverable failure.
+    ///
+    /// This is the single place that moves the state machine to `Closed` on
+    /// failure, and therefore the single place that emits
+    /// [`SmtpAuditEvent::SessionAborted`][crate::audit::SmtpAuditEvent::SessionAborted]
+    /// — once per session, guarded by the state check, so that a failure
+    /// which unwinds through several layers still produces one event.
+    /// `quit` reports its own outcome and returns early when the session is
+    /// already closed, so the two cannot both fire.
     fn mark_closed_on_logical_failure(&mut self) {
         // After any unrecoverable error, the connection is poisoned. Move to
         // Closed so subsequent calls fail fast with InvalidInput.
@@ -228,8 +237,10 @@ impl<T: Transport> SmtpClient<T> {
                 state = ?self.state,
                 "session closed on logical failure; further calls will fail fast"
             );
+            self.state = SessionState::Closed;
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::SessionAborted);
         }
-        self.state = SessionState::Closed;
     }
 }
 

@@ -7,9 +7,7 @@
 use super::SmtpClient;
 #[cfg(feature = "mail-builder")]
 use crate::error::IoError;
-#[cfg(feature = "smtputf8")]
-use crate::error::ProtocolError;
-use crate::error::{InvalidInputError, SmtpError, SmtpOp};
+use crate::error::{InvalidInputError, ProtocolError, SmtpError, SmtpOp};
 use crate::outcome::SendOutcome;
 use crate::protocol::{
     self, DotStufferState, dot_stuff_and_terminate, format_command, format_mail_from,
@@ -20,6 +18,113 @@ use crate::tracing_helpers::smtp_debug;
 use crate::transport::Transport;
 
 impl<T: Transport> SmtpClient<T> {
+    /// Run the envelope phase: `MAIL FROM`, every `RCPT TO`, and `DATA`
+    /// through the server's `354` go-ahead.
+    ///
+    /// All four send methods share this, which is why it takes the already
+    /// formatted `MAIL FROM` line rather than the address: the SMTPUTF8
+    /// variant formats its own with the `SMTPUTF8` parameter attached.
+    /// After it returns `Ok`, the session is in [`SessionState::Data`] and
+    /// the caller writes the body.
+    ///
+    /// When the server advertised `PIPELINING` (RFC 2920) the commands go
+    /// out in one write and the replies are read in order, which removes a
+    /// round trip per recipient. Wire output on a server that did not
+    /// advertise it is unchanged.
+    async fn run_envelope(&mut self, mail_from_line: &[u8], to: &[&str]) -> Result<(), SmtpError> {
+        self.transition(SessionState::MailFrom)?;
+
+        #[cfg(feature = "pipelining")]
+        let pipelining = protocol::ehlo_advertises_pipelining(&self.capabilities);
+        #[cfg(not(feature = "pipelining"))]
+        let pipelining = false;
+
+        if pipelining {
+            // ── Pipelined path ────────────────────────────────────────
+            // Collect MAIL FROM + all RCPT TO + DATA into one buffer,
+            // write once, flush, then read all responses in order.
+            let mut pipeline: Vec<u8> = Vec::with_capacity(
+                mail_from_line.len() + 6 + to.iter().map(|a| 12 + a.len()).sum::<usize>(),
+            );
+            pipeline.extend_from_slice(mail_from_line);
+            self.transition(SessionState::RcptTo)?;
+            for &addr in to {
+                pipeline.extend_from_slice(&format_rcpt_to(addr));
+            }
+            self.transition(SessionState::Data)?;
+            pipeline.extend_from_slice(&format_command("DATA"));
+            self.write_all(&pipeline).await?;
+            self.flush().await?;
+
+            // Read MAIL FROM response.
+            let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                    code: mail_reply.code,
+                });
+            smtp_debug!(pipelining = true, "MAIL FROM accepted");
+
+            // Read one RCPT TO response per recipient.
+            for _ in to {
+                self.read_rcpt_reply().await?;
+            }
+
+            // Read DATA 354 response.
+            self.expect_code(354, SmtpOp::Data).await?;
+        } else {
+            // ── Sequential path ───────────────────────────────────────
+            self.write_all(mail_from_line).await?;
+            let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
+                    code: mail_reply.code,
+                });
+            smtp_debug!(pipelining = false, "MAIL FROM accepted");
+
+            self.transition(SessionState::RcptTo)?;
+            for &addr in to {
+                self.write_all(&format_rcpt_to(addr)).await?;
+                self.read_rcpt_reply().await?;
+                smtp_debug!(rcpt = %addr, "RCPT TO accepted");
+            }
+
+            self.transition(SessionState::Data)?;
+            self.write_all(&format_command("DATA")).await?;
+            self.expect_code(354, SmtpOp::Data).await?;
+        }
+        Ok(())
+    }
+
+    /// Read one `RCPT TO` reply and audit the outcome either way.
+    ///
+    /// A rejection is as interesting to an audit sink as an acceptance —
+    /// more so, since repeated rejections are what abuse looks like — so
+    /// `RecipientRejected` is emitted before the error propagates.
+    async fn read_rcpt_reply(&mut self) -> Result<(), SmtpError> {
+        // Deliberately not `expect_class`: that marks the session closed —
+        // and so emits `SessionAborted` — before returning the error, which
+        // would put the abort ahead of the rejection that caused it. Reading
+        // the reply directly keeps the audit log in causal order.
+        let reply = self.read_reply().await?;
+        if reply.class() == 2 {
+            self.audit
+                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted { code: reply.code });
+            return Ok(());
+        }
+
+        self.audit
+            .on_event(&crate::audit::SmtpAuditEvent::RecipientRejected { code: reply.code });
+        self.mark_closed_on_logical_failure();
+        Err(ProtocolError::UnexpectedCode {
+            during: SmtpOp::RcptTo,
+            expected_class: 2,
+            actual: reply.code,
+            enhanced: reply.enhanced(),
+            message: reply.joined_text(),
+        }
+        .into())
+    }
+
     /// Send a single message.
     ///
     /// `from` is the envelope sender (RFC 5321 reverse-path), used in the
@@ -76,78 +181,7 @@ impl<T: Transport> SmtpClient<T> {
             "send_mail: starting transaction"
         );
 
-        // Issue MAIL FROM, RCPT TO, and DATA — with pipelining if the
-        // server advertised it (RFC 2920). Pipelining sends all three
-        // command types in a single write, then reads all responses,
-        // reducing RTTs from 3+N (one per command) to 2 (one flush + one
-        // DATA-body exchange) regardless of recipient count.
-        self.transition(SessionState::MailFrom)?;
-
-        #[cfg(feature = "pipelining")]
-        let pipelining = protocol::ehlo_advertises_pipelining(&self.capabilities);
-        #[cfg(not(feature = "pipelining"))]
-        let pipelining = false;
-
-        if pipelining {
-            // ── Pipelined path ────────────────────────────────────────
-            // Collect MAIL FROM + all RCPT TO + DATA into one buffer,
-            // write once, flush, then read all responses in order.
-            let mut pipeline: Vec<u8> =
-                Vec::with_capacity(64 + to.iter().map(|a| 12 + a.len()).sum::<usize>());
-            pipeline.extend_from_slice(&format_mail_from(from));
-            self.transition(SessionState::RcptTo)?;
-            for &addr in to {
-                pipeline.extend_from_slice(&format_rcpt_to(addr));
-            }
-            self.transition(SessionState::Data)?;
-            pipeline.extend_from_slice(&format_command("DATA"));
-            self.write_all(&pipeline).await?;
-            self.flush().await?;
-
-            // Read MAIL FROM response.
-            let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-            self.audit
-                .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-                    code: mail_reply.code,
-                });
-            smtp_debug!(from = %from, pipelining = true, "MAIL FROM accepted");
-
-            // Read one RCPT TO response per recipient.
-            for _ in to {
-                let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-                self.audit
-                    .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                        code: rcpt_reply.code,
-                    });
-            }
-
-            // Read DATA 354 response.
-            self.expect_code(354, SmtpOp::Data).await?;
-        } else {
-            // ── Sequential path (original) ────────────────────────────
-            self.write_all(&format_mail_from(from)).await?;
-            let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-            self.audit
-                .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-                    code: mail_reply.code,
-                });
-            smtp_debug!(from = %from, pipelining = false, "MAIL FROM accepted");
-
-            self.transition(SessionState::RcptTo)?;
-            for &addr in to {
-                self.write_all(&format_rcpt_to(addr)).await?;
-                let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-                self.audit
-                    .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                        code: rcpt_reply.code,
-                    });
-                smtp_debug!(rcpt = %addr, "RCPT TO accepted");
-            }
-
-            self.transition(SessionState::Data)?;
-            self.write_all(&format_command("DATA")).await?;
-            self.expect_code(354, SmtpOp::Data).await?;
-        }
+        self.run_envelope(&format_mail_from(from), to).await?;
 
         // Send the body with dot-stuffing and terminator. The
         // post-terminator reply carries the queue id (if the server
@@ -291,30 +325,7 @@ impl<T: Transport> SmtpClient<T> {
             "send_mail_bytes: starting transaction"
         );
 
-        // Issue MAIL FROM.
-        self.transition(SessionState::MailFrom)?;
-        self.write_all(&format_mail_from(from)).await?;
-        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit
-            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-                code: mail_reply.code,
-            });
-
-        // Issue RCPT TO for every recipient.
-        self.transition(SessionState::RcptTo)?;
-        for &addr in to {
-            self.write_all(&format_rcpt_to(addr)).await?;
-            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit
-                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                    code: rcpt_reply.code,
-                });
-        }
-
-        // Issue DATA, expect 354.
-        self.transition(SessionState::Data)?;
-        self.write_all(&format_command("DATA")).await?;
-        self.expect_code(354, SmtpOp::Data).await?;
+        self.run_envelope(&format_mail_from(from), to).await?;
 
         // Send the body with dot-stuffing and terminator.
         let payload = dot_stuff_and_terminate(body);
@@ -400,30 +411,7 @@ impl<T: Transport> SmtpClient<T> {
             "send_mail_stream: starting transaction"
         );
 
-        // MAIL FROM.
-        self.transition(SessionState::MailFrom)?;
-        self.write_all(&format_mail_from(from)).await?;
-        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit
-            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-                code: mail_reply.code,
-            });
-
-        // RCPT TO.
-        self.transition(SessionState::RcptTo)?;
-        for &addr in to {
-            self.write_all(&format_rcpt_to(addr)).await?;
-            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit
-                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                    code: rcpt_reply.code,
-                });
-        }
-
-        // DATA.
-        self.transition(SessionState::Data)?;
-        self.write_all(&format_command("DATA")).await?;
-        self.expect_code(354, SmtpOp::Data).await?;
+        self.run_envelope(&format_mail_from(from), to).await?;
 
         // Stream the body through the dot-stuffer in 8 KB chunks.
         let mut stuffer = DotStufferState::new();
@@ -521,31 +509,10 @@ impl<T: Transport> SmtpClient<T> {
             .check_message_size(body.len())
             .map_err(crate::error::SmtpError::Policy)?;
 
-        // Issue MAIL FROM:<from> SMTPUTF8.
-        self.transition(SessionState::MailFrom)?;
-        self.write_all(&protocol::format_mail_from_smtputf8(from))
+        // Only the MAIL FROM line differs from the ASCII path: it carries
+        // the SMTPUTF8 parameter.
+        self.run_envelope(&protocol::format_mail_from_smtputf8(from), to)
             .await?;
-        let mail_reply = self.expect_class(2, SmtpOp::MailFrom).await?;
-        self.audit
-            .on_event(&crate::audit::SmtpAuditEvent::MailFromAccepted {
-                code: mail_reply.code,
-            });
-
-        // RCPT TO is identical to the ASCII path.
-        self.transition(SessionState::RcptTo)?;
-        for &addr in to {
-            self.write_all(&format_rcpt_to(addr)).await?;
-            let rcpt_reply = self.expect_class(2, SmtpOp::RcptTo).await?;
-            self.audit
-                .on_event(&crate::audit::SmtpAuditEvent::RecipientAccepted {
-                    code: rcpt_reply.code,
-                });
-        }
-
-        // DATA + body identical to the ASCII path.
-        self.transition(SessionState::Data)?;
-        self.write_all(&format_command("DATA")).await?;
-        self.expect_code(354, SmtpOp::Data).await?;
 
         let payload = dot_stuff_and_terminate(body.as_bytes());
         self.write_all(&payload).await?;

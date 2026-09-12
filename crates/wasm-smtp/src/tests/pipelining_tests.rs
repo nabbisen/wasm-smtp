@@ -210,3 +210,245 @@ fn pipelining_result_carries_queue_id() {
         "queue id should be parsed from '250 2.0.0 OK: queued as A1B2C3'"
     );
 }
+
+// ── All four send methods pipeline (RFC 025 D5) ───────────────────────────
+//
+// Before 0.16.0 only `send_mail` batched; the other three always ran
+// sequentially. These assert the batching, and the wire-equality tests below
+// assert that consolidating the four envelope implementations into one did
+// not disturb what goes out on a server that never advertised PIPELINING.
+
+/// Body used by every wire-comparison test in this section. Contains a
+/// leading-dot line so dot-stuffing shows up in the comparison.
+const WIRE_BODY: &str = "Subject: wire\r\n\r\nbody line\r\n.dotted\r\n";
+
+/// Exactly what 0.15.2 wrote for `send_mail`, `send_mail_bytes`, and
+/// `send_mail_stream` against a two-recipient, non-pipelining server.
+/// Captured by running the 0.15.2 tag, not written by hand.
+const WIRE_0_15_2: &str = "EHLO client.example.com\r\n\
+                           AUTH PLAIN AHUAcA==\r\n\
+                           MAIL FROM:<from@example.com>\r\n\
+                           RCPT TO:<a@e.com>\r\n\
+                           RCPT TO:<b@e.com>\r\n\
+                           DATA\r\n\
+                           Subject: wire\r\n\r\nbody line\r\n..dotted\r\n.\r\n\
+                           QUIT\r\n";
+
+/// How many separate `write_all` calls the transport saw. The pipelined
+/// path must put MAIL FROM, every RCPT TO, and DATA into one of them.
+fn pipelined_envelope_is_single_write(writes: &[Vec<u8>]) -> bool {
+    writes.iter().any(|w| {
+        let s = String::from_utf8_lossy(w);
+        s.starts_with("MAIL FROM:") && s.contains("RCPT TO:") && s.trim_end().ends_with("DATA")
+    })
+}
+
+#[test]
+fn pipelining_send_mail_bytes_batches_envelope() {
+    let (transport, _written, _) = MockTransport::new(&[&pipelining_exchange(2)]);
+    let writes = transport.write_calls();
+    block_on(async {
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
+        c.login("u", "p").await.unwrap();
+        c.send_mail_bytes(
+            "from@example.com",
+            &["a@e.com", "b@e.com"],
+            WIRE_BODY.as_bytes(),
+        )
+        .await
+        .unwrap();
+        c.quit().await.unwrap();
+    });
+    assert!(
+        pipelined_envelope_is_single_write(&writes.borrow()),
+        "send_mail_bytes must batch the envelope into one write: {:?}",
+        writes
+            .borrow()
+            .iter()
+            .map(|w| String::from_utf8_lossy(w).into_owned())
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn pipelining_send_mail_stream_batches_envelope() {
+    use crate::message_body::StrBody;
+
+    let (transport, _written, _) = MockTransport::new(&[&pipelining_exchange(2)]);
+    let writes = transport.write_calls();
+    block_on(async {
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
+        c.login("u", "p").await.unwrap();
+        c.send_mail_stream(
+            "from@example.com",
+            &["a@e.com", "b@e.com"],
+            &mut StrBody::new(WIRE_BODY),
+        )
+        .await
+        .unwrap();
+        c.quit().await.unwrap();
+    });
+    assert!(
+        pipelined_envelope_is_single_write(&writes.borrow()),
+        "send_mail_stream must batch the envelope into one write"
+    );
+}
+
+#[cfg(feature = "smtputf8")]
+#[test]
+fn pipelining_send_mail_smtputf8_batches_envelope() {
+    let mut parts: Vec<&[u8]> = vec![
+        b"220 mail.example.com ESMTP\r\n",
+        b"250-mail.example.com\r\n250-AUTH PLAIN LOGIN\r\n250-PIPELINING\r\n250 SMTPUTF8\r\n",
+        b"235 2.7.0 OK\r\n",
+        b"250 2.1.0 OK\r\n",
+    ];
+    parts.extend(std::iter::repeat_n(b"250 2.1.5 OK\r\n".as_slice(), 2));
+    parts.extend_from_slice(&[
+        b"354 Start mail\r\n",
+        b"250 2.0.0 OK queued\r\n",
+        b"221 2.0.0 Bye\r\n",
+    ]);
+    let exchange = flatten(&parts);
+
+    let (transport, written, _) = MockTransport::new(&[&exchange]);
+    let writes = transport.write_calls();
+    block_on(async {
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
+        c.login("u", "p").await.unwrap();
+        c.send_mail_smtputf8("from@example.com", &["a@e.com", "b@e.com"], WIRE_BODY)
+            .await
+            .unwrap();
+        c.quit().await.unwrap();
+    });
+    assert!(
+        pipelined_envelope_is_single_write(&writes.borrow()),
+        "send_mail_smtputf8 must batch the envelope into one write"
+    );
+    // The SMTPUTF8 parameter must survive batching.
+    let wire = String::from_utf8(written.borrow().clone()).unwrap();
+    assert!(
+        wire.contains("MAIL FROM:<from@example.com> SMTPUTF8\r\n"),
+        "SMTPUTF8 parameter missing: {wire:?}"
+    );
+}
+
+// ── Wire equality with 0.15.2 on a non-pipelining server ──────────────────
+
+#[test]
+fn no_pipelining_send_mail_wire_matches_0_15_2() {
+    let (transport, written, _) = MockTransport::new(&[&no_pipelining_exchange(2)]);
+    block_on(async {
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
+        c.login("u", "p").await.unwrap();
+        c.send_mail("from@example.com", &["a@e.com", "b@e.com"], WIRE_BODY)
+            .await
+            .unwrap();
+        c.quit().await.unwrap();
+    });
+    assert_eq!(
+        String::from_utf8(written.borrow().clone()).unwrap(),
+        WIRE_0_15_2
+    );
+}
+
+#[test]
+fn no_pipelining_send_mail_bytes_wire_matches_0_15_2() {
+    let (transport, written, _) = MockTransport::new(&[&no_pipelining_exchange(2)]);
+    block_on(async {
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
+        c.login("u", "p").await.unwrap();
+        c.send_mail_bytes(
+            "from@example.com",
+            &["a@e.com", "b@e.com"],
+            WIRE_BODY.as_bytes(),
+        )
+        .await
+        .unwrap();
+        c.quit().await.unwrap();
+    });
+    assert_eq!(
+        String::from_utf8(written.borrow().clone()).unwrap(),
+        WIRE_0_15_2
+    );
+}
+
+#[test]
+fn no_pipelining_send_mail_stream_wire_matches_0_15_2() {
+    use crate::message_body::StrBody;
+
+    let (transport, written, _) = MockTransport::new(&[&no_pipelining_exchange(2)]);
+    block_on(async {
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
+        c.login("u", "p").await.unwrap();
+        c.send_mail_stream(
+            "from@example.com",
+            &["a@e.com", "b@e.com"],
+            &mut StrBody::new(WIRE_BODY),
+        )
+        .await
+        .unwrap();
+        c.quit().await.unwrap();
+    });
+    assert_eq!(
+        String::from_utf8(written.borrow().clone()).unwrap(),
+        WIRE_0_15_2
+    );
+}
+
+#[cfg(feature = "smtputf8")]
+#[test]
+fn no_pipelining_send_mail_smtputf8_wire_matches_0_15_2() {
+    /// 0.15.2's output for `send_mail_smtputf8`: identical to the others
+    /// except for the MAIL FROM parameter.
+    const WIRE_SMTPUTF8_0_15_2: &str = "EHLO client.example.com\r\n\
+                                        AUTH PLAIN AHUAcA==\r\n\
+                                        MAIL FROM:<from@example.com> SMTPUTF8\r\n\
+                                        RCPT TO:<a@e.com>\r\n\
+                                        RCPT TO:<b@e.com>\r\n\
+                                        DATA\r\n\
+                                        Subject: wire\r\n\r\nbody line\r\n..dotted\r\n.\r\n\
+                                        QUIT\r\n";
+
+    let mut parts: Vec<&[u8]> = vec![
+        b"220 mail.example.com ESMTP\r\n",
+        b"250-mail.example.com\r\n250-AUTH PLAIN LOGIN\r\n250 SMTPUTF8\r\n",
+        b"235 2.7.0 OK\r\n",
+        b"250 2.1.0 OK\r\n",
+    ];
+    parts.extend(std::iter::repeat_n(b"250 2.1.5 OK\r\n".as_slice(), 2));
+    parts.extend_from_slice(&[
+        b"354 Start mail\r\n",
+        b"250 2.0.0 OK queued\r\n",
+        b"221 2.0.0 Bye\r\n",
+    ]);
+    let exchange = flatten(&parts);
+
+    let (transport, written, _) = MockTransport::new(&[&exchange]);
+    block_on(async {
+        let mut c = SmtpClient::connect(transport, "client.example.com")
+            .await
+            .unwrap();
+        c.login("u", "p").await.unwrap();
+        c.send_mail_smtputf8("from@example.com", &["a@e.com", "b@e.com"], WIRE_BODY)
+            .await
+            .unwrap();
+        c.quit().await.unwrap();
+    });
+    assert_eq!(
+        String::from_utf8(written.borrow().clone()).unwrap(),
+        WIRE_SMTPUTF8_0_15_2
+    );
+}
