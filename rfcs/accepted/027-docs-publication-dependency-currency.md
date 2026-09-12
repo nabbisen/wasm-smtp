@@ -159,3 +159,10 @@ to 0.5 now.
 ## Amendment log
 
 - 2026-09-12: accepted by the owner with both open questions answered.
+- 2026-09-12, after review 1 of the implementation: `mail-builder` 0.5
+  and `wit-bindgen` 0.62 both landed with no adaptation needed; the
+  rustls floor is `0.23.44`. The lockfile refresh exposed a WASI
+  contract-version drift in the component crate (declared `@0.2.4`,
+  linked imports `@0.2.12` via a transitive caret range). Decided to
+  ship 0.17.0 with it: it is not a regression and no lockfile of ours
+  can fix it for a consumer. Carried to **RFC 028**.

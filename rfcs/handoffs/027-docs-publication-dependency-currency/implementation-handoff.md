@@ -83,3 +83,48 @@ book deployed (link to the Actions run).
 
 Lowering any floor; disabling the smoke test to get through a
 `wit-bindgen` change; committing `docs/book/`.
+
+---
+
+# Revision 2 — 2026-09-12, after review 1
+
+Review: `.git-exclude/reviewed/027-docs-publication-dependency-currency-review-1.md`.
+S1–S3 are accepted. The §4 escalation is decided: **ship 0.17.0 with the
+WASI version drift.** It is not a regression (every consumer since
+0.14.0 with a current lockfile already has it), and no lockfile of ours
+can fix it for a consumer, because `wasi` 0.14.7 declares `wasip2` with
+a caret range. The real fix is RFC 028 (proposed): align the
+annotations, guard the drift in the gate, and execute the component
+under a host. Do not touch `wit/` in this release beyond C1.
+
+Three documentation corrections, all inside the release.
+
+## C1 — `wit/deps/README.md` justification is now false
+
+It says the packages are 0.2.4 because that is "the version the `wasi`
+0.14 crate implements". Replace with two sentences saying what is true:
+the vendored packages are WASI 0.2.4; the `wasi` crate's transitive
+`wasip2` may implement a later 0.2.x because that range is outside this
+project's control; the mismatch and its fix are tracked in RFC 028.
+This file ships inside the published crate, so the wording matters.
+
+## C2 — mdBook version for contributors
+
+`.github/CONTRIBUTING.md`: one line near the required checks naming the
+mdBook version the published site is built with (0.5.4, matching
+`docs.yml`), so a contributor cannot render a book that differs from the
+live one without knowing. Not a gate command.
+
+## C3 — Fold the `[Unreleased]` entry into 0.17.0
+
+Move the RFC 026 documentation entry from `[Unreleased]` into 0.17.0's
+Documentation section, so the 0.17.0 notes mention the anti-abuse
+chapter that ships in those crates. Leave 0.16.1's entry alone.
+`[Unreleased]` ends up empty; that is correct.
+
+## S3 (again) — Release commit
+
+Fold C1–C3, rerun the full gate, refresh `evidence/027/`, commit as
+"Release 0.17.0" superseding `75f4251`, and stop. Second request:
+`.git-exclude/review-request/027-docs-publication-dependency-currency-2.md`,
+listing only what changed. Do not tag, push, or publish.

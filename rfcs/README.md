@@ -22,7 +22,9 @@ lifecycle policy is defined in
 
 ## Proposed
 
-_(empty)_
+| ID | Title | Priority |
+|----|-------|----------|
+| [028](./proposed/028-wasi-contract-version-alignment.md) | WASI contract version alignment and component execution | P1 |
 
 ## Draft
 
@@ -67,4 +69,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–026 are implemented; 027 is accepted; 022–023 are drafts. The next RFC is **028**.
+RFC 000–021 and 024–026 are implemented; 027 is accepted; 028 is proposed; 022–023 are drafts. The next RFC is **029**.
