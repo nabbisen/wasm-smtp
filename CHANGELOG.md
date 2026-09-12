@@ -1,5 +1,34 @@
 ## [Unreleased]
 
+## [0.17.1] — 2026-09-13
+
+A documentation release. No change to any published crate's source,
+dependencies, or public API.
+
+### Documentation
+
+- **Every dependency version string in the documentation was stale or is
+  now guarded** (RFC 029). Twenty of them, spanning 0.4 through 0.16
+  against a current 0.17, across the README, four book chapters, and the
+  `mail-builder` advice in the composing chapter — which still named 0.4
+  after 0.17.0 moved that dependency to 0.5. A reader copying any of
+  them got a version we no longer publish.
+- **The class is removed, not just the instances.** Dependency
+  instructions are now `cargo add` invocations, which name no version and
+  cannot go stale. The tokio chapter's four-way comparison of feature
+  configurations stays as TOML, because it reads better as one block, and
+  is held by the check below.
+- **`tools/check-doc-versions.sh` runs in the gate**, comparing every
+  `wasm-smtp*` version string in the README, the book, and the crate
+  READMEs against the workspace manifest, and every `mail-builder` string
+  against the workspace dependency. Major.minor only, so a patch release
+  does not invalidate the documentation. This is the third attempt at
+  this problem; the first two were hand-corrections that rotted by the
+  next release.
+- `TERMS_OF_USE.md` described the library as being for "constrained
+  runtimes (initially Cloudflare Workers)". Four adapters ship and two of
+  them are not WASM-constrained; it now says so.
+
 ## [0.17.0] — 2026-09-12
 
 RFC 027: publish the book, and bring the dependency declarations up to
@@ -1610,7 +1639,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.17.0...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.17.1...HEAD
+[0.17.1]: https://github.com/nabbisen/wasm-smtp/compare/0.17.0...0.17.1
 [0.17.0]: https://github.com/nabbisen/wasm-smtp/compare/0.16.1...0.17.0
 [0.16.1]: https://github.com/nabbisen/wasm-smtp/compare/0.16.0...0.16.1
 [0.16.0]: https://github.com/nabbisen/wasm-smtp/compare/0.15.2...0.16.0
