@@ -261,3 +261,11 @@ finding to be reported, not a design choice left open.
     found by the first smoke run: `WasiStream` dropped its socket before
     the socket's child streams, which traps the guest under WASI 0.2.
     Fixed by field order, documented in place.
+- 2026-09-12, after review 2
+  (`.git-exclude/reviewed/025-wasi-hardening-review-2.md`): approved at
+  `d259fe0`. The negative smoke mode was implemented for both implicit
+  TLS and STARTTLS; the STARTTLS variant proves on-target that a refused
+  upgrade does not fall back to plaintext (DEC-015).
+  **Follow-up, next cycle:** unit tests for the smoke driver's checker
+  functions against synthetic transcripts, so the driver's own
+  assertions are tested without a manual step.
