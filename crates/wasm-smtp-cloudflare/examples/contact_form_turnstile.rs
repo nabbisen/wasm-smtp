@@ -108,7 +108,7 @@ pub async fn handle(mut req: Request, env: Env) -> Result<Response> {
         }
     }
 
-    // 4. Only now does an SMTP session exist.
+    // 5. Only now does an SMTP session exist.
     let host = env.var("SMTP_HOST")?.to_string();
     let port: u16 = env.var("SMTP_PORT")?.to_string().parse().unwrap_or(465);
     let user = env.secret("SMTP_USER")?.to_string();
@@ -117,6 +117,22 @@ pub async fn handle(mut req: Request, env: Env) -> Result<Response> {
     let name = field(&form, "name");
     let email = field(&form, "email");
     let message = field(&form, "message");
+
+    // 4. Header safety. `name` and `email` land in the header block, which
+    //    this handler builds as text. A value containing CR or LF would
+    //    inject headers of the submitter's choosing — `Bcc:` being the
+    //    useful one — and turn this endpoint into the relay the steps above
+    //    exist to prevent. `send_mail` validates the *envelope* addresses
+    //    and refuses CR/LF there, but the header block is caller-supplied
+    //    and passes through untouched, so the check belongs here.
+    if has_line_break(&name) || has_line_break(&email) {
+        console_log!("contact form: rejected a field containing a line break");
+        return Response::error("Bad Request", 400);
+    }
+    if wasm_smtp::protocol::validate_address(&email).is_err() {
+        console_log!("contact form: rejected an invalid submitter address");
+        return Response::error("Bad Request", 400);
+    }
 
     match deliver(&host, port, &user, &pass, &name, &email, &message).await {
         Ok(()) => Response::ok("Thanks — your message is on its way."),
@@ -167,6 +183,12 @@ async fn deliver(
     // `From` is the authenticated mailbox; the submitter goes in
     // `Reply-To`. Putting an unverified address in `From` is how a contact
     // form becomes a spoofing tool, and it fails SPF besides.
+    // CR/LF is legitimate inside a body, but SMTP wants CRLF specifically
+    // and the library's dot-stuffing keys off line starts. Browsers
+    // normally send CRLF from a textarea; normalizing means not relying on
+    // that.
+    let message = normalize_crlf(message);
+
     let body = format!(
         "From: {user}\r\n\
          To: support@example.com\r\n\
@@ -184,6 +206,31 @@ async fn deliver(
         .send_mail(user, &["support@example.com"], &body)
         .await?;
     client.quit().await
+}
+
+/// Whether a value carries a line break, and so cannot go into a header.
+fn has_line_break(value: &str) -> bool {
+    value.contains('\r') || value.contains('\n')
+}
+
+/// Normalize any mix of CR, LF, and CRLF to the CRLF that SMTP requires.
+fn normalize_crlf(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\r' => {
+                // Consume a following LF so CRLF does not become CRCRLF.
+                if chars.peek() == Some(&'\n') {
+                    chars.next();
+                }
+                out.push_str("\r\n");
+            }
+            '\n' => out.push_str("\r\n"),
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 /// Read a form field as a string, treating a file upload or a missing
@@ -218,3 +265,37 @@ fn urlencode(s: &str) -> String {
 // Examples are built as binaries on the host, where the `#[event]` export
 // is inert. A real Worker crate is a `cdylib` and has no `main`.
 fn main() {}
+
+#[cfg(test)]
+mod tests {
+    use super::{has_line_break, normalize_crlf};
+
+    #[test]
+    fn line_breaks_in_header_fields_are_detected() {
+        // The injection this guard exists to stop: a submitted name that
+        // continues into a header of the submitter's choosing.
+        assert!(has_line_break("Mallory\r\nBcc: victim@example.org"));
+        assert!(has_line_break("Mallory\nBcc: victim@example.org"));
+        assert!(has_line_break("Mallory\r"));
+        assert!(!has_line_break("Mallory"));
+        assert!(!has_line_break(""));
+    }
+
+    #[test]
+    fn injected_address_is_rejected_by_the_validator_too() {
+        // Belt and braces: even if the line-break check were removed, the
+        // address validator refuses the same payload.
+        assert!(wasm_smtp::protocol::validate_address("a@e.com\r\nBcc: v@e.org").is_err());
+        assert!(wasm_smtp::protocol::validate_address("a@e.com").is_ok());
+    }
+
+    #[test]
+    fn bodies_are_normalized_to_crlf() {
+        assert_eq!(normalize_crlf("a\nb"), "a\r\nb");
+        assert_eq!(normalize_crlf("a\rb"), "a\r\nb");
+        // Already-CRLF input must not double up.
+        assert_eq!(normalize_crlf("a\r\nb"), "a\r\nb");
+        assert_eq!(normalize_crlf("a\r\n\r\nb"), "a\r\n\r\nb");
+        assert_eq!(normalize_crlf("plain"), "plain");
+    }
+}

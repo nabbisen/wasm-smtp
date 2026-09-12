@@ -73,6 +73,14 @@ Neither substitutes for the other. A challenge does not stop a verified
 human from submitting a thousand-recipient message; `BoundedPolicy` does
 not stop a script from calling your endpoint a thousand times.
 
+Validating input *before* it reaches a header belongs to the request
+boundary too. The library validates the envelope addresses it is given and
+refuses CR/LF there, but the header block is text the application builds,
+and a line break in a submitted name or address appends headers of the
+submitter's choosing — `Bcc:` first among them. Reject those fields, or
+build the message with [`mail-builder`](../core/composing-messages.md),
+which encodes per field.
+
 ### Why the library stops at the SMTP layer
 
 The core does no I/O and speaks only SMTP; the adapters are transport and

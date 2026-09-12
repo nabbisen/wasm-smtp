@@ -13,7 +13,12 @@
   Worker is a compiled example
   (`crates/wasm-smtp-cloudflare/examples/contact_form_turnstile.rs`) and
   the gate checks it for `wasm32-unknown-unknown`, so it cannot rot
-  silently. No published crate gains a dependency.
+  silently. Both contact-form examples now reject a submitted name or
+  address containing CR or LF before it reaches the header block: the
+  library validates the envelope addresses it is given, but a header block
+  the application builds by hand is its own responsibility, and a line
+  break there appends headers of the submitter'''s choosing. No published
+  crate gains a dependency.
 
 ## [0.16.0] — 2026-09-12
 

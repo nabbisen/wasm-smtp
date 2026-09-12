@@ -32,6 +32,14 @@ async fn deliver_contact_form(form: ContactForm) -> Result<(), SmtpError> {
         .login("forms@example.com", &smtp_password())
         .await?;
 
+    // Anything the submitter controls that lands in a header must be
+    // refused if it carries CR or LF, or they can append headers of their
+    // own — see "Contact form with a bot challenge" below, which does this
+    // and the rest of the request-boundary checks properly.
+    if form.name.contains(['\r', '\n']) || form.email.contains(['\r', '\n']) {
+        return Err(wasm_smtp::InvalidInputError::new("line break in a header field").into());
+    }
+
     // Compose a fully-formed RFC 5322 message. The library does not
     // build MIME for you; for plain text this is just a few headers
     // followed by a blank line and the body.
@@ -66,7 +74,10 @@ async fn deliver_contact_form(form: ContactForm) -> Result<(), SmtpError> {
 # fn smtp_password() -> String { String::new() }
 ```
 
-A few notes on the headers in this example. `Reply-To` is set to the
+A few notes on the headers in this example. The CR/LF check comes first
+because every field below it is attacker-controlled text going into a
+header block: without it, a `name` of `Mallory\r\nBcc: victim@example.org`
+adds a recipient nobody asked for. `Reply-To` is set to the
 form submitter's address while `From` stays as the authenticated
 sending mailbox — this is the well-known pattern for forwarding mail
 on someone's behalf without spoofing the envelope sender, which would
@@ -94,7 +105,17 @@ shape is:
 3. **Challenge verification.** `POST` the submitted token to the vendor's
    verification endpoint with your secret key. A refusal is `403`; an
    unreachable verifier is `503`.
-4. **Send.** Only now open the SMTP session.
+4. **Header safety.** Reject any submitted value that will land in a
+   header — here `name` and `email` — if it contains CR or LF. Without
+   that check a submitter can end the `Subject:` line early and append
+   headers of their own, `Bcc:` being the profitable one, which turns the
+   endpoint into the relay steps 2 and 3 exist to prevent. `send_mail`
+   validates the *envelope* addresses and refuses CR/LF there, but the
+   header block is text you built, and it passes through untouched. The
+   [`mail-builder` route](../core/composing-messages.md) does this per
+   field for you and is the better answer for anything more elaborate than
+   a fixed template.
+5. **Send.** Only now open the SMTP session.
 
 The middle of it, with the boilerplate elided:
 
@@ -105,6 +126,7 @@ The middle of it, with the boilerplate elided:
 # struct SiteVerify { success: bool, #[serde(rename = "error-codes", default)] error_codes: Vec<String> }
 # async fn verify(_s: &str, _t: &str, _ip: &str) -> Result<SiteVerify> { unimplemented!() }
 # fn field(_f: &worker::FormData, _n: &str) -> String { String::new() }
+# fn has_line_break(v: &str) -> bool { v.contains('\r') || v.contains('\n') }
 # async fn deliver(_h: &str, _p: u16, _u: &str, _pw: &str, _n: &str, _e: &str, _m: &str)
 #     -> std::result::Result<(), wasm_smtp::SmtpError> { Ok(()) }
 # async fn handle(mut req: Request, env: Env) -> Result<Response> {
@@ -137,12 +159,23 @@ match verify(&secret, &token, &remote_ip).await {
     }
 }
 
+// Header safety: a CR or LF in a value that lands in a header lets the
+// submitter append headers of their own, `Bcc:` being the useful one.
+let name = field(&form, "name");
+let email = field(&form, "email");
+if has_line_break(&name) || has_line_break(&email) {
+    console_log!("contact form: rejected a field containing a line break");
+    return Response::error("Bad Request", 400);
+}
+if wasm_smtp::protocol::validate_address(&email).is_err() {
+    return Response::error("Bad Request", 400);
+}
+
 // Only past this point does an SMTP session exist.
 let host = env.var("SMTP_HOST")?.to_string();
 let user = env.secret("SMTP_USER")?.to_string();
 let pass = env.secret("SMTP_PASS")?.to_string();
-deliver(&host, 465, &user, &pass,
-        &field(&form, "name"), &field(&form, "email"), &field(&form, "message"))
+deliver(&host, 465, &user, &pass, &name, &email, &field(&form, "message"))
     .await
     .map_err(|e| { console_log!("contact form: send failed: {e}"); worker::Error::RustError("send failed".into()) })?;
 
