@@ -1,76 +1,14 @@
 # wasm-smtp
 
-[![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](https://github.com/nabbisen/wasm-smtp/blob/main/LICENSE)    
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp?label=wasm-smtp)](https://crates.io/crates/wasm-smtp)
-[![Rust Documentation](https://docs.rs/wasm-smtp/badge.svg?version=latest)](https://docs.rs/wasm-smtp)
-[![Dependency Status](https://deps.rs/crate/wasm-smtp/latest/status.svg)](https://deps.rs/crate/wasm-smtp)    
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp-tokio?label=tokio-adapter)](https://crates.io/crates/wasm-smtp-tokio)
-[![Rust Documentation](https://docs.rs/wasm-smtp-tokio/badge.svg?version=latest)](https://docs.rs/wasm-smtp-tokio)
-[![Dependency Status](https://deps.rs/crate/wasm-smtp-tokio/latest/status.svg)](https://deps.rs/crate/wasm-smtp-tokio)
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp-wasi?label=wasi-adapter)](https://crates.io/crates/wasm-smtp-wasi)
-[![Rust Documentation](https://docs.rs/wasm-smtp-wasi/badge.svg?version=latest)](https://docs.rs/wasm-smtp-wasi)
-[![Dependency Status](https://deps.rs/crate/wasm-smtp-wasi/latest/status.svg)](https://deps.rs/crate/wasm-smtp-wasi)
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp-component?label=component)](https://crates.io/crates/wasm-smtp-component)
-[![Rust Documentation](https://docs.rs/wasm-smtp-component/badge.svg?version=latest)](https://docs.rs/wasm-smtp-component)
-[![Dependency Status](https://deps.rs/crate/wasm-smtp-component/latest/status.svg)](https://deps.rs/crate/wasm-smtp-component)
-[![crates.io](https://img.shields.io/crates/v/wasm-smtp-cloudflare?label=cloudflare-adapter)](https://crates.io/crates/wasm-smtp-cloudflare)
-[![Rust Documentation](https://docs.rs/wasm-smtp-cloudflare/badge.svg?version=latest)](https://docs.rs/wasm-smtp-cloudflare)
-[![Dependency Status](https://deps.rs/crate/wasm-smtp-cloudflare/latest/status.svg)](https://deps.rs/crate/wasm-smtp-cloudflare)
+[![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](LICENSE)
 
 Rust crates for sending mail by SMTP from WebAssembly runtimes. The
 project separates the protocol implementation from the runtime-specific
 socket code so that the same SMTP engine can be reused on every host.
 
-## Crates
-
-| Crate                   | Role                                                       | Status         |
-| ----------------------- | ---------------------------------------------------------- | -------------- |
-| `wasm-smtp`             | Environment-independent SMTP state machine and parser.     | Implemented    |
-| `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp`.         | Implemented    |
-| `wasm-smtp-tokio`       | Tokio + rustls socket adapter for `wasm-smtp`.             | Implemented    |
-| `wasm-smtp-wasi`        | WASI 0.2 sockets adapter (`wasm32-wasip2`).                | Implemented    |
-| `wasm-smtp-component`   | WASM Component Model WIT interface (`crates/wasm-smtp-component/wit/smtp.wit`). | Implemented |
-
-`wasm-smtp` is the foundation: it implements the SMTP state
-machine, response parsing, command formatting, dot-stuffing, and error
-classification, but does no I/O of its own. Each runtime gets its own
-adapter crate that provides a [`Transport`] implementation.
-
-Four adapters ship today:
-
-- `wasm-smtp-cloudflare` — Cloudflare Workers (WASM target).
-- `wasm-smtp-tokio` — tokio-based servers (axum, actix, warp, hyper, plain tokio, …).
-- `wasm-smtp-wasi` — WASI 0.2 runtimes (wasmtime, WAMR) targeting `wasm32-wasip2`.
-- `wasm-smtp-component` — WASM Component Model WIT interface
-  (`crates/wasm-smtp-component/wit/smtp.wit`),
-  enabling language-neutral bindings (TypeScript, Go, Python, C, …).
-
 ## Minimum usage
 
-From a Cloudflare Worker (the production target):
-
-```rust
-use wasm_smtp_cloudflare::connect_smtps;
-
-# async fn run() -> Result<(), wasm_smtp_cloudflare::SmtpError> {
-let mut client =
-    connect_smtps("smtp.example.com", 465, "client.example.com").await?;
-client.login("user@example.com", "secret").await?;
-client.send_mail(
-    "user@example.com",
-    &["recipient@example.org"],
-    "From: user@example.com\r\n\
-     To: recipient@example.org\r\n\
-     Subject: Hello\r\n\
-     \r\n\
-     Body text.\r\n",
-).await?;
-client.quit().await?;
-# Ok(())
-# }
-```
-
-Or directly against `wasm-smtp` with any `Transport` you supply:
+### Directly against `wasm-smtp` with any `Transport` you supply
 
 ```rust
 use wasm_smtp::{SmtpClient, Transport};
@@ -96,6 +34,29 @@ The `body` argument is a fully-formed RFC 5322 message: headers, a blank
 line, then the body, with CRLF line endings. The library does not build
 MIME, attach files, or compose multipart bodies.
 
+### From a Cloudflare Worker (the production target)
+
+```rust
+use wasm_smtp_cloudflare::connect_smtps;
+
+# async fn run() -> Result<(), wasm_smtp_cloudflare::SmtpError> {
+let mut client =
+    connect_smtps("smtp.example.com", 465, "client.example.com").await?;
+client.login("user@example.com", "secret").await?;
+client.send_mail(
+    "user@example.com",
+    &["recipient@example.org"],
+    "From: user@example.com\r\n\
+     To: recipient@example.org\r\n\
+     Subject: Hello\r\n\
+     \r\n\
+     Body text.\r\n",
+).await?;
+client.quit().await?;
+# Ok(())
+# }
+```
+
 ## Connection model
 
 Two TLS models are supported:
@@ -110,7 +71,31 @@ In both cases the TLS handshake is the responsibility of the
 [`Transport`] implementation; `wasm-smtp` sees an opaque byte
 stream and (for STARTTLS) a single `upgrade_to_tls()` signal.
 
-## Cargo features
+## Crates
+
+| Crate                   | Role                                                       | crates.io | docs.rs | deps.rs |
+| ----------------------- | ---------------------------------------------------------- | --- | --- | --- |
+| `wasm-smtp`             | Environment-independent SMTP state machine and parser.     | [![crates.io](https://img.shields.io/crates/v/wasm-smtp?label=wasm-smtp)](https://crates.io/crates/wasm-smtp) | [![Rust Documentation](https://docs.rs/wasm-smtp/badge.svg?version=latest)](https://docs.rs/wasm-smtp) | [![Dependency Status](https://deps.rs/crate/wasm-smtp/latest/status.svg)](https://deps.rs/crate/wasm-smtp) |
+| `wasm-smtp-component`   | WASM Component Model WIT interface (`crates/wasm-smtp-component/wit/smtp.wit`). | [![crates.io](https://img.shields.io/crates/v/wasm-smtp-component?label=component)](https://crates.io/crates/wasm-smtp-component) | [![Rust Documentation](https://docs.rs/wasm-smtp-component/badge.svg?version=latest)](https://docs.rs/wasm-smtp-component) | [![Dependency Status](https://deps.rs/crate/wasm-smtp-component/latest/status.svg)](https://deps.rs/crate/wasm-smtp-component) |
+| `wasm-smtp-tokio`       | Tokio + rustls socket adapter for `wasm-smtp`.             | [![crates.io](https://img.shields.io/crates/v/wasm-smtp-tokio?label=tokio-adapter)](https://crates.io/crates/wasm-smtp-tokio) | [![Rust Documentation](https://docs.rs/wasm-smtp-tokio/badge.svg?version=latest)](https://docs.rs/wasm-smtp-tokio) | [![Dependency Status](https://deps.rs/crate/wasm-smtp-tokio/latest/status.svg)](https://deps.rs/crate/wasm-smtp-tokio) |
+| `wasm-smtp-wasi`        | WASI 0.2 sockets adapter (`wasm32-wasip2`).                | [![crates.io](https://img.shields.io/crates/v/wasm-smtp-wasi?label=wasi-adapter)](https://crates.io/crates/wasm-smtp-wasi) | [![Rust Documentation](https://docs.rs/wasm-smtp-wasi/badge.svg?version=latest)](https://docs.rs/wasm-smtp-wasi) | [![Dependency Status](https://deps.rs/crate/wasm-smtp-wasi/latest/status.svg)](https://deps.rs/crate/wasm-smtp-wasi) |
+| `wasm-smtp-cloudflare`  | Cloudflare Workers socket adapter for `wasm-smtp`.         | [![crates.io](https://img.shields.io/crates/v/wasm-smtp-cloudflare?label=cloudflare-adapter)](https://crates.io/crates/wasm-smtp-cloudflare) | [![Rust Documentation](https://docs.rs/wasm-smtp-cloudflare/badge.svg?version=latest)](https://docs.rs/wasm-smtp-cloudflare) | [![Dependency Status](https://deps.rs/crate/wasm-smtp-cloudflare/latest/status.svg)](https://deps.rs/crate/wasm-smtp-cloudflare) |
+
+`wasm-smtp` is the foundation: it implements the SMTP state
+machine, response parsing, command formatting, dot-stuffing, and error
+classification, but does no I/O of its own. Each runtime gets its own
+adapter crate that provides a [`Transport`] implementation.
+
+Four adapters ship today:
+
+- `wasm-smtp-component` — WASM Component Model WIT interface
+  (`crates/wasm-smtp-component/wit/smtp.wit`),
+  enabling language-neutral bindings (TypeScript, Go, Python, C, …).
+- `wasm-smtp-tokio` — tokio-based servers (axum, actix, warp, hyper, plain tokio, …).
+- `wasm-smtp-wasi` — WASI 0.2 runtimes (wasmtime, WAMR) targeting `wasm32-wasip2`.
+- `wasm-smtp-cloudflare` — Cloudflare Workers (WASM target).
+
+### Cargo features
 
 `wasm-smtp` exposes cargo features so that size-sensitive deployments
 (Cloudflare Workers' 3 MiB cap, in particular) can opt out of
@@ -146,7 +131,7 @@ feature that pass-through-enables it on the core crate, so adapter-
 only callers do not need a direct dependency on `wasm-smtp` to
 opt in.
 
-## Minimum supported Rust version
+### Minimum supported Rust version
 
 1.88 (Rust 2024 edition). The workspace pins that toolchain in
 `rust-toolchain.toml`, which is also what CI enforces.
