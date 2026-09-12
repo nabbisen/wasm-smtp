@@ -430,7 +430,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    Turnstile-style challenges, rate limits, and honeypots at the
    request boundary, documented as application-layer patterns; no
    library integration.
-3. Further extension themes (channel binding, DSN, Component Model
+3. **Documentation publication and dependency currency** (RFC 027,
+   proposed 2026-09-12 from the owner's README review): publish the
+   mdBook to GitHub Pages; raise the rustls floor past the advisory
+   deps.rs flags; take the `mail-builder` and `wit-bindgen` majors;
+   refresh the lockfile.
+4. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 
 ## Phase 19 — WASI hardening and on-target verification *(0.16.0)*

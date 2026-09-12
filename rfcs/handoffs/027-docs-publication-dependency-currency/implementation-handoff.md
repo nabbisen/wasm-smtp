@@ -1,0 +1,85 @@
+# Developer Handoff — RFC 027: Documentation publication and dependency currency
+
+**Governing RFC.** [`../../proposed/027-docs-publication-dependency-currency.md`](../../proposed/027-docs-publication-dependency-currency.md)
+**Prepared.** 2026-09-12 by the architect. Baseline: the README commits `81fb3a4`, `4f0db09`.
+**Starts.** On the owner's approval of RFC 027 (the architect relays it).
+**Review request goes to.** `.git-exclude/review-request/027-docs-publication-dependency-currency.md`
+
+## 1. Change scope
+
+`.github/workflows/docs.yml` (new), `docs/book.toml`, `README.md`
+(Documentation section only), `crates/wasm-smtp-wasi/Cargo.toml`,
+`crates/wasm-smtp/Cargo.toml`, `crates/wasm-smtp-component/Cargo.toml`,
+`Cargo.toml` (workspace line only if needed), `Cargo.lock`,
+`CHANGELOG.md`, and, only if RFC 027 D3 forces it,
+`crates/wasm-smtp/src/client/send.rs::send_message` plus
+`docs/src/core/composing-messages.md`.
+
+## 2. Non-change scope
+
+No other library source. No new features. No `--all-features`. Do not
+tag, push, or publish. Do not add the README badge; the owner does.
+
+## 3. Slices
+
+### S1. Book publication (D1)
+
+1. `.github/workflows/docs.yml`:
+   - `on: push: branches: [main]` and `workflow_dispatch`.
+   - `permissions: contents: read, pages: write, id-token: write`.
+   - `concurrency: group: pages, cancel-in-progress: true`.
+   - Steps: checkout; install mdBook at a pinned version (the locally
+     verified line is 0.5.x; `peaceiris/actions-mdbook` or a direct
+     download, either is fine, pin the version); `mdbook build docs`;
+     `actions/configure-pages`; `actions/upload-pages-artifact` with
+     `path: docs/book`; `actions/deploy-pages` in a `deploy` job with
+     `environment: github-pages`.
+2. `docs/book.toml`: add `site-url = "/wasm-smtp/"` under `[output.html]`.
+   Run `mdbook build docs` locally and open `docs/book/index.html` to
+   confirm intra-book links still resolve.
+3. `README.md`, Documentation section: first sentence links the
+   published book at `https://nabbisen.github.io/wasm-smtp/`; keep the
+   `docs/src` pointer as the source location. Leave the badge row alone.
+4. If the repository's Pages source is set to a branch rather than
+   "GitHub Actions", the deploy step will fail with a clear message; do
+   not switch to a `gh-pages` branch push, report it and the architect
+   asks the owner to flip the setting.
+
+### S2. Dependency currency (D2–D5)
+
+1. `cargo update` on the pinned toolchain. Record the resolved `rustls`
+   version.
+2. `crates/wasm-smtp-wasi/Cargo.toml`: `rustls` floor to the resolved
+   version (at least `0.23.18`). Keep `default-features = false` and
+   the feature list.
+3. `mail-builder`: read its 0.5 changelog. If `MessageBuilder::new`,
+   `.from`, `.to`, `.subject`, `.text_body`, `.html_body`,
+   `.attachment`, and `write_to_string` are unchanged, move the
+   workspace floor to `0.5` and run `cargo test -p wasm-smtp --features mail-builder`
+   plus the composing-chapter snippets by eye. If any of those changed,
+   stop and report the delta; do not adapt `send_message` without the
+   architect's word.
+4. `wit-bindgen`: try `0.62` in the component crate. Acceptance is the
+   wasip2 check and the smoke test (`cargo check --target wasm32-wasip2 -p wasm-smtp-component`
+   and `cargo run -p wasm-smtp-smoke`). If `generate!`'s `with:` map or
+   `export!` need more than a local edit, keep `0.57` and report why.
+5. Full gate, all commands, on the refreshed lockfile.
+
+### S3. Release commit
+
+Version per RFC 027 D6 (0.17.0 if `mail-builder` moved, else 0.16.2)
+across the workspace and pins; CHANGELOG entry with a compatibility
+note for the rustls floor and, if applicable, the `mail-builder` major;
+full gate; evidence under `.git-exclude/review-request/evidence/027/`;
+commit "Release X.Y.Z"; stop.
+
+## 4. Acceptance criteria
+
+RFC 027 §Acceptance criteria. The review request states the resolved
+versions of `rustls`, `mail-builder`, and `wit-bindgen`, and whether the
+book deployed (link to the Actions run).
+
+## 5. Prohibited shortcuts
+
+Lowering any floor; disabling the smoke test to get through a
+`wit-bindgen` change; committing `docs/book/`.

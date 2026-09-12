@@ -20,7 +20,9 @@ _(empty)_
 
 ## Proposed
 
-_(empty)_
+| ID | Title | Priority | Handoff |
+|----|-------|----------|---------|
+| [027](./proposed/027-docs-publication-dependency-currency.md) | Documentation publication and dependency currency | P1 | [drafted](./handoffs/027-docs-publication-dependency-currency/implementation-handoff.md) |
 
 ## Draft
 
@@ -65,4 +67,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–026 are implemented; 022–023 are drafts. The next RFC is **027**.
+RFC 000–021 and 024–026 are implemented; 027 is proposed; 022–023 are drafts. The next RFC is **028**.
