@@ -109,7 +109,7 @@ impl Transport for CloudflareTransport {
         socket
             .close()
             .await
-            .map_err(|e| IoError::new(format!("socket close failed: {e}")))
+            .map_err(|e| IoError::with_source("socket close failed", e))
     }
 }
 
@@ -154,7 +154,7 @@ where
 {
     AsyncReadExt::read(stream, buf)
         .await
-        .map_err(|e| IoError::new(format!("read failed: {e}")))
+        .map_err(|e| IoError::with_source("read failed", e))
 }
 
 /// Write the entire buffer to any `tokio::io::AsyncWrite` stream,
@@ -169,5 +169,5 @@ where
 {
     AsyncWriteExt::write_all(stream, buf)
         .await
-        .map_err(|e| IoError::new(format!("write failed: {e}")))
+        .map_err(|e| IoError::with_source("write failed", e))
 }

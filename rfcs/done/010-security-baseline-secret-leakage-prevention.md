@@ -4,6 +4,8 @@
 Amended by RFC 024 D10 (0.15.2): `unsafe_code = "forbid"` in every crate
 except generated Component Model glue in `wasm-smtp-component`, which is
 `deny` with allowances scoped to the generated modules.
+Amended by RFC 025 D7 (0.16.0): the enforced advisory check is
+`cargo audit` in CI, not `cargo deny`.
 **Priority.** P0
 **Tracks.** Security
 **Touches.** All crates, `TERMS_OF_USE.md`, `.github/SECURITY.md`, `docs/src/security.md`

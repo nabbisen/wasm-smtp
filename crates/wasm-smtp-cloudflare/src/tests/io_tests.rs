@@ -31,10 +31,15 @@ async fn read_async_io_propagates_errors_as_io_error() {
     let mut buf = [0u8; 16];
     let result = read_async_io(&mut mock, &mut buf).await;
     let err = result.expect_err("must error");
-    let s = format!("{err}");
+
+    // Display carries the context; the underlying failure is preserved as
+    // the error source rather than formatted into the message, so callers
+    // can classify it (RFC 013 as amended by RFC 025 D6).
+    assert_eq!(format!("{err}"), "read failed");
+    let source = std::error::Error::source(&err).expect("source must be preserved");
     assert!(
-        s.contains("read failed") && s.contains("simulated transport failure"),
-        "unexpected error message: {s}",
+        format!("{source}").contains("simulated transport failure"),
+        "source should carry the underlying failure: {source}",
     );
 }
 
@@ -71,10 +76,12 @@ async fn write_all_async_io_propagates_errors_as_io_error() {
     let mut mock = Builder::new().write_error(err).build();
     let result = write_all_async_io(&mut mock, b"X").await;
     let err = result.expect_err("must error");
-    let s = format!("{err}");
+
+    assert_eq!(format!("{err}"), "write failed");
+    let source = std::error::Error::source(&err).expect("source must be preserved");
     assert!(
-        s.contains("write failed") && s.contains("simulated write failure"),
-        "unexpected error message: {s}",
+        format!("{source}").contains("simulated write failure"),
+        "source should carry the underlying failure: {source}",
     );
 }
 

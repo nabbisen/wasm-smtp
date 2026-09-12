@@ -1,6 +1,8 @@
 # RFC 012 — Audit event model
 
 **Status.** Implemented (0.10.0)
+Amended by RFC 025 D4 (0.16.0): `RecipientRejected` and `SessionAborted`
+emission defined.
 **Priority.** P1
 **Tracks.** Audit / Security
 **Touches.** `crates/wasm-smtp/src/audit.rs`, `crates/wasm-smtp/src/session.rs`, `docs/src/audit.md`

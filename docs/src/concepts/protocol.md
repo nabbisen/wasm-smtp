@@ -381,6 +381,30 @@ enforce ASCII as they always have.
 
 [`validate_address_utf8`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/protocol/fn.validate_address_utf8.html
 
+## PIPELINING (RFC 2920) — feature-gated
+
+When the server advertises `PIPELINING` and the default-on `pipelining`
+feature is compiled in, the envelope phase goes out as a single write:
+`MAIL FROM`, every `RCPT TO`, and `DATA` together, followed by one
+flush. The replies are then read in order. This removes a round trip per
+recipient, which matters most on high-latency links — a ten-recipient
+message costs two round trips instead of twelve.
+
+All four send methods (`send_mail`, `send_mail_bytes`,
+`send_mail_stream`, `send_mail_smtputf8`) share one envelope
+implementation and therefore behave identically here. Before 0.16.0 only
+`send_mail` pipelined; the other three always ran sequentially.
+
+Against a server that does not advertise the capability, the sequential
+path runs and the bytes on the wire are unchanged — the test suite
+asserts byte-equality with 0.15.2's output for all four methods.
+
+Pipelining does not change error handling: each reply is still matched
+to its command in order, and the first non-2xx reply ends the
+transaction. RFC 2920's restriction that `EHLO`, `DATA`, and `QUIT` are
+synchronisation points is respected — nothing is batched across the
+`354` go-ahead.
+
 ## TLS models
 
 The crate supports two TLS models at the transport layer:

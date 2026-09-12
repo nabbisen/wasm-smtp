@@ -16,7 +16,7 @@ categories = ["email", "development-tools::testing"]
 path = "src/lib.rs"
 
 [dependencies]
-wasm-smtp = { path = "../wasm-smtp", version = "0.15.2" }
+wasm-smtp = { path = "../wasm-smtp", version = "0.16.0" }
 
 [lints]
 workspace = true

@@ -1,6 +1,9 @@
 # RFC 013 — Cloudflare adapter design
 
 **Status.** Implemented (0.3.0)
+Amended by RFC 025 D6 (0.16.0): `worker::Error` does satisfy
+`Error + Send + Sync + 'static`, so the adapter preserves it as the error
+source rather than formatting it into the message.
 **Priority.** P1
 **Tracks.** Adapter / Cloudflare
 **Touches.** `crates/wasm-smtp-cloudflare/`, `docs/src/cloudflare-adapter.md`

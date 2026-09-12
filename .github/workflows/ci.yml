@@ -61,6 +61,19 @@ jobs:
           cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
           cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
 
+      # The adapter's defects were all of the kind that only running it
+      # finds, so the gate runs it: a real wasm32-wasip2 guest under
+      # wasmtime against a scripted TLS SMTP responder on loopback, in both
+      # implicit-TLS and STARTTLS modes. No external network.
+      - uses: bytecodealliance/actions/wasmtime/setup@v1
+        with:
+          version: "27.0.0"
+
+      - name: On-target smoke test
+        run: |
+          cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
+          cargo run -p wasm-smtp-smoke
+
   # Non-blocking early warning about upcoming toolchain breakage.
   stable:
     name: stable (advisory)
@@ -83,3 +96,19 @@ jobs:
 
       - name: Clippy
         run: cargo +stable clippy --workspace --all-targets -- -D warnings
+
+  # Dependency advisories. Blocking: a vulnerability against anything in
+  # the lockfile should turn the build red. cargo audit exits non-zero on
+  # vulnerabilities; unsoundness and yanked-crate warnings show in the log
+  # without failing, which is the level of noise a release gate can carry.
+  audit:
+    name: audit (advisories)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
+
+      - name: cargo audit
+        run: cargo audit

@@ -39,12 +39,12 @@ pub async fn connect_implicit_tls(host: &str, port: u16) -> Result<CloudflareTra
     let socket = Socket::builder()
         .secure_transport(SecureTransport::On)
         .connect(host.to_string(), port)
-        .map_err(|e| IoError::new(format!("connect to {host}:{port} failed: {e}")))?;
+        .map_err(|e| IoError::with_source(format!("connect to {host}:{port} failed"), e))?;
 
     socket
         .opened()
         .await
-        .map_err(|e| IoError::new(format!("TLS handshake to {host}:{port} failed: {e}")))?;
+        .map_err(|e| IoError::with_source(format!("TLS handshake to {host}:{port} failed"), e))?;
 
     Ok(CloudflareTransport::from_socket(socket))
 }
@@ -71,13 +71,13 @@ pub async fn connect_starttls(host: &str, port: u16) -> Result<CloudflareTranspo
     let socket = Socket::builder()
         .secure_transport(SecureTransport::StartTls)
         .connect(host.to_string(), port)
-        .map_err(|e| IoError::new(format!("connect to {host}:{port} failed: {e}")))?;
+        .map_err(|e| IoError::with_source(format!("connect to {host}:{port} failed"), e))?;
 
     // `opened()` awaits the TCP connect (no TLS yet under StartTls).
     socket
         .opened()
         .await
-        .map_err(|e| IoError::new(format!("TCP connect to {host}:{port} failed: {e}")))?;
+        .map_err(|e| IoError::with_source(format!("TCP connect to {host}:{port} failed"), e))?;
 
     Ok(CloudflareTransport::from_socket(socket))
 }

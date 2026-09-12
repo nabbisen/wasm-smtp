@@ -28,6 +28,7 @@ wasm-smtp/
 │  ├─ wasm-smtp-component/    WASM Component Model export
 │  │  └─ wit/                 the contract (smtp.wit) and its WASI deps
 │  └─ wasm-smtp-test/         mock Transport for tests
+├─ tools/smoke/               on-target smoke-test driver (never published)
 ├─ docs/src/                  long-form, mdBook-ready documentation
 ├─ rfcs/                      design records; see rfcs/README.md
 └─ .github/                   policy, issue templates, CI workflow
@@ -77,6 +78,14 @@ cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm3
 # Add --allow-dirty when checking uncommitted work.
 cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
 cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
+
+# On-target: a real wasm32-wasip2 guest under wasmtime against a scripted
+# TLS SMTP responder on loopback. Needs wasmtime on PATH (or WASMTIME set).
+cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
+cargo run -p wasm-smtp-smoke
+
+# Dependency advisories.
+cargo audit
 ```
 
 A pull request that does not pass these is unlikely to be merged.

@@ -49,8 +49,35 @@ use `send_mail_bytes` instead.
 ## AuditSink
 
 `AuditSink` receives a `SmtpAuditEvent` for each significant protocol
-event (EHLO, AUTH, MAIL FROM, RCPT TO, DATA, QUIT). Use it for logging,
-metrics, or tracing.
+event. Use it for logging, metrics, or tracing.
+
+The full set, in the order a successful authenticated send produces
+them:
+
+| Event | When |
+|---|---|
+| `Connected` | the transport is up, before the greeting is read |
+| `GreetingReceived { code }` | the server's greeting was accepted |
+| `EhloCompleted` | `EHLO` accepted; capabilities recorded |
+| `TlsUpgraded` | a STARTTLS upgrade completed (between the two `EhloCompleted`s) |
+| `AuthCompleted { mechanism }` | authentication succeeded; the mechanism is the wire keyword, e.g. `"SCRAM-SHA-256"` |
+| `MailFromAccepted { code }` | `MAIL FROM` accepted |
+| `RecipientAccepted { code }` | one `RCPT TO` accepted (250 or 251) |
+| `RecipientRejected { code }` | one `RCPT TO` refused (4xx or 5xx), emitted before the error propagates |
+| `MessageAccepted { code }` | the server accepted the message body |
+| `QuitCompleted` | `QUIT` and the transport close both succeeded |
+| `SessionAborted` | the session failed and will accept no further commands |
+
+`SessionAborted` is emitted exactly once per session, from the single
+place that closes the state machine on failure — an unexpected reply, a
+rejected recipient, or a transport error all reach it, and a `quit` on an
+already-aborted session does not add a second. A clean session never
+emits it. When a recipient rejection is what ended the session, the
+`RecipientRejected` event precedes the abort, so a log reader sees the
+cause before the effect.
+
+No event carries credentials, message content, or envelope addresses;
+codes and mechanism names only.
 
 ```rust
 use wasm_smtp::audit::{AuditSink, SmtpAuditEvent};

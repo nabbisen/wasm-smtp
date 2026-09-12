@@ -433,6 +433,26 @@ Order is the owner's decision after the RFC 024 roadmap review.
 3. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 
+## Phase 19 — WASI hardening and on-target verification *(0.16.0)*
+
+RFC 025. The WASI adapter and the Component Model export had never
+executed on a `wasm32-wasip2` host — RFC 024 only got them compiling for
+it. Running them found three defects that compilation cannot.
+
+- ✅ **On-target smoke test in the gate.** A scripted TLS SMTP responder
+  on loopback, a real guest under wasmtime, both implicit-TLS and
+  STARTTLS, asserting the session that crossed the wire.
+- ✅ **STARTTLS on WASI works.** It previously panicked on every upgrade.
+- ✅ **Reads no longer report a live connection as closed**, and the
+  guest no longer traps when a connection is dropped.
+- ✅ **`connect_smtp_starttls_with`** for STARTTLS against a private CA.
+- ✅ **Audit events completed**: `RecipientRejected` emitted at last, and
+  `SessionAborted` exactly once per session from one choke point.
+- ✅ **One envelope implementation** for all four send methods, which
+  also extends PIPELINING to the three that lacked it.
+- ✅ **Error causes preserved** in the Cloudflare and WASI adapters.
+- ✅ **`cargo audit` in CI**, which RFC 010 had claimed since 0.5.0.
+
 ## Out of scope (for now)
 
 The following are deliberately omitted from the roadmap. They may be

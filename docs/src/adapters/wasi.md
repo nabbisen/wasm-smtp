@@ -35,6 +35,30 @@ client.send_mail(
 client.quit().await?;
 ```
 
+## On-target verification
+
+The adapter is exercised on a real `wasm32-wasip2` host on every CI run,
+not only compiled for it. `tools/smoke` starts a scripted TLS-terminated
+SMTP responder on loopback, runs
+`crates/wasm-smtp-wasi/examples/smoke.rs` under wasmtime against it, and
+checks the session that actually crossed the wire: command order, that
+the body arrived dot-stuffed, and — for STARTTLS — that everything after
+the upgrade arrived inside TLS rather than in plaintext.
+
+```sh
+cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
+cargo run -p wasm-smtp-smoke
+```
+
+It needs `wasmtime` on `PATH` (or `WASMTIME` pointing at it) and touches
+loopback only. The certificate is generated per run and nothing is
+committed.
+
+This is worth stating plainly: until 0.16.0 no code in this crate had
+ever executed on its target. Doing so found a STARTTLS path that panicked
+unconditionally, a read that reported "peer closed" whenever a reply was
+not already buffered, and a resource-drop order that trapped the guest.
+
 ## STARTTLS (port 587)
 
 ```rust

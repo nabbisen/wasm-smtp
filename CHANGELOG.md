@@ -1,5 +1,88 @@
 ## [Unreleased]
 
+## [0.16.0] — 2026-09-12
+
+RFC 025: run the WASI adapter on a real host for the first time, and fix
+what that exposed. Also completes the audit event model, gives the four
+send methods one envelope implementation, restores error causes in two
+adapters, and puts dependency advisories in CI.
+
+**Compatibility notes.** Three items affect behaviour even though nothing
+was removed: (1) one new public function,
+`wasm_smtp_wasi::connect_smtp_starttls_with`; (2) `send_mail_bytes`,
+`send_mail_stream`, and `send_mail_smtputf8` now batch the envelope when
+the server advertises `PIPELINING`, as `send_mail` already did — on a
+server that does not advertise it the bytes are unchanged, and the test
+suite asserts byte-equality with 0.15.2 for all four methods; (3)
+`RecipientRejected` and `SessionAborted` are now actually emitted, so an
+`AuditSink` that matches exhaustively will see events it never saw
+before.
+
+### Fixed
+
+- **STARTTLS on WASI panicked on every upgrade.** `upgrade_to_tls`
+  evaluated a placeholder function that panics unconditionally, as an
+  argument to `mem::replace`, so the argument was evaluated before the
+  branch that would have avoided it. Deleted along with the placeholder.
+- **The WASI adapter reported "peer closed" for any reply that was not
+  already buffered.** `read` used the non-blocking `input-stream.read`,
+  whose empty result means "nothing ready yet", and mapped it to `Ok(0)`
+  — which the core reads as a clean EOF (RFC 005). On a real network that
+  is nearly every reply. It now uses `blocking-read`, and an empty result
+  from that blocks again rather than reporting EOF.
+- **The WASI adapter trapped the guest when a connection was dropped.**
+  `WasiStream` held its `TcpSocket` before the input and output streams
+  taken from it. Those are child resources of the socket in WASI 0.2, and
+  dropping a parent while a child is alive traps. Rust drops fields in
+  declaration order, so the streams are now declared first.
+- **`SmtpAuditEvent::RecipientRejected` was never emitted**, and
+  `SessionAborted` only from `quit`, so a failure during a transaction
+  left no abort record — exactly the case audit exists for. Both are now
+  emitted, `SessionAborted` exactly once per session from the single
+  place that closes the state machine on failure.
+- **The Cloudflare adapter discarded error causes**, formatting
+  `worker::Error` into a message string instead of preserving it as the
+  source. `worker::Error` does satisfy `Error + Send + Sync + 'static`,
+  so callers can now walk `.source()` to the underlying failure, as they
+  already could on the tokio adapter.
+
+### Added
+
+- **On-target smoke test** (`tools/smoke`, dev-only and never published).
+  Starts a scripted TLS-terminated SMTP responder on loopback, runs a
+  `wasm32-wasip2` guest under wasmtime against it, and asserts the
+  session that actually crossed the wire — command order, dot-stuffing,
+  and for STARTTLS that everything after the upgrade arrived inside TLS.
+  Both implicit-TLS and STARTTLS modes run on every CI change.
+- **`wasm_smtp_wasi::connect_smtp_starttls_with`**, mirroring the
+  implicit-TLS pair. Without it a STARTTLS session cannot be pointed at a
+  private or test CA.
+- **`cargo audit` CI job.** RFC 010 has claimed since 0.5.0 that CI
+  enforced dependency advisories; nothing did.
+
+### Changed
+
+- **One envelope implementation.** `MAIL FROM` → `RCPT TO` → `DATA`
+  through the `354` is now a single private method that all four send
+  methods call, replacing four near-identical copies. This is what
+  extends pipelining to the three methods that lacked it.
+- **The WASI transport's state is explicit.** A `Closed` variant replaces
+  the placeholder stream: a failed STARTTLS handshake leaves the
+  transport closed rather than falling back to plaintext, `close` is
+  idempotent, and I/O after close reports it.
+- RFC 010's advisory rule is amended to name `cargo audit` rather than
+  `cargo deny`; licence checking is not in scope and one tool is enough.
+
+### Documentation
+
+- `docs/src/adapters/wasi.md` documents the on-target test and states
+  plainly that no code in the crate had executed on its target before
+  this release.
+- `docs/src/core/policy-audit.md` lists the full event set, when each
+  fires, and the exactly-once rule for `SessionAborted`.
+- `docs/src/concepts/protocol.md` gains a PIPELINING section covering
+  what is batched, what is not, and the unchanged sequential path.
+
 ## [0.15.2] — 2026-09-12
 
 A maintenance release. RFC 024: make the release gate trustworthy. No
@@ -1444,7 +1527,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.15.2...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.16.0...HEAD
+[0.16.0]: https://github.com/nabbisen/wasm-smtp/compare/0.15.2...0.16.0
 [0.15.2]: https://github.com/nabbisen/wasm-smtp/compare/0.15.1...0.15.2
 [0.15.1]: https://github.com/nabbisen/wasm-smtp/compare/0.15.0...0.15.1
 [0.15.0]: https://github.com/nabbisen/wasm-smtp/compare/0.14.0...0.15.0
