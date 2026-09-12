@@ -5,6 +5,14 @@
 A maintenance release. RFC 024: make the release gate trustworthy. No
 public API changes; no protocol behavior changes.
 
+**Compatibility notes.** Two items in this release affect downstream
+builds even though nothing in the public API moved: (1) the minimum
+supported Rust version is now **1.88**, corrected from a previously
+false 1.85; and (2) `wasm-smtp-component` now compiles its lints with
+`unsafe_code = "deny"` rather than the workspace's `"forbid"`, with the
+allowance scoped to wit-bindgen's generated Component Model glue —
+every other crate keeps `"forbid"` unchanged.
+
 ### Fixed
 
 - **`wasm-smtp` did not compile with the `smtputf8` feature.**
