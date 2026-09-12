@@ -59,7 +59,7 @@ jobs:
       - name: Check packaged contents
         run: |
           cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
-          cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
+          cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets.wit$'
 
       # The documented Worker examples are compiled for the target they
       # claim to run on, so the prose cannot rot silently.
@@ -71,6 +71,12 @@ jobs:
       # owner found a stale one by hand before this check existed.
       - name: Check documentation versions
         run: ./tools/check-doc-versions.sh
+
+      # The component repeats the WASI minor in nineteen places and the
+      # lockfile decides it. They were two years apart until RFC 028,
+      # because nothing compared them.
+      - name: Check the declared WASI version
+        run: ./tools/check-wasi-version.sh
 
       # Examples carry tests of their own (the contact-form header guard);
       # `cargo test --workspace` builds examples but does not run those.
@@ -89,6 +95,16 @@ jobs:
         run: |
           cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
           cargo run -p wasm-smtp-smoke
+
+      # The component shipped for three releases without ever being
+      # instantiated. This runs it: wasmtime 38 as a library embeds the
+      # built artifact, satisfies its WASI imports, and calls
+      # `smtp-send.send` against the same scripted responder. No
+      # wasmtime CLI — the host is a crate dependency of the harness.
+      - name: Component host smoke test
+        run: |
+          cargo build --target wasm32-wasip2 -p wasm-smtp-component
+          cargo run -p wasm-smtp-component-smoke
 
   # Non-blocking early warning about upcoming toolchain breakage.
   stable:

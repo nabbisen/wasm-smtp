@@ -77,13 +77,17 @@ cargo check -p wasm-smtp -p wasm-smtp-wasi -p wasm-smtp-component --target wasm3
 # Packaged contents: the published component must carry its contract.
 # Add --allow-dirty when checking uncommitted work.
 cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
-cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
+cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets.wit$'
 
 # The documented Worker examples must compile for the Workers target.
 cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 
 # Dependency versions in the documentation must match the manifest.
 ./tools/check-doc-versions.sh
+
+# The WASI minor the component declares must be the one the lockfile
+# resolves. Re-vendoring wit/deps/ is what a failure here asks for.
+./tools/check-wasi-version.sh
 cargo test -p wasm-smtp-cloudflare --examples   # example tests are not run by --workspace
 
 # On-target: a real wasm32-wasip2 guest under wasmtime against a scripted
@@ -92,6 +96,12 @@ cargo test -p wasm-smtp-cloudflare --examples   # example tests are not run by -
 # (or WASMTIME set).
 cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
 cargo run -p wasm-smtp-smoke
+
+# The component, under a host: wasmtime 38 embedded as a library
+# instantiates the built artifact and calls smtp-send.send against the
+# same responder. No wasmtime CLI needed for this one.
+cargo build --target wasm32-wasip2 -p wasm-smtp-component
+cargo run -p wasm-smtp-component-smoke
 
 # Dependency advisories.
 cargo audit

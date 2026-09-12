@@ -1,6 +1,18 @@
 # RFC 024 — Release gate integrity, toolchain baseline, and MSRV correction
 
 **Status.** Implemented (0.15.2)
+D8 amended by RFC 028 (version pending release): the vendored WASI
+packages and the world's import annotations move from `@0.2.4` to
+`@0.2.12`, and `wit/deps/` becomes three flat files. D8 assumed the
+declared minor had to match what the host provides; running the
+component showed it does not — a host satisfies these imports by semver
+compatibility, and the artifact's own imports are unaffected by the
+annotations. §D3's gate list gains two commands with it:
+`tools/check-wasi-version.sh`, which compares the declared minor against
+the `wasip2` metadata in `Cargo.lock` and would have caught D8's error
+on the day it was written, and a host run of the component itself. The
+packaged-contents check moves from `wit/deps/sockets/tcp.wit` to
+`wit/deps/sockets.wit` with the layout.
 **Priority.** P0
 **Tracks.** Release / Governance / CI / Workspace
 **Touches.** `Cargo.toml`, `rust-toolchain.toml` (new), `.github/workflows/` (new), `crates/*`, `docs/src/`, `CHANGELOG.md`, `ROADMAP.md`, `rfcs/done/001-*` (amendment note)

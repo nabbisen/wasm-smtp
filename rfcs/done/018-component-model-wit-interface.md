@@ -5,6 +5,14 @@ Amended by RFC 024 D8 (0.15.2): `from` escaped as `%from`, WASI imports
 moved to `@0.2.4` with the packages vendored under `wit/deps/`; contract
 relocated to `crates/wasm-smtp-component/wit/` so the published crate
 carries it (RFC 024 D11).
+Amended by RFC 028 (version pending release): the component was executed
+for the first time, under wasmtime 38 via `tools/component-smoke`. The
+vendored WASI packages move to 0.2.12 and the world's import annotations
+with them; the `wit/deps/` layout is now three flat files rather than
+three directories. The declared minor is documentation of the host
+requirement, not a description of the artifact, which imports two WASI
+minors (0.2.12 from the `wasi` crate, 0.2.3 from the Rust standard
+library) and did not change at all when the annotations did.
 **Priority.** P2
 **Tracks.** Component Model / WIT
 **Touches.** `wit/` (new), `docs/src/component-model.md`
