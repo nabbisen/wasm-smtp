@@ -1,6 +1,7 @@
 # RFC 001 — Workspace, crate boundaries, and release structure
 
 **Status.** Implemented (v0.10.0)
+Amended by RFC 024 (v0.15.2): `wasm-smtp-test` is published.
 **Priority.** P0
 **Tracks.** Project foundation / Release / Workspace
 **Touches.** `Cargo.toml`, `crates/`, `crates/core/`, `crates/cloudflare/`, `crates/test/`, `README.md`, `ROADMAP.md`, `CHANGELOG.md`
