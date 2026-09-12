@@ -57,6 +57,12 @@ wasm-smtp/
 Before sending a pull request, please run, from the workspace root, the
 same command list CI runs (RFC 024 §D3):
 
+Releases follow one order (RFC 032 D6): a release commit is tagged only
+after CI has passed on that exact commit. The release commit is pushed on
+its own — by hash if later commits exist locally — and the tag and the
+publish wait for its green run, so a red run stops a release before any
+tag exists.
+
 ```bash
 cargo fmt --all -- --check
 cargo clippy --locked --workspace --all-targets -- -D warnings
@@ -105,8 +111,13 @@ cargo run --locked -p wasm-smtp-smoke
 # same responder. No wasmtime CLI needed for this one.
 cargo build --locked --target wasm32-wasip2 -p wasm-smtp-component
 cargo run --locked -p wasm-smtp-component-smoke
+```
 
-# Dependency advisories.
+That block is the `gate` job in `.github/workflows/ci.yml`, command for
+command and in order. CI also runs `cargo audit` in a separate `audit`
+job; run it locally too before a pull request:
+
+```bash
 cargo audit
 ```
 

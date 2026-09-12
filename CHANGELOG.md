@@ -1,5 +1,52 @@
 ## [Unreleased]
 
+RFC 032: verification coverage. Nothing a consumer receives changes — no
+published crate's source, manifest, dependencies, or built artifact. What
+changes is what the gate reaches, and the order releases happen in.
+
+### Testing
+
+- **The tokio adapter completes a send in a test.** A new integration test
+  drives `wasm-smtp-tokio` over a real loopback socket against the scripted
+  TLS responder: implicit TLS, STARTTLS upgraded on the same socket, and an
+  untrusted certificate refused. The refused case asserts that no SMTP
+  command reached the server, not merely that an error came back. Runs
+  under `cargo test --workspace`.
+- **The transcript assertions are shared.** The WASI smoke test, the
+  component harness, and the tokio test now hold their recordings to the
+  same `check_session` / `check_refused` in `tools/smoke`'s library, each
+  with self-tests showing it rejects the sessions it exists to reject.
+- **The shell guards are tested.** `tools/guard-tests/run.sh` points
+  `check-doc-versions.sh` and `check-wasi-version.sh` at thirteen fixture
+  trees, one per branch, and compares exit status and output byte for
+  byte. A new gate command.
+
+### CI
+
+- **wasmtime CLI 27.0.0 → 36.0.15** for the WASI smoke test: the 36.0.x LTS
+  line, the same one the component harness links, chosen for its security
+  backports.
+- **`--locked`** on every gate command that resolves the lockfile, in CI
+  and in `CONTRIBUTING.md`, so CI tests the committed `Cargo.lock`.
+- **Third-party actions pinned by commit SHA**, with the release in a
+  trailing comment; `cargo-audit` installed at an exact version.
+- **A weekly scheduled workflow** runs `cargo audit` and the `#[ignore]`d
+  tests, so advisories and the slow tests are seen between commits.
+  GitHub disables scheduled workflows after 60 days without repository
+  activity; `CONTRIBUTING.md` says how to re-enable it.
+
+### Process
+
+- **Releases are tagged only after CI passes on the release commit.** The
+  release commit is pushed alone, and the tag and publish wait for its
+  green run. Recorded in `CONTRIBUTING.md`.
+
+### Not in this release
+
+- **Compiling the book's Rust code blocks (RFC 032 D2) did not land.** The
+  inventory found blocks that are wrong rather than merely uncompiled, and
+  those are documentation defects to be fixed and reviewed as such first.
+
 ## [0.17.2] — 2026-09-13
 
 RFC 028. The `wasm-smtp-component` crate had shipped for three releases
