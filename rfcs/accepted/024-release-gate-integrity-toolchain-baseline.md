@@ -210,7 +210,7 @@ selected (tokio: aws-lc-rs or ring per feature; WASI: ring). Test-side
 `install_default()` calls are removed; the workspace test run passing
 without them is the proof. No public API change.
 
-### D10. `unsafe_code` level in `wasm-smtp-component` — **pending owner decision**
+### D10. `unsafe_code` level in `wasm-smtp-component` — **accepted by the owner on 2026-09-12**
 
 Building the component for `wasm32-wasip2` (D5, D8) revealed that
 wit-bindgen's generated canonical-ABI glue contains `unsafe` by
@@ -233,8 +233,9 @@ is `deny` with allowances scoped to the generated modules only." The
 separate-bindings-crate alternative was rejected: it relocates the same
 unsafe surface without reducing it.
 
-This is a change to a documented security-baseline rule and therefore
-the owner's decision.
+This is a change to a documented security-baseline rule; the owner
+accepted it on 2026-09-12. RFC 010 receives the amendment note in the
+release commit (handoff S11).
 
 ### D7. Release
 
@@ -321,3 +322,5 @@ of the version offset.
 
 - 2026-09-12: D6 confirmed; D8 and D9 added after review 1 of the
   implementation (see `.git-exclude/reviewed/024-release-gate-integrity-review-1.md`).
+- 2026-09-12: D10 added after review 2 and accepted by the owner; the
+  owner approved the v0.15.2 release on the same day (D7).

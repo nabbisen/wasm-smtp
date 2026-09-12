@@ -373,9 +373,8 @@ same structure as request 1, listing only what changed since `b2cc145`.
 # Revision 3 — 2026-09-12, after review 2
 
 Review: `.git-exclude/reviewed/024-release-gate-integrity-review-2.md`.
-Head `e6f6d65` is approved. Nothing below starts until the owner has
-(a) accepted RFC 024 D10 and (b) approved the v0.15.2 release. The
-architect will relay both.
+Head `e6f6d65` is approved. **The owner accepted RFC 024 D10 and
+approved the v0.15.2 release on 2026-09-12. S11 is authorized; begin.**
 
 ## S11 — Release execution
 
