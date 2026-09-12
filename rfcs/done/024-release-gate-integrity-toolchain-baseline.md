@@ -1,6 +1,6 @@
 # RFC 024 — Release gate integrity, toolchain baseline, and MSRV correction
 
-**Status.** Accepted
+**Status.** Implemented (0.15.2)
 **Priority.** P0
 **Tracks.** Release / Governance / CI / Workspace
 **Touches.** `Cargo.toml`, `rust-toolchain.toml` (new), `.github/workflows/` (new), `crates/*`, `docs/src/`, `CHANGELOG.md`, `ROADMAP.md`, `rfcs/done/001-*` (amendment note)
@@ -353,6 +353,7 @@ of the version offset.
   implementation (see `.git-exclude/reviewed/024-release-gate-integrity-review-1.md`).
 - 2026-09-12: D10 added after review 2 and accepted by the owner; the
   owner approved the v0.15.2 release on the same day (D7).
+- 2026-09-12: released as 0.15.2 (tag at `8a46d22`; six crates published).
 - 2026-09-12: D11 added after review 3 of the release commit: the
   component crate packaged without its WIT; the contract moves inside
   the crate and a packaging check joins the gate. Release held until

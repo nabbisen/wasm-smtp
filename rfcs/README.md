@@ -16,9 +16,7 @@ lifecycle policy is defined in
 
 ## Accepted
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [024](./accepted/024-release-gate-integrity-toolchain-baseline.md) | Release gate integrity, toolchain baseline, and MSRV correction | P0 | [yes](./handoffs/024-release-gate-integrity/implementation-handoff.md) |
+_(empty)_
 
 ## Proposed
 
@@ -57,6 +55,7 @@ _(empty)_
 | [019](./done/019-streaming-data-bounded-memory.md) | Streaming DATA and bounded memory | v0.13.0 |
 | [020](./done/020-large-message-handling-memory-tests.md) | Large message handling and memory behavior tests | v0.11.0 |
 | [021](./done/021-no-std-alloc-feasibility.md) | no_std / alloc feasibility | v0.11.0 |
+| [024](./done/024-release-gate-integrity-toolchain-baseline.md) | Release gate integrity, toolchain baseline, and MSRV correction ([handoff](./handoffs/024-release-gate-integrity/implementation-handoff.md)) | 0.15.2 |
 
 ## Archive
 
@@ -64,4 +63,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 are implemented; 022–023 are drafts; 024 is accepted. The next RFC is **025**.
+RFC 000–021 and 024 are implemented; 022–023 are drafts. The next RFC is **025**.

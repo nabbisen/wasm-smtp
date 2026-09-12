@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 024: Release gate integrity, toolchain baseline, and MSRV correction
 
-**Governing RFC.** [`../../accepted/024-release-gate-integrity-toolchain-baseline.md`](../../accepted/024-release-gate-integrity-toolchain-baseline.md)
+**Governing RFC.** [`../../done/024-release-gate-integrity-toolchain-baseline.md`](../../done/024-release-gate-integrity-toolchain-baseline.md)
 **Target release.** v0.15.2 (patch). Release approval is the owner's; this handoff produces the release candidate.
 **Prepared.** 2026-09-12 by the architect. Baseline commit `04696b1`.
 **Review request goes to.** `.git-exclude/review-request/024-release-gate-integrity.md`
