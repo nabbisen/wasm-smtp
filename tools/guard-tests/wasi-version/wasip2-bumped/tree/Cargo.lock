@@ -1,0 +1,12 @@
+version = 4
+
+[[package]]
+name = "wasi"
+version = "0.14.7+wasi-0.2.4"
+dependencies = [
+ "wasip2",
+]
+
+[[package]]
+name = "wasip2"
+version = "1.0.5+wasi-0.2.13"

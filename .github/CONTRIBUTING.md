@@ -88,6 +88,9 @@ cargo check -p wasm-smtp-cloudflare --examples --target wasm32-unknown-unknown
 # The WASI minor the component declares must be the one the lockfile
 # resolves. Re-vendoring wit/deps/ is what a failure here asks for.
 ./tools/check-wasi-version.sh
+
+# The two guards above, against fixture trees covering every branch.
+./tools/guard-tests/run.sh
 cargo test -p wasm-smtp-cloudflare --examples   # example tests are not run by --workspace
 
 # On-target: a real wasm32-wasip2 guest under wasmtime against a scripted

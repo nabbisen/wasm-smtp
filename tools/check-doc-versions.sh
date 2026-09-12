@@ -16,6 +16,23 @@
 # Only `major.minor` is compared, so a patch release does not invalidate
 # the documentation.
 #
+# What is scanned: `README.md`, `docs/src/**/*.md`, `crates/*/README.md`,
+# and `tools/*/README.md` — everything a reader copies a dependency line
+# out of. Two things are left out on purpose, and neither is an oversight:
+#
+#   - `CHANGELOG.md`, whose version strings are history. "moves to 0.5"
+#     in the 0.17.0 entry is true forever and must not be "corrected".
+#   - `rfcs/`, for the same reason: an RFC records what was decided at the
+#     version it was decided.
+#
+# The tokio chapter keeps one TOML block of dependency lines, comparing
+# four feature configurations, where every other chapter moved to
+# `cargo add`. That block is intentional live coverage: it reads better
+# as one block, and it is the input that keeps this check's own-crate
+# branch exercised against the real book between releases.
+#
+# The fixture tests in `tools/guard-tests/` exercise every branch.
+#
 # Usage: tools/check-doc-versions.sh [root]
 # Exits 0 and prints nothing when clean; prints `file:line: found …,
 # expected …` per violation and exits 1 otherwise.

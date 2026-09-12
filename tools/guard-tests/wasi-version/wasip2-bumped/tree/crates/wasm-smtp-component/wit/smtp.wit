@@ -1,0 +1,6 @@
+package wasm-smtp:smtp@0.1.0;
+
+world smtp-client {
+    import wasi:sockets/tcp@0.2.12;
+    import wasi:io/streams@0.2.12;
+}

@@ -1,0 +1,4 @@
+README.md:1: found "0.16", expected "0.17"
+crates/wasm-smtp-wasi/README.md:1: found "0.15.2", expected "0.17"
+docs/src/core/usage.md:1: found "0.8", expected "0.17"
+tools/smoke/README.md:1: found "0.1", expected "0.17"

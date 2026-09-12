@@ -78,6 +78,11 @@ jobs:
       - name: Check the declared WASI version
         run: ./tools/check-wasi-version.sh
 
+      # The two checks above, checked. Each was shown failing once by hand;
+      # these fixtures keep showing it, one minimal tree per branch.
+      - name: Guard fixture tests
+        run: ./tools/guard-tests/run.sh
+
       # Examples carry tests of their own (the contact-form header guard);
       # `cargo test --workspace` builds examples but does not run those.
       - name: Test examples

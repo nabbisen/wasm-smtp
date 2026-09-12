@@ -1,0 +1,5 @@
+[workspace.package]
+version = "0.17.2"
+
+[workspace.dependencies]
+mail-builder = { git = "https://example.invalid/mail-builder" }

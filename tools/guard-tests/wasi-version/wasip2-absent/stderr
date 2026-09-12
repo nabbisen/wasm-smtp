@@ -1,0 +1,4 @@
+check-wasi-version: no wasip2 package with +wasi-X.Y.Z metadata in Cargo.lock.
+  The component's WASI bindings reach it through the `wasi` facade crate. If that
+  is no longer true, this check needs rewriting against whatever replaced it — do
+  not fall back to `wasi`'s own version, which is the mistake this guards.

@@ -1,0 +1,8 @@
+[workspace]
+members = []
+
+[workspace.package]
+version = "0.17.2"
+
+[workspace.dependencies]
+mail-builder = { version = "0.5", default-features = false }

@@ -1,0 +1,5 @@
+[workspace.package]
+version.workspace = true
+
+[workspace.dependencies]
+mail-builder = { version = "0.5" }
