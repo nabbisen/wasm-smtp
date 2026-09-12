@@ -80,7 +80,9 @@ cargo package --list -p wasm-smtp-component | grep -q '^wit/smtp.wit$'
 cargo package --list -p wasm-smtp-component | grep -q '^wit/deps/sockets/tcp.wit$'
 
 # On-target: a real wasm32-wasip2 guest under wasmtime against a scripted
-# TLS SMTP responder on loopback. Needs wasmtime on PATH (or WASMTIME set).
+# TLS SMTP responder on loopback, in four modes — two positive and two
+# that prove an untrusted certificate is refused. Needs wasmtime on PATH
+# (or WASMTIME set).
 cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
 cargo run -p wasm-smtp-smoke
 

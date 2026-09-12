@@ -90,12 +90,20 @@ impl WasiStream {
     ///
     /// The loop has no iteration cap on purpose: a blocking read with no
     /// data and no close is a stalled peer, which is the caller's timeout
-    /// to impose, not this layer's.
+    /// to impose, not this layer's. It does wait on the stream's pollable
+    /// before retrying, which is what turns a host that returns empty
+    /// *without* having blocked into a wait rather than a spin burning CPU
+    /// budget on host calls until the next byte lands.
     pub(crate) fn read(&mut self, buf: &mut [u8]) -> Result<usize, WasiSmtpError> {
         loop {
             match self.reader.blocking_read(buf.len() as u64) {
-                // Not ready yet despite the name. Block again.
-                Ok(bytes) if bytes.is_empty() => continue,
+                // Not ready yet despite the name. Wait for readiness, then
+                // block again.
+                Ok(bytes) if bytes.is_empty() => {
+                    let pollable = self.reader.subscribe();
+                    poll(&[&pollable]);
+                    continue;
+                }
                 Ok(bytes) => {
                     let n = bytes.len().min(buf.len());
                     buf[..n].copy_from_slice(&bytes[..n]);

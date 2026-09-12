@@ -53,7 +53,12 @@ before.
   `wasm32-wasip2` guest under wasmtime against it, and asserts the
   session that actually crossed the wire — command order, dot-stuffing,
   and for STARTTLS that everything after the upgrade arrived inside TLS.
-  Both implicit-TLS and STARTTLS modes run on every CI change.
+  Four modes run on every CI change: implicit TLS, STARTTLS, and two
+  negative modes in which the guest is given a CA that did not sign the
+  server's certificate and must refuse the connection without speaking
+  SMTP — including proof that a refused upgrade does not fall back to the
+  plaintext channel. This discharges RFC 017's untrusted-certificate
+  acceptance criterion, which had never been verified on a host.
 - **`wasm_smtp_wasi::connect_smtp_starttls_with`**, mirroring the
   implicit-TLS pair. Without it a STARTTLS session cannot be pointed at a
   private or test CA.
@@ -72,6 +77,10 @@ before.
   idempotent, and I/O after close reports it.
 - RFC 010's advisory rule is amended to name `cargo audit` rather than
   `cargo deny`; licence checking is not in scope and one tool is enough.
+- `anyhow` moved 1.0.102 → 1.0.104 in the lockfile, clearing
+  RUSTSEC-2026-0190 (an unsoundness advisory). It reaches the lockfile
+  only through wit-bindgen's build-time tooling, so no published crate's
+  runtime graph was affected either way; `cargo audit` is now silent.
 
 ### Documentation
 

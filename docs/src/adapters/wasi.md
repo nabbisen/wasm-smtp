@@ -50,8 +50,22 @@ cargo build --target wasm32-wasip2 -p wasm-smtp-wasi --example smoke
 cargo run -p wasm-smtp-smoke
 ```
 
+Four modes run, and two of them are negative:
+
+| Mode | What it proves |
+|---|---|
+| `implicit` | a full implicit-TLS session, in order, dot-stuffed |
+| `starttls` | the same after an in-place upgrade, with everything from the second `EHLO` onward inside TLS |
+| `untrusted` | a certificate the guest's CA did not sign is refused, and no SMTP command is spoken |
+| `untrusted-starttls` | a refused upgrade does not fall back to the plaintext channel |
+
+The negative modes are the point of the exercise as much as the positive
+ones: a client that validated no certificate at all would produce a
+transcript identical to `implicit`, so only a run against a certificate it
+should reject can tell the two apart.
+
 It needs `wasmtime` on `PATH` (or `WASMTIME` pointing at it) and touches
-loopback only. The certificate is generated per run and nothing is
+loopback only. Both certificates are generated per run and nothing is
 committed.
 
 This is worth stating plainly: until 0.16.0 no code in this crate had

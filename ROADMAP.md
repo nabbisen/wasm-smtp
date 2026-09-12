@@ -440,8 +440,10 @@ executed on a `wasm32-wasip2` host — RFC 024 only got them compiling for
 it. Running them found three defects that compilation cannot.
 
 - ✅ **On-target smoke test in the gate.** A scripted TLS SMTP responder
-  on loopback, a real guest under wasmtime, both implicit-TLS and
-  STARTTLS, asserting the session that crossed the wire.
+  on loopback, a real guest under wasmtime, asserting the session that
+  crossed the wire — in four modes: implicit TLS, STARTTLS, and two
+  negative modes proving an untrusted certificate is refused and that a
+  failed upgrade does not fall back to plaintext.
 - ✅ **STARTTLS on WASI works.** It previously panicked on every upgrade.
 - ✅ **Reads no longer report a live connection as closed**, and the
   guest no longer traps when a connection is dropped.

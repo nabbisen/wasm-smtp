@@ -1,6 +1,8 @@
 # RFC 017 — WASI TLS strategy
 
 **Status.** Implemented (0.12.0)
+Amended by RFC 025 (0.16.0): the untrusted-certificate acceptance
+criterion is verified on-target by the smoke test.
 **Priority.** P2
 **Tracks.** WASI / TLS / Security
 **Touches.** `docs/src/wasi-tls.md`, `crates/wasm-smtp-wasi/` (future)
