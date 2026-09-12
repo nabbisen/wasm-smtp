@@ -8,6 +8,7 @@ members = [
     "crates/wasm-smtp-wasi",
     "crates/wasm-smtp-component",
     "tools/smoke",
+    "tools/component-smoke",
 ]
 
 [workspace.package]

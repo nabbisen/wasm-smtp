@@ -1,0 +1,33 @@
+[package]
+name = "wasm-smtp-component-smoke"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Executes the wasm-smtp Component Model export under a host (dev-only, never published)."
+# Test tooling, not a library. Never goes to crates.io.
+publish = false
+
+[[bin]]
+name = "wasm-smtp-component-smoke"
+path = "src/main.rs"
+
+[dependencies]
+# The scripted SMTP responder, shared with the adapter-level smoke test.
+wasm-smtp-smoke = { path = "../smoke" }
+rustls-pki-types = { workspace = true, features = ["std"] }
+
+# The host. Pinned to 38.0.4: its MSRV is exactly the 1.88.0 this workspace
+# pins, so the harness builds on the gate's toolchain without loosening
+# anything. Deliberately a different version from the wasmtime 27 CLI the
+# adapter smoke test uses — that one is whatever CI installs, this one is
+# what the component is linked against, and pinning them separately means a
+# bump to either is a visible decision.
+wasmtime = "=38.0.4"
+wasmtime-wasi = "=38.0.4"
+
+[lints]
+workspace = true

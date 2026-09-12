@@ -11,6 +11,12 @@ description = "On-target smoke-test driver for wasm-smtp-wasi (dev-only, never p
 # Test tooling, not a library. Never goes to crates.io.
 publish = false
 
+# The scripted responder is a library so that tools/component-smoke can
+# drive the same server rather than keeping a second copy of the script.
+[lib]
+name = "wasm_smtp_smoke"
+path = "src/lib.rs"
+
 [[bin]]
 name = "wasm-smtp-smoke"
 path = "src/main.rs"
