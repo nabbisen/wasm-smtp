@@ -160,3 +160,41 @@ shape and where it lives, the pinned `wasmtime` versions and why, S2's
 decision with the rejected alternative and its cost, what S3 guards and
 its demonstrated failure, changed files, gate results, and a proposed
 release version with the reasoning.
+
+---
+
+# Revision 2 — 2026-09-13, after review 1
+
+Review: `.git-exclude/reviewed/028-wasi-contract-alignment-review-1.md`.
+S1–S4 are approved with no corrections. Gate commands 17–19 and
+command 12's corrected path are accepted into the gate. The
+`ROADMAP.md` scope addition is kept.
+
+**Release decided: 0.17.2, a patch.** The reasoning is in the review
+§3; the short form is that the old declaration was never correct, so no
+working consumer configuration can break from correcting it, and the
+`wit/deps/` layout change came byte-identical from a newer upstream
+rather than from us. The WIT package stays at `wasm-smtp:smtp@0.1.0`
+deliberately: nothing a consumer writes changes.
+
+## S5 — Release commit (0.17.2)
+
+1. Workspace `version` and the five inter-crate pins to `0.17.2`.
+   Run both guards afterwards: `check-doc-versions.sh` compares
+   major.minor and should stay silent on a patch, and
+   `check-wasi-version.sh` is unaffected. If either speaks, fix what it
+   names.
+2. Replace "version pending release" in the `rfcs/done/018-*` and
+   `rfcs/done/024-*` amendment notes with `0.17.2`.
+3. `CHANGELOG.md`: a `[0.17.2]` section dated the release day, and the
+   comparison links. Worth stating plainly in it that the component's
+   built artifact is unchanged and that what moved was a declaration
+   that had never matched it — a reader comparing 0.17.1 and 0.17.2
+   artifacts should not have to infer that.
+4. Full gate, all twenty commands; evidence under
+   `.git-exclude/review-request/evidence/028/`.
+5. Commit as "Release 0.17.2". Stop — do not tag, push, or publish.
+
+Report the commit hash in
+`.git-exclude/review-request/028-wasi-contract-alignment-2.md`. Keep it
+short: this slice is a version bump and three text substitutions.
