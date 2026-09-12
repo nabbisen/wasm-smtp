@@ -437,13 +437,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    <https://nabbisen.github.io/wasm-smtp/>; the rustls floor is past the
    advisory; `mail-builder` 0.5 and `wit-bindgen` 0.62 are taken; the
    lockfile is current and deps.rs is clean.
-4. **WASI contract version alignment and component execution**
-   (RFC 028, accepted): the component has never executed. Run it under
-   a host first — which is cheaper than the RFC first assumed, since
-   the `wasm32-wasip2` target already emits a component — and let that
-   decide how to fix the mismatch between its declared WASI imports
-   (`@0.2.4`) and the artifact's (`@0.2.12`, plus `@0.2.3` from the
-   Rust standard library).
+4. ✅ **WASI contract version alignment and component execution**
+   (RFC 028, shipped 0.17.2): the component is built and executed under
+   a wasmtime 36 LTS host on every gate run; its declared WASI imports
+   now match the `wasip2` bindings it links, the standard library's own
+   `@0.2.3` interfaces are documented as inherent, and a gate check
+   fails if the declared minor drifts from the lockfile again.
 5. ✅ **Documentation version audit and guard** (RFC 029, shipped
    0.17.1): twenty stale dependency version strings corrected, the
    snippets restated as `cargo add` commands that carry no version, and

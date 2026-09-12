@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 028: WASI contract alignment and component execution
 
-**Governing RFC.** [`../../accepted/028-wasi-contract-version-alignment.md`](../../accepted/028-wasi-contract-version-alignment.md) — read its **Amendment** section first; two of the design's original assumptions are disproven there and the work order changed because of it.
+**Governing RFC.** [`../../done/028-wasi-contract-version-alignment.md`](../../done/028-wasi-contract-version-alignment.md) — read its **Amendment** section first; two of the design's original assumptions are disproven there and the work order changed because of it.
 **Prepared.** 2026-09-13 by the architect. Baseline: `ff3d07b` (0.17.1 released).
 **Starts.** Now. Accepted by the owner on 2026-09-13.
 **Target release.** Undecided, and deliberately so: what ships depends on what step 1 finds. Propose a version in the review request. Release approval is the owner's.

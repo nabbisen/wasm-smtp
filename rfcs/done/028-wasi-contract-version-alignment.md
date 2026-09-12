@@ -1,6 +1,6 @@
 # RFC 028 — WASI contract version alignment and component execution
 
-**Status.** Accepted
+**Status.** Implemented (0.17.2)
 **Priority.** P1
 **Tracks.** Component Model / WASI / Testing / CI
 **Touches.** `crates/wasm-smtp-component/wit/`, `crates/wasm-smtp-component/src/lib.rs`, `crates/wasm-smtp-component/Cargo.toml`, `tools/smoke/` or a new `tools/component-smoke/`, `.github/workflows/ci.yml`, `rfcs/done/018-*`, `rfcs/done/024-*` (amendment notes)
