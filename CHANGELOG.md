@@ -1,10 +1,21 @@
 ## [Unreleased]
 
+## [0.17.2] — 2026-09-13
+
 RFC 028. The `wasm-smtp-component` crate had shipped for three releases
 without ever being executed. It now runs in the gate, and what running
 it showed corrects both the contract it declares and the instructions
 for building it. No change to the `smtp-send` interface: no type, field,
 function, or the `wasm-smtp:smtp@0.1.0` package version.
+
+**The built component is byte-for-byte the same as 0.17.1's in what it
+imports.** Nothing about the artifact changed. What changed is the
+declaration of what a host must provide, which had never matched the
+artifact in the first place: the world said WASI 0.2.4 while the
+component has always imported 0.2.12 and 0.2.3. A host built to satisfy
+only the declaration could never have instantiated this component, so
+there is no working setup that this release breaks — only a false
+statement it stops making.
 
 ### Changed
 
@@ -1694,7 +1705,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.17.1...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.17.2...HEAD
+[0.17.2]: https://github.com/nabbisen/wasm-smtp/compare/0.17.1...0.17.2
 [0.17.1]: https://github.com/nabbisen/wasm-smtp/compare/0.17.0...0.17.1
 [0.17.0]: https://github.com/nabbisen/wasm-smtp/compare/0.16.1...0.17.0
 [0.16.1]: https://github.com/nabbisen/wasm-smtp/compare/0.16.0...0.16.1

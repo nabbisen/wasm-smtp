@@ -2466,7 +2466,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "getrandom 0.4.3",
  "hmac",
@@ -2479,7 +2479,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-cloudflare"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "getrandom 0.4.3",
  "serde",
@@ -2491,7 +2491,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-component"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "wasi 0.14.7+wasi-0.2.4",
  "wasm-smtp",
@@ -2502,7 +2502,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-component-smoke"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "rustls-pki-types",
  "wasm-smtp-smoke",
@@ -2512,7 +2512,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-smoke"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "rcgen",
  "rustls",
@@ -2521,14 +2521,14 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-test"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "wasm-smtp",
 ]
 
 [[package]]
 name = "wasm-smtp-tokio"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "rustls-native-certs",
  "rustls-pki-types",
@@ -2541,7 +2541,7 @@ dependencies = [
 
 [[package]]
 name = "wasm-smtp-wasi"
-version = "0.17.1"
+version = "0.17.2"
 dependencies = [
  "rustls",
  "rustls-native-certs",

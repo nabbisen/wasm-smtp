@@ -1,7 +1,7 @@
 # RFC 024 — Release gate integrity, toolchain baseline, and MSRV correction
 
 **Status.** Implemented (0.15.2)
-D8 amended by RFC 028 (version pending release): the vendored WASI
+D8 amended by RFC 028 (0.17.2): the vendored WASI
 packages and the world's import annotations move from `@0.2.4` to
 `@0.2.12`, and `wit/deps/` becomes three flat files. D8 assumed the
 declared minor had to match what the host provides; running the
