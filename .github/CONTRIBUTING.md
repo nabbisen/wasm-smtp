@@ -21,22 +21,29 @@ for both contributors and reviewers.
 ```text
 wasm-smtp/
 ├─ crates/
-│  ├─ wasm-smtp/              wasm-smtp: pure protocol engine, no I/O
+│  ├─ wasm-smtp/              pure protocol engine, no I/O
 │  ├─ wasm-smtp-cloudflare/   Cloudflare Workers socket adapter
-│  └─ wasm-smtp-tokio/        Tokio + rustls socket adapter
+│  ├─ wasm-smtp-tokio/        Tokio + rustls socket adapter
+│  ├─ wasm-smtp-wasi/         WASI 0.2 sockets adapter (wasm32-wasip2)
+│  ├─ wasm-smtp-component/    WASM Component Model export (wit/smtp.wit)
+│  └─ wasm-smtp-test/         mock Transport for tests
+├─ wit/                       the Component Model contract and its deps
 ├─ docs/src/                  long-form, mdBook-ready documentation
-└─ .github/                   policy and issue-template files
+├─ rfcs/                      design records; see rfcs/README.md
+└─ .github/                   policy, issue templates, CI workflow
 ```
 
 ## Code style
 
 - Rust 2024 edition. Stable Rust, MSRV declared in the workspace
   `Cargo.toml`.
-- Modern module style: do not introduce `mod.rs`. Each module is one
-  file at the same level as its parent.
-- Tests for the core crate live in `crates/core/src/tests.rs` and use
-  the in-tree synchronous mock transport. Do not introduce a runtime
-  dependency on `tokio`, `futures`, or any executor.
+- Modern module style: a module with submodules is a `foo.rs` next to a
+  `foo/` directory. Do not introduce `mod.rs`-only modules.
+- Tests live under `crates/<crate>/src/tests/` (or `src/tests.rs` for a
+  small crate), separate from the implementation, and use a synchronous
+  mock transport — `wasm-smtp-test` in this workspace. Do not introduce
+  a runtime dependency on `tokio`, `futures`, or any executor in the
+  core.
 - Keep `unsafe` out of the core. The workspace `Cargo.toml` enforces
   `unsafe_code = "forbid"`.
 - All public items must have a doc comment. Comments and documentation
