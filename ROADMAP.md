@@ -465,7 +465,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    lints fixed, including base64 with a new round-trip test; one pedantic
    lint allowed on eight impl blocks where no rewrite works on both
    toolchains; the job now reports every crate. No API or behaviour change.
-9. Further extension themes (channel binding, DSN, Component Model
+9. **Links that work where the documentation is published** (RFC 034,
+   proposed): relative links in the root README break on crates.io, ten
+   docs.rs links name pages rustdoc does not generate, and docs.rs omits
+   the core's feature-gated API. Fix them, publish the core's features on
+   docs.rs, and add an offline gate check for both link kinds.
+10. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 
 ## Phase 19 — WASI hardening and on-target verification *(0.16.0)*

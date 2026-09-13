@@ -22,7 +22,9 @@ lifecycle policy is defined in
 
 ## Proposed
 
-_(empty)_
+| ID | Title | Priority |
+|----|-------|----------|
+| [034](./proposed/034-published-documentation-links.md) | Links that work where the documentation is published | P1 |
 
 ## Draft
 
@@ -74,4 +76,4 @@ _(empty)_
 
 ---
 
-RFC 000–021, 024–029, 032 and 033 are implemented; 030 is accepted; 031 is superseded by 032; 022–023 are drafts. The next RFC is **034**.
+RFC 000–021, 024–029, 032 and 033 are implemented; 030 is accepted; 034 is proposed; 031 is superseded by 032; 022–023 are drafts. The next RFC is **035**.
