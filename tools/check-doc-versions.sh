@@ -7,18 +7,22 @@
 # the owner found one by hand. A constant that has to match a release is
 # something a machine should check (RFC 029 D2, D4).
 #
-# Two things are compared:
+# Three things are compared:
 #
 #   - any `wasm-smtp*` version, against `[workspace.package] version`;
 #   - any `mail-builder` version, against `[workspace.dependencies]`,
-#     because the composing chapter's advice depends on what we build.
+#     because the composing chapter's advice depends on what we build;
+#   - the minimum supported Rust version: any line containing `MSRV` or
+#     `Minimum supported Rust version` whose first `N.N` differs from
+#     `[workspace.package] rust-version` (RFC 034 D8). The book's
+#     Introduction and CONTRIBUTING.md each state it by hand.
 #
 # Only `major.minor` is compared, so a patch release does not invalidate
 # the documentation.
 #
 # What is scanned: `README.md`, `docs/src/**/*.md`, `crates/*/README.md`,
-# and `tools/*/README.md` — everything a reader copies a dependency line
-# out of. Two things are left out on purpose, and neither is an oversight:
+# `tools/*/README.md`, and `.github/CONTRIBUTING.md` — everything a reader
+# copies a dependency line out of, and every place the MSRV is stated. Two things are left out on purpose, and neither is an oversight:
 #
 #   - `CHANGELOG.md`, whose version strings are history. "moves to 0.5"
 #     in the 0.17.0 entry is true forever and must not be "corrected".
@@ -76,6 +80,17 @@ expected_mail_builder=$(awk '
     }
 ' "$manifest")
 
+# `[workspace.package] rust-version`, as major.minor.
+expected_rust=$(awk '
+    /^\[/ { section = $0 }
+    section == "[workspace.package]" && /^rust-version[ \t]*=/ {
+        if (match($0, /"[0-9]+\.[0-9]+/)) {
+            print substr($0, RSTART + 1, RLENGTH - 1)
+            exit
+        }
+    }
+' "$manifest")
+
 if [ -z "$expected_own" ]; then
     echo "check-doc-versions: could not read [workspace.package] version" >&2
     exit 2
@@ -84,12 +99,17 @@ if [ -z "$expected_mail_builder" ]; then
     echo "check-doc-versions: could not read mail-builder from [workspace.dependencies]" >&2
     exit 2
 fi
+if [ -z "$expected_rust" ]; then
+    echo "check-doc-versions: could not read [workspace.package] rust-version" >&2
+    exit 2
+fi
 
 # README, the book, and each crate's own README: everything a reader
 # copies a dependency line out of.
 files=$(
     {
         [ -f "$root/README.md" ] && echo "$root/README.md"
+        [ -f "$root/.github/CONTRIBUTING.md" ] && echo "$root/.github/CONTRIBUTING.md"
         find "$root/docs/src" -name '*.md' -type f 2>/dev/null
         find "$root/crates" -maxdepth 2 -name 'README.md' -type f 2>/dev/null
         find "$root/tools" -maxdepth 2 -name 'README.md' -type f 2>/dev/null
@@ -102,9 +122,20 @@ for file in $files; do
     # relative path is what an editor or a CI annotation wants.
     rel=${file#"$root/"}
     output=$(
-        awk -v own="$expected_own" -v mb="$expected_mail_builder" -v path="$rel" '
+        awk -v own="$expected_own" -v mb="$expected_mail_builder" -v rust="$expected_rust" -v path="$rel" '
             {
                 line = $0
+                # A line stating the MSRV: its first N.N is the version it
+                # states (RFC 034 D8).
+                if (index(line, "MSRV") || index(line, "Minimum supported Rust version")) {
+                    if (match(line, /[0-9]+\.[0-9]+/)) {
+                        stated = substr(line, RSTART, RLENGTH)
+                        if (stated != rust) {
+                            printf "%s:%d: found \"%s\", expected \"%s\"\n", \
+                                path, NR, stated, rust
+                        }
+                    }
+                }
                 # A dependency line names the crate, then an "=", then a
                 # version either directly or inside an inline table. The
                 # leading "#" of a commented-out alternative is fine: a
