@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 034: Links that work where the documentation is published
 
-**Governing RFC.** [`../../accepted/034-published-documentation-links.md`](../../accepted/034-published-documentation-links.md). Read *Decisions at acceptance* and the *Amendment* first.
+**Governing RFC.** [`../../done/034-published-documentation-links.md`](../../done/034-published-documentation-links.md). Read *Decisions at acceptance* and the *Amendment* first.
 **Prepared.** 2026-09-13 by the architect.
 **Starts.** Now.
 **Target release.** **0.18.0**, before it is tagged. The release commit is redone as the last commit (S13). Release approval remains the owner's.

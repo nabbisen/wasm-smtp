@@ -463,12 +463,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    lints fixed, including base64 with a new round-trip test; one pedantic
    lint allowed on eight impl blocks where no rewrite works on both
    toolchains; the job now reports every crate. No API or behaviour change.
-9. **Links that work where the documentation is published** (RFC 034,
-   accepted, before 0.18.0): relative links in the root README break on
-   crates.io; ten docs.rs links and four intra-doc links name pages that
-   do not exist; docs.rs omits the core's feature-gated API and every
-   function of the WASI adapter. Fix them, publish the right features and
-   target on docs.rs, and gate both link kinds offline.
+9. ✅ **Links that work where the documentation is published** (RFC 034,
+   shipped 0.18.0): links resolve on crates.io and docs.rs, verified after
+   publishing; docs.rs documents the core's feature-gated API and every
+   WASI adapter function; the README's first screen leads with the
+   documentation and acceptable use; and three gate commands keep links,
+   intra-doc links, and the stated MSRV from drifting again.
 10. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 

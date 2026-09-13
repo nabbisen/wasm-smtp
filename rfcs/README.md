@@ -16,9 +16,7 @@ lifecycle policy is defined in
 
 ## Accepted
 
-| ID | Title | Priority | Handoff |
-|----|-------|----------|---------|
-| [034](./accepted/034-published-documentation-links.md) | Links that work where the documentation is published | P1 | [yes](./handoffs/034-published-documentation-links/implementation-handoff.md) |
+_(empty)_
 
 ## Proposed
 
@@ -66,6 +64,7 @@ _(empty)_
 | [030](./done/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface ([handoff](./handoffs/030-component-trust-anchor-configuration/implementation-handoff.md)) | 0.18.0 |
 | [032](./done/032-verification-coverage.md) | Verification coverage: what the gate does not yet reach ([handoff](./handoffs/032-verification-coverage/implementation-handoff.md)) | 0.18.0 |
 | [033](./done/033-stable-toolchain-lint-currency.md) | Stable-toolchain lint currency ([handoff](./handoffs/033-stable-toolchain-lint-currency/implementation-handoff.md)) | 0.18.0 |
+| [034](./done/034-published-documentation-links.md) | Links that work where the documentation is published ([handoff](./handoffs/034-published-documentation-links/implementation-handoff.md)) | 0.18.0 |
 
 ## Archive
 
@@ -75,4 +74,4 @@ _(empty)_
 
 ---
 
-RFC 000–021 and 024–033 are implemented, except 031, which is superseded by 032; 034 is accepted; 022–023 are drafts. The next RFC is **035**.
+RFC 000–021 and 024–034 are implemented, except 031, which is superseded by 032; 022–023 are drafts. The next RFC is **035**.

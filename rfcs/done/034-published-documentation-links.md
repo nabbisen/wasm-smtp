@@ -1,11 +1,27 @@
 # RFC 034 — Links that work where the documentation is published
 
-**Status.** Accepted (owner, 2026-09-13)
+**Status.** Implemented (0.18.0)
 **Handoff.** [`../handoffs/034-published-documentation-links/implementation-handoff.md`](../handoffs/034-published-documentation-links/implementation-handoff.md)
 **Priority.** P1
 **Tracks.** Documentation / CI
 **Touches.** `README.md`, `crates/wasm-smtp-cloudflare/src/lib.rs` (one rustdoc link), `docs/src/{adapters/wasi,concepts/protocol,concepts/security,core/usage}.md`, `CHANGELOG.md` (two link targets), `crates/wasm-smtp/src/{client/send.rs,client/starttls.rs,message_body.rs}` (four intra-doc links), `crates/{wasm-smtp,wasm-smtp-wasi}/Cargo.toml` (`[package.metadata.docs.rs]`), a new check under `tools/` with fixtures, `.github/workflows/ci.yml`, `.github/CONTRIBUTING.md`
 **Origin.** The owner found four broken links on <https://crates.io/crates/wasm-smtp> on 2026-09-13 and suspected relative paths. The architect confirmed the cause and found the same class of defect in more places.
+
+## Verified after publishing (2026-09-13)
+
+- **crates.io.** On the three shared-README pages (`wasm-smtp`,
+  `wasm-smtp-tokio`, `wasm-smtp-cloudflare`) at 0.18.0, every link
+  resolves: License, `TERMS_OF_USE.md`, the published book, the
+  `Transport` docs.rs link, and the badges.
+- **docs.rs, D3.** `wasm-smtp` 0.18.0 documents `send_mail_smtputf8` and
+  `protocol::validate_address_utf8`. Neither page had existed before.
+- **docs.rs, D2.** `transport/trait.Transport.html` and
+  `client/struct.SmtpClient.html` return 200.
+- **docs.rs, D6.** `wasm-smtp-wasi` 0.18.0's landing page lists all four
+  connect functions. `fn.connect_smtps.html` returns 200 for 0.18.0 and
+  `latest`; 0.17.2 listed none. The one premise only publishing could
+  verify, that docs.rs cross-compiles this crate for `wasm32-wasip2`,
+  holds.
 
 ## Decisions at acceptance
 
