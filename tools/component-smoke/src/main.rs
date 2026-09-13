@@ -1,16 +1,11 @@
 //! Executes the `wasm-smtp-component` artifact under a real host
-//! (RFC 028 S1).
+//! (RFC 028 S1, RFC 030 S4).
 //!
-//! The component has shipped since 0.14.0 and, until this harness, had
-//! never run. It was compiled for `wasm32-wasip2` and its packaged
-//! contents were checked, but nothing ever instantiated it or called its
-//! `smtp-send.send` export. Everything known about its behaviour came
-//! from reading it.
-//!
-//! This harness closes that gap the same way `tools/smoke` closed it for
-//! the WASI adapter: start the scripted TLS-terminated SMTP responder on
-//! loopback, run the real thing against it, and assert the transcript the
-//! responder recorded rather than that a call returned `Ok`.
+//! The component shipped from 0.14.0 without ever being instantiated;
+//! RFC 028 added this harness to run it. It starts the scripted
+//! TLS-terminated SMTP responder on loopback, runs the real artifact
+//! against it, and asserts the transcript the responder recorded rather
+//! than that a call returned `Ok`.
 //!
 //! ```text
 //! cargo build --target wasm32-wasip2 -p wasm-smtp-component
@@ -19,26 +14,21 @@
 //!
 //! `COMPONENT_WASM` overrides the artifact path.
 //!
-//! ## What this asserts, and what it cannot
+//! ## Cases
 //!
-//! The component builds its TLS trust anchors from the WASI adapter's
-//! defaults — the bundled Mozilla root set — and `smtp-config` has no
-//! field for a trust anchor: it carries host, port, EHLO domain, and TLS
-//! mode, and nothing else. A run-generated CA therefore cannot reach the
-//! guest through the interface, so a scripted responder with a self-signed
-//! certificate cannot complete a handshake with it.
+//! RFC 030 gave the interface a trust-anchor choice, so the run's own CA
+//! can now reach the guest and the success path is asserted end to end:
 //!
-//! What that leaves is the negative property, which is the one worth
-//! having anyway: the component instantiates under a real host, its
-//! `smtp-send.send` export runs end to end, it reaches the network,
-//! validates the server certificate, refuses one it cannot chain, and
-//! reports the refusal as a well-formed `send-error` rather than trapping,
-//! hanging, or succeeding. That is the same property RFC 025's `untrusted`
-//! smoke mode proves for the adapter, now proven through the component's
-//! own export.
-//!
-//! Asserting the full positive transcript needs a decision about the
-//! interface or the build; see the RFC 028 review request.
+//! - `custom-implicit` and `custom-starttls`: an `smtp-config` whose
+//!   `custom` trust anchors hold exactly the run's CA. The send must
+//!   succeed, and the transcript must be the one SMTP requires — the same
+//!   assertions the adapter smoke test makes, from the shared library.
+//! - `bundled-refused`: `bundled` trusts only the Mozilla roots, which did
+//!   not sign the run's certificate. The handshake must be refused, with a
+//!   certificate error, and no SMTP command may reach the responder.
+//! - `private-key-create`: `create` given the run's private key as
+//!   `custom` must fail with `invalid-input`, and the error, captured here
+//!   on the host side, must contain nothing from the key.
 //!
 //! The guest is given `127.0.0.1` and a certificate carrying an IP SAN,
 //! for the reason `tools/smoke` documents: resolving `localhost` inside a
@@ -46,12 +36,14 @@
 //! resolution order.
 
 use std::net::{Ipv4Addr, SocketAddr, TcpListener};
-use std::path::PathBuf;
-use std::sync::mpsc;
+use std::path::{Path, PathBuf};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use wasm_smtp_smoke::{Recording, check_refused, generate_cert, serve_implicit, server_config};
+use wasm_smtp_smoke::{
+    Expected, Recording, check_refused, check_session, generate_cert, serve_implicit,
+    serve_starttls, server_config,
+};
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
 use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiCtxView, WasiView};
@@ -76,8 +68,12 @@ use bindings::exports::wasm_smtp::smtp::smtp_send;
 /// Generous, because a debug-build guest under a cold host is not fast.
 const ACCEPT_TIMEOUT: Duration = Duration::from_secs(30);
 
-/// The domain the component is told to announce.
-const EHLO: &str = "component.example.com";
+/// The session the component is told to send.
+const EXPECTED: Expected<'static> = Expected {
+    ehlo: "component.example.com",
+    from: "smoke@example.com",
+    rcpt: "rcpt@example.org",
+};
 
 /// Host state: WASI plus the resource table the component model needs.
 struct Host {
@@ -94,113 +90,242 @@ impl WasiView for Host {
     }
 }
 
-fn main() {
-    match run() {
-        Ok(()) => println!("PASS  component"),
-        Err(e) => {
-            println!("FAIL  component: {e}");
-            std::process::exit(1);
+#[derive(Clone, Copy)]
+enum Case {
+    CustomImplicit,
+    CustomStartTls,
+    BundledRefused,
+    PrivateKeyCreate,
+}
+
+impl Case {
+    const ALL: [Case; 4] = [
+        Case::CustomImplicit,
+        Case::CustomStartTls,
+        Case::BundledRefused,
+        Case::PrivateKeyCreate,
+    ];
+
+    fn name(self) -> &'static str {
+        match self {
+            Case::CustomImplicit => "custom-implicit",
+            Case::CustomStartTls => "custom-starttls",
+            Case::BundledRefused => "bundled-refused",
+            Case::PrivateKeyCreate => "private-key-create",
         }
     }
 }
 
-fn run() -> Result<(), String> {
+fn main() {
     let wasm = std::env::var("COMPONENT_WASM").map_or_else(
         |_| PathBuf::from("target/wasm32-wasip2/debug/wasm_smtp_component.wasm"),
         PathBuf::from,
     );
     if !wasm.exists() {
-        return Err(format!(
-            "component not found at {}\nbuild it first: \
+        eprintln!(
+            "component-smoke: component not found at {}\nbuild it first: \
              cargo build --target wasm32-wasip2 -p wasm-smtp-component",
             wasm.display()
-        ));
+        );
+        std::process::exit(2);
     }
 
-    let (cert_pem, key_pem) = generate_cert()?;
-    let tls_config = server_config(&cert_pem, &key_pem)?;
+    let mut failures = 0;
+    for case in Case::ALL {
+        match run_case(case, &wasm) {
+            Ok(()) => println!("PASS  {}", case.name()),
+            Err(e) => {
+                println!("FAIL  {}: {e}", case.name());
+                failures += 1;
+            }
+        }
+    }
+    if failures > 0 {
+        eprintln!("component-smoke: {failures} case(s) failed");
+        std::process::exit(1);
+    }
+}
 
+fn run_case(case: Case, wasm: &Path) -> Result<(), String> {
+    // A fresh certificate per case, so no case can pass on another's state.
+    let (cert_pem, key_pem) = generate_cert()?;
+    match case {
+        Case::CustomImplicit => positive(wasm, false, &cert_pem, &key_pem),
+        Case::CustomStartTls => positive(wasm, true, &cert_pem, &key_pem),
+        Case::BundledRefused => refused(wasm, &cert_pem, &key_pem),
+        Case::PrivateKeyCreate => private_key_create(wasm, &key_pem),
+    }
+}
+
+/// `custom` holding the run's CA: the send succeeds with the full
+/// transcript.
+fn positive(wasm: &Path, starttls: bool, cert_pem: &str, key_pem: &str) -> Result<(), String> {
+    let tls_mode = if starttls {
+        smtp_send::TlsMode::Starttls
+    } else {
+        smtp_send::TlsMode::Implicit
+    };
+    let trust = smtp_send::TrustAnchors::Custom(cert_pem.to_owned());
+    let (outcome, recording, responder) =
+        with_responder(wasm, starttls, cert_pem, key_pem, tls_mode, &trust)?;
+
+    responder.map_err(|e| {
+        format!(
+            "responder: {e}; send returned {outcome:?}; recorded {:?}",
+            recording.commands()
+        )
+    })?;
+    match outcome {
+        Outcome::Ok(250) => {}
+        other => {
+            return Err(format!(
+                "expected send to succeed with 250, got {other:?}; recorded {:?}",
+                recording.commands()
+            ));
+        }
+    }
+    check_session(&recording, starttls, &EXPECTED)
+}
+
+/// `bundled` against the run's certificate: refused before any SMTP.
+fn refused(wasm: &Path, cert_pem: &str, key_pem: &str) -> Result<(), String> {
+    let (outcome, recording, _responder) = with_responder(
+        wasm,
+        false,
+        cert_pem,
+        key_pem,
+        smtp_send::TlsMode::Implicit,
+        &smtp_send::TrustAnchors::Bundled,
+    )?;
+    // A responder-side error is the expected outcome here: the guest hangs
+    // up on it when the certificate does not validate. The recording is what
+    // matters, and `check_refusal` decides.
+    check_refusal(&outcome, &recording)
+}
+
+/// `create` with the run's private key as `custom`: `invalid-input`, and
+/// nothing from the key in the message.
+fn private_key_create(wasm: &Path, key_pem: &str) -> Result<(), String> {
+    // No network for this case: it must fail before a connection could
+    // exist, so the host permits none.
+    let (mut store, client) = instantiate(wasm, None)?;
+    let created = client
+        .wasm_smtp_smtp_smtp_send()
+        .smtp_config()
+        .call_create(
+            &mut store,
+            "127.0.0.1",
+            465,
+            EXPECTED.ehlo,
+            smtp_send::TlsMode::Implicit,
+            &smtp_send::TrustAnchors::Custom(key_pem.to_owned()),
+        )
+        .map_err(|e| format!("smtp-config.create trapped: {e:?}"))?;
+    let message = match created {
+        Err(smtp_send::SendError::InvalidInput(message)) => message,
+        Err(other) => return Err(format!("expected invalid-input, got {other:?}")),
+        Ok(config) => {
+            let _ = config.resource_drop(&mut store);
+            return Err("a private key was accepted as a trust anchor".to_owned());
+        }
+    };
+    check_no_echo(&message, key_pem)
+}
+
+/// What the component's `send` returned.
+#[derive(Debug)]
+enum Outcome {
+    Ok(u16),
+    Err(String),
+}
+
+/// Serve one scripted session on loopback while the component creates a
+/// configuration and sends through it once.
+fn with_responder(
+    wasm: &Path,
+    starttls: bool,
+    cert_pem: &str,
+    key_pem: &str,
+    tls_mode: smtp_send::TlsMode,
+    trust: &smtp_send::TrustAnchors,
+) -> Result<(Outcome, Recording, Result<(), String>), String> {
     let listener = TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, 0)))
         .map_err(|e| format!("bind failed: {e}"))?;
     let port = listener
         .local_addr()
         .map_err(|e| format!("local_addr failed: {e}"))?
         .port();
+    let responder = spawn_responder(listener, starttls, cert_pem, key_pem)?;
 
-    // One connection, one scripted session, on its own thread so the guest
-    // can run while the responder talks.
-    // The listener does not block indefinitely: if the guest never connects
-    // — which is what a component that failed before reaching the network
-    // would do — the harness has to fail rather than hang.
+    let sent = create_and_send(wasm, port, tls_mode, trust);
+
+    let (recording, responder_result) = responder
+        .join()
+        .map_err(|_| "responder thread panicked".to_owned())?;
+    // The guest's failure is the more informative one when both fail: a
+    // responder error usually means the guest never got far enough to talk.
+    let outcome = sent.map_err(|e| {
+        format!(
+            "{e}\n--- responder ---\n{responder_result:?}\n--- recorded ---\n{:?}",
+            recording.commands()
+        )
+    })?;
+    Ok((outcome, recording, responder_result))
+}
+
+type Responder = thread::JoinHandle<(Recording, Result<(), String>)>;
+
+/// One connection, one scripted session, on its own thread so the guest
+/// can run while the responder talks. The listener does not block
+/// indefinitely: a guest that never connects has to fail the case rather
+/// than hang it.
+fn spawn_responder(
+    listener: TcpListener,
+    starttls: bool,
+    cert_pem: &str,
+    key_pem: &str,
+) -> Result<Responder, String> {
+    let tls_config = server_config(cert_pem, key_pem)?;
     listener
         .set_nonblocking(true)
         .map_err(|e| format!("set_nonblocking failed: {e}"))?;
-
-    let (tx, rx) = mpsc::channel();
-    let responder = thread::spawn(move || {
-        let deadline = std::time::Instant::now() + ACCEPT_TIMEOUT;
-        let outcome = loop {
+    Ok(thread::spawn(move || {
+        let deadline = Instant::now() + ACCEPT_TIMEOUT;
+        loop {
             match listener.accept() {
                 Ok((sock, _)) => {
                     // Hand the accepted socket back to blocking mode; the
                     // responder is written against a blocking stream.
                     if let Err(e) = sock.set_nonblocking(false) {
-                        break (
+                        return (
                             Recording::default(),
                             Err(format!("set_blocking failed: {e}")),
                         );
                     }
-                    break serve_implicit(sock, tls_config);
+                    return if starttls {
+                        serve_starttls(sock, tls_config)
+                    } else {
+                        serve_implicit(sock, tls_config)
+                    };
                 }
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
-                    if std::time::Instant::now() >= deadline {
-                        break (
+                    if Instant::now() >= deadline {
+                        return (
                             Recording::default(),
                             Err("the guest never connected".to_owned()),
                         );
                     }
-                    thread::sleep(std::time::Duration::from_millis(20));
+                    thread::sleep(Duration::from_millis(20));
                 }
-                Err(e) => break (Recording::default(), Err(format!("accept failed: {e}"))),
+                Err(e) => return (Recording::default(), Err(format!("accept failed: {e}"))),
             }
-        };
-        let _ = tx.send(());
-        outcome
-    });
-
-    let call_result = call_send(&wasm, port, &cert_pem);
-
-    let _ = rx.recv_timeout(std::time::Duration::from_secs(30));
-    let (recording, responder_result) = responder
-        .join()
-        .map_err(|_| "responder thread panicked".to_owned())?;
-
-    // The guest's failure is the more informative one when both fail: a
-    // responder error usually means the guest never got far enough to talk.
-    let outcome = call_result.map_err(|e| {
-        format!(
-            "{e}\n--- responder ---\n{:?}\n--- recorded ---\n{:?}",
-            responder_result,
-            recording.commands()
-        )
-    })?;
-
-    // A responder-side error is the expected outcome here: the guest hangs
-    // up on it when the certificate does not validate. The recording is what
-    // matters, and `check` decides.
-    let _ = responder_result;
-
-    check(&outcome, &recording)
+        }
+    }))
 }
 
-/// What the component's `send` returned.
-enum Outcome {
-    Ok(u16),
-    Err(String),
-}
-
-/// Instantiate the component and call `smtp-send.send` once.
-fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String> {
+/// Instantiate the component. `port` is the one loopback port it may
+/// reach; `None` permits no network at all.
+fn instantiate(wasm: &Path, port: Option<u16>) -> Result<(Store<Host>, SmtpClient), String> {
     let mut config = Config::new();
     config.wasm_component_model(true);
     let engine = Engine::new(&config).map_err(|e| format!("engine: {e:?}"))?;
@@ -224,17 +349,20 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
     wasmtime_wasi::p2::add_to_linker_sync(&mut linker)
         .map_err(|e| format!("adding WASI to the linker failed: {e:?}"))?;
 
-    // Loopback only, and the CA the responder is using. No inherited
-    // network, no filesystem: the component needs neither.
-    let ctx = WasiCtxBuilder::new()
-        .inherit_stderr()
-        .allow_ip_name_lookup(true)
-        .allow_tcp(true)
-        .socket_addr_check(move |addr, _| {
-            let allowed = addr.ip().is_loopback() && addr.port() == port;
-            Box::pin(async move { allowed })
-        })
-        .build();
+    // Loopback only, and only the responder's port. No inherited network,
+    // no filesystem: the component needs neither.
+    let mut builder = WasiCtxBuilder::new();
+    builder.inherit_stderr();
+    if let Some(port) = port {
+        builder
+            .allow_ip_name_lookup(true)
+            .allow_tcp(true)
+            .socket_addr_check(move |addr, _| {
+                let allowed = addr.ip().is_loopback() && addr.port() == port;
+                Box::pin(async move { allowed })
+            });
+    }
+    let ctx = builder.build();
 
     let mut store = Store::new(
         &engine,
@@ -243,27 +371,36 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
             table: ResourceTable::new(),
         },
     );
-
-    let bindings = SmtpClient::instantiate(&mut store, &component, &linker)
+    let client = SmtpClient::instantiate(&mut store, &component, &linker)
         .map_err(|e| format!("instantiating the component failed: {e:?}"))?;
+    Ok((store, client))
+}
 
-    let api = bindings.wasm_smtp_smtp_smtp_send();
+/// Create a configuration, send one message through it, and drop it.
+fn create_and_send(
+    wasm: &Path,
+    port: u16,
+    tls_mode: smtp_send::TlsMode,
+    trust: &smtp_send::TrustAnchors,
+) -> Result<Outcome, String> {
+    let (mut store, client) = instantiate(wasm, Some(port))?;
+    let api = client.wasm_smtp_smtp_smtp_send();
 
-    // The configuration is a resource validated once, at creation (RFC 030
-    // D1). `bundled` trusts only the adapter's Mozilla roots, which did not
-    // sign the run's certificate, so the handshake below must be refused.
+    // Validated once, at creation (RFC 030 D1). A valid configuration must
+    // be accepted in every case this function serves.
     let config = api
         .smtp_config()
         .call_create(
             &mut store,
             "127.0.0.1",
             port,
-            EHLO,
-            smtp_send::TlsMode::Implicit,
-            &smtp_send::TrustAnchors::Bundled,
+            EXPECTED.ehlo,
+            tls_mode,
+            trust,
         )
         .map_err(|e| format!("smtp-config.create trapped: {e:?}"))?
         .map_err(|e| format!("smtp-config.create rejected a valid configuration: {e:?}"))?;
+
     let credentials = smtp_send::SmtpCredentials {
         username: "smoke@example.com".to_owned(),
         password: "secret".to_owned(),
@@ -271,8 +408,8 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
     // A leading-dot line, so the responder can prove the component
     // dot-stuffed on the wire rather than trusting that it does.
     let message = smtp_send::SmtpMessage {
-        from: "smoke@example.com".to_owned(),
-        to: vec!["rcpt@example.org".to_owned()],
+        from: EXPECTED.from.to_owned(),
+        to: vec![EXPECTED.rcpt.to_owned()],
         raw_message: "From: smoke@example.com\r\n\
                       To: rcpt@example.org\r\n\
                       Subject: component smoke\r\n\
@@ -282,9 +419,6 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
                       last line\r\n"
             .to_owned(),
     };
-
-    // The run's CA is not used here: this case proves `bundled` refuses it.
-    let _ = ca_pem;
 
     let sent = api
         .call_send(&mut store, config, &credentials, &message)
@@ -296,10 +430,10 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
         .resource_drop(&mut store)
         .map_err(|e| format!("dropping smtp-config failed: {e:?}"))?;
 
-    match sent {
-        Ok(result) => Ok(Outcome::Ok(result.reply_code)),
-        Err(e) => Ok(Outcome::Err(format!("{e:?}"))),
-    }
+    Ok(match sent {
+        Ok(result) => Outcome::Ok(result.reply_code),
+        Err(e) => Outcome::Err(format!("{e:?}")),
+    })
 }
 
 /// Assert the component refused a certificate it could not chain, and did
@@ -308,7 +442,7 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
 /// Three things, and the third is the one a weaker test would miss: a
 /// component that skipped validation would have completed the handshake
 /// and spoken SMTP to a server holding a certificate signed by nobody.
-fn check(outcome: &Outcome, rec: &Recording) -> Result<(), String> {
+fn check_refusal(outcome: &Outcome, rec: &Recording) -> Result<(), String> {
     let code = match outcome {
         Outcome::Ok(code) => {
             return Err(format!(
@@ -336,26 +470,46 @@ fn check(outcome: &Outcome, rec: &Recording) -> Result<(), String> {
     // authenticated. The same assertion the adapter smoke test's untrusted
     // mode and the tokio adapter's refused case make, from the shared
     // library; implicit TLS, so nothing at all is allowed.
-    check_refused(rec, false, EHLO)
+    check_refused(rec, false, EXPECTED.ehlo)
         .map_err(|e| format!("no SMTP command may cross an unvalidated channel: {e}"))?;
 
     Ok(())
 }
 
-// ── Self-tests for the checker ────────────────────────────────────────────
+/// Assert an error message contains nothing from a private key: no line of
+/// its PEM, no 16-character run of its base64, and not its label.
+fn check_no_echo(message: &str, key_pem: &str) -> Result<(), String> {
+    for line in key_pem.lines().filter(|l| !l.trim().is_empty()) {
+        if message.contains(line) {
+            return Err(format!("the error repeats a line of the key: {message}"));
+        }
+    }
+    let body: String = key_pem
+        .lines()
+        .filter(|l| !l.starts_with("-----"))
+        .collect();
+    for window in body.as_bytes().windows(16) {
+        let window = std::str::from_utf8(window).map_err(|_| "key PEM is not ASCII")?;
+        if message.contains(window) {
+            return Err(format!("the error repeats key material: {message}"));
+        }
+    }
+    if message.contains("PRIVATE KEY") {
+        return Err(format!("the error repeats the key's label: {message}"));
+    }
+    Ok(())
+}
+
+// ── Self-tests for the checkers ───────────────────────────────────────────
 //
-// `check` is the whole assertion of this harness, so it gets the same
-// treatment the things it guards get: it is shown failing, on inputs
-// chosen to be the ways it could be wrong. A checker that cannot fail
-// passes every run and means nothing.
-//
-// These cover the three properties from synthetic inputs; the end-to-end
-// demonstration is in the RFC 028 review request, where a build that
-// trusted the responder's certificate produced exactly the first case
-// below against a live responder.
+// `check_refusal` and `check_no_echo` are the assertions of two of the four
+// cases, so each is shown failing on inputs chosen to be the ways it could be
+// wrong. A checker that cannot fail passes every run and means nothing. The
+// positive cases' assertions are `check_session`, self-tested in the shared
+// library.
 #[cfg(test)]
 mod tests {
-    use super::{Outcome, check};
+    use super::{Outcome, check_no_echo, check_refusal};
     use wasm_smtp_smoke::{Leg, Recording};
 
     fn recording(lines: &[&str]) -> Recording {
@@ -369,7 +523,7 @@ mod tests {
     /// through. A harness that only asserted "it ran" would pass here.
     #[test]
     fn a_successful_send_is_a_failure() {
-        let e = check(&Outcome::Ok(250), &recording(&["EHLO x", "QUIT"])).unwrap_err();
+        let e = check_refusal(&Outcome::Ok(250), &recording(&["EHLO x", "QUIT"])).unwrap_err();
         assert!(e.contains("did not validate"), "{e}");
     }
 
@@ -378,7 +532,7 @@ mod tests {
     /// indistinguishable from a rejected certificate.
     #[test]
     fn the_wrong_error_is_a_failure() {
-        let e = check(
+        let e = check_refusal(
             &Outcome::Err("Io(\"connection refused\")".to_owned()),
             &recording(&[]),
         )
@@ -390,7 +544,7 @@ mod tests {
     /// authenticated, even if the send ultimately failed.
     #[test]
     fn speaking_before_the_refusal_is_a_failure() {
-        let e = check(
+        let e = check_refusal(
             &Outcome::Err("Io(\"TLS handshake failed: UnknownIssuer\")".to_owned()),
             &recording(&["EHLO component.example.com"]),
         )
@@ -402,12 +556,26 @@ mod tests {
     /// be rejecting something a passing input does not trip.
     #[test]
     fn a_certificate_refusal_with_an_empty_transcript_passes() {
-        check(
+        check_refusal(
             &Outcome::Err(
                 "Io(\"TLS handshake failed: invalid peer certificate: UnknownIssuer\")".to_owned(),
             ),
             &recording(&[]),
         )
         .unwrap();
+    }
+
+    const KEY: &str = "-----BEGIN PRIVATE KEY-----\n\
+                       MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgevZzL1gdAFr88hb2\n\
+                       -----END PRIVATE KEY-----\n";
+
+    /// Each way a message could leak the key is caught, and a fixed message
+    /// passes.
+    #[test]
+    fn check_no_echo_catches_every_kind_of_leak() {
+        assert!(check_no_echo("trust anchors: block 1: not a certificate", KEY).is_ok());
+        assert!(check_no_echo("bad input: -----BEGIN PRIVATE KEY-----", KEY).is_err());
+        assert!(check_no_echo("near AMBMGByqGSM49AgEG here", KEY).is_err());
+        assert!(check_no_echo("a PRIVATE KEY was given", KEY).is_err());
     }
 }
