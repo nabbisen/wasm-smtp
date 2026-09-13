@@ -24,8 +24,8 @@ webpki-roots  = ["wasm-smtp-wasi/webpki-roots"]
 native-roots  = ["wasm-smtp-wasi/native-roots"]
 
 [dependencies]
-wasm-smtp      = { path = "../wasm-smtp",      version = "0.17.2", default-features = false }
-wasm-smtp-wasi = { path = "../wasm-smtp-wasi", version = "0.17.2", default-features = false }
+wasm-smtp      = { path = "../wasm-smtp",      version = "0.18.0", default-features = false }
+wasm-smtp-wasi = { path = "../wasm-smtp-wasi", version = "0.18.0", default-features = false }
 # Trust-anchor parsing (RFC 030): the root store type the WASI adapter
 # connects with, and PEM base64 decoding. Both are already in the adapter's
 # graph at these versions; `std` only, so no crypto provider is chosen here.

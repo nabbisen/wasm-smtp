@@ -1,5 +1,7 @@
 ## [Unreleased]
 
+## [0.18.0] — 2026-09-13
+
 ### Breaking — for component consumers only
 
 RFC 030. The Component Model interface can now say which certificate
@@ -1844,7 +1846,8 @@ defensive posture of the crate.
   by the server, preferring `PLAIN` over `LOGIN`. Servers that
   advertise only `LOGIN` continue to work unchanged.
 
-[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.17.2...HEAD
+[Unreleased]: https://github.com/nabbisen/wasm-smtp/compare/0.18.0...HEAD
+[0.18.0]: https://github.com/nabbisen/wasm-smtp/compare/0.17.2...0.18.0
 [0.17.2]: https://github.com/nabbisen/wasm-smtp/compare/0.17.1...0.17.2
 [0.17.1]: https://github.com/nabbisen/wasm-smtp/compare/0.17.0...0.17.1
 [0.17.0]: https://github.com/nabbisen/wasm-smtp/compare/0.16.1...0.17.0
