@@ -24,6 +24,12 @@ boundary between SMTP and the host runtime as a single small trait
 against a synchronous mock, and easy to maintain. New runtimes need
 only an adapter; they never need to fork the protocol implementation.
 
+## Minimum supported Rust version
+
+The MSRV is 1.88, on the Rust 2024 edition, declared as `rust-version`
+in the workspace manifest. The repository pins that toolchain in
+`rust-toolchain.toml`, which CI enforces.
+
 ## What this project is for
 
 The realistic use case is *programmatic transactional email* from a

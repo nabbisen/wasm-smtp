@@ -1,10 +1,19 @@
 # wasm-smtp
 
 [![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](https://github.com/nabbisen/wasm-smtp/blob/main/LICENSE)
+[![Documentation](https://img.shields.io/badge/docs-book-blue)](https://nabbisen.github.io/wasm-smtp/)
 
 Rust crates for sending mail by SMTP from WebAssembly runtimes. The
 project separates the protocol implementation from the runtime-specific
 socket code so that the same SMTP engine can be reused on every host.
+
+Documentation: <https://nabbisen.github.io/wasm-smtp/>
+
+## Acceptable use
+
+This library must not be used to deliver unsolicited bulk mail, to
+impersonate other senders, or to deliver mail that violates the
+operating policy of any SMTP server. See [`TERMS_OF_USE.md`].
 
 ## Minimum usage
 
@@ -132,27 +141,5 @@ feature that pass-through-enables it on the core crate, so adapter-
 only callers do not need a direct dependency on `wasm-smtp` to
 opt in.
 
-### Minimum supported Rust version
-
-1.88 (Rust 2024 edition). The workspace pins that toolchain in
-`rust-toolchain.toml`, which is also what CI enforces.
-
-## Acceptable use
-
-This library must not be used to deliver unsolicited bulk mail, to
-impersonate other senders, or to deliver mail that violates the
-operating policy of any SMTP server. See [`TERMS_OF_USE.md`].
-
-## Documentation
-
-The long-form documentation is published at
-**<https://nabbisen.github.io/wasm-smtp/>**, rebuilt from `main` on every
-push. It covers project architecture, the SMTP protocol surface, the
-error taxonomy, security and anti-abuse guidance, and end-to-end usage.
-
-The source lives in [`docs/src`] if you would rather read it in the
-repository or build it yourself with `mdbook build docs`.
-
 [`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/transport/trait.Transport.html
-[`docs/src`]: ./docs/src
 [`TERMS_OF_USE.md`]: https://github.com/nabbisen/wasm-smtp/blob/main/TERMS_OF_USE.md
