@@ -11,8 +11,10 @@
 #   stdout    the expected standard output, byte for byte
 #   stderr    optional; when present, compared too
 #
-# where <guard> is `doc-versions` or `wasi-version`, naming
-# tools/check-<guard>.sh.
+# where <guard> is `doc-versions`, `wasi-version`, or `doc-links`, naming
+# tools/check-<guard>.sh. The `doc-links` trees carry a fake `target/doc`,
+# which the repository's `.gitignore` excludes by name: add those files with
+# `git add -f`.
 #
 # A shell runner rather than a Rust test because of what a failure looks
 # like: `diff -u` of expected against actual output is what someone

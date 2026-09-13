@@ -121,6 +121,10 @@ cargo test --locked -p wasm-smtp-book --features book
 # too, for doctests.
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p wasm-smtp -p wasm-smtp-tokio -p wasm-smtp-cloudflare -p wasm-smtp-test -p wasm-smtp-component --features wasm-smtp/smtputf8,wasm-smtp/mail-builder,wasm-smtp/tracing
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p wasm-smtp-wasi --target wasm32-wasip2
+
+# Links that resolve where they are read: published READMEs from each
+# crate's directory, docs.rs links against the documentation just built.
+./tools/check-doc-links.sh
 ```
 
 That block is the `gate` job in `.github/workflows/ci.yml`, command for

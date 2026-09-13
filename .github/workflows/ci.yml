@@ -147,6 +147,13 @@ jobs:
           RUSTDOCFLAGS: -D warnings
         run: cargo doc --locked --no-deps -p wasm-smtp-wasi --target wasm32-wasip2
 
+      # Links that resolve where they are read (RFC 034 D4): published
+      # READMEs' relative links from each crate's directory, as crates.io
+      # resolves them, and docs.rs item links against the documentation the
+      # two steps above just built. Offline.
+      - name: Check documentation links
+        run: ./tools/check-doc-links.sh
+
   # Non-blocking early warning about upcoming toolchain breakage.
   stable:
     name: stable (advisory)
