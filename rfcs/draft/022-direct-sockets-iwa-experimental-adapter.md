@@ -1,179 +1,190 @@
-# RFC 022 — Direct Sockets / IWA experimental adapter
+# RFC 022 — Direct Sockets adapter for Isolated Web Apps, and its browser credential model
 
 **Status.** Draft
 **Priority.** P3
-**Tracks.** Experimental / Browser / Adapter
-**Touches.** `crates/wasm-smtp-direct-sockets/` (future), `docs/src/direct-sockets.md`
+**Tracks.** Experimental / Browser / Adapter / Security
+**Touches.** `crates/wasm-smtp-direct-sockets/` (future), `docs/src/adapters/direct-sockets.md` (future)
+**Supersedes.** [RFC 023](../archive/023-browser-side-secret-consent-model.md), merged here at the owner's decision on 2026-09-13, as RFC 023's own open question 3 proposed. The two were one design split across two files.
+**Refreshed.** 2026-09-13. The 2025 draft rested on premises that are no longer true. Every factual statement below was checked on that date against the sources listed at the end.
 
 ## Summary
 
-Design an experimental adapter for the W3C Direct Sockets API, targeting
-Isolated Web Apps (IWA) and other high-trust browser contexts where raw
-TCP connections from a browser are permitted.
+Design an experimental `Transport` adapter over the Direct Sockets API
+(`TCPSocket`), for Chrome Isolated Web Apps (IWAs). The adapter would
+let an app delivered through the browser submit mail with no backend
+server. It also defines the credential rules any such adapter must
+document. This stays a draft: it is feasible, but its audience today is
+small (§Audience).
 
-This adapter is explicitly **experimental**. It is not intended for
-general-purpose web applications.
+## What is known (2026-09-13)
 
-## Motivation
+| Fact | Source |
+|---|---|
+| The WICG Direct Sockets spec is still "a work in progress". It defines `TCPSocket`, `UDPSocket`, `TCPServerSocket`, and `MulticastController`, with WHATWG streams for TCP | WICG spec |
+| **The spec defines no TLS**: no secure socket, no `startTLS`, no upgrade | WICG spec |
+| `TCPSocket` is `[IsolatedContext]` and gated by the **`direct-sockets` permissions policy** (default allowlist `'none'`), declared in the IWA manifest. **No user activation is required** | WICG spec; Chrome IWA docs |
+| Chrome's Intent to Ship was approved for Chrome 130, desktop only, Isolated Web Apps only. Android is excluded | blink-dev Intent to Ship |
+| **IWAs themselves are supported only on ChromeOS**, installed through admin policy, for users and browsers from ChromeOS 128 | Chrome Enterprise help |
+| Standards signals: Mozilla "Closed as Harmful"; WebKit "No signal" | blink-dev Intent to Ship |
+| `web-sys` 0.3.105 has `TcpSocket`, `TcpServerSocket`, and the socket events | docs.rs |
+| **`rustls` 0.23.44 with `ring` compiles for `wasm32-unknown-unknown`** on the pinned 1.88 toolchain, **only** with `ring`'s `wasm32_unknown_unknown_js` feature (randomness from the browser) and `rustls-pki-types`' `web` feature (the clock). Without them, `ring::rand::SystemRandom` and `UnixTime::now` do not exist on that target. **It is not verified that a handshake runs inside an IWA** | architect probe |
 
-The W3C Direct Sockets API (WICG proposal) gives browser contexts direct
-TCP/UDP access, bypassing the HTTP API layer. As of 2025, this API is
-available only in:
+What changed from the 2025 draft:
+- It assumed browser-managed TLS was "the spec direction". There is no TLS in the spec, so the only path is TLS in Rust.
+- It used `navigator.openTCPSocket`. The API is `new TCPSocket(…)`.
+- Its security model relied on a **user gesture** that the API does not require.
+- It waited for a "Candidate Recommendation", which a WICG incubation with a harmful position from one engine is not on course to reach.
 
-- Chrome's **Isolated Web Apps** (IWA): Signed WebBundle packaged apps
-  operating outside the normal same-origin sandbox.
-- Certain **managed enterprise / ChromeOS** contexts.
-- Developer-mode Chrome with experimental flags.
+## Audience
 
-It is **not** available to ordinary web pages or standard PWAs.
-
-When available, Direct Sockets would allow a browser-delivered
-application to connect directly to an SMTP submission endpoint, enabling
-fully client-side email sending without a backend server. The security
-and UX implications require careful design.
+In practice, organizations running Chrome Enterprise-managed ChromeOS
+fleets that ship an IWA, from one engine, behind a policy an
+administrator must set. That is the whole reason this is P3 and a
+draft. It is feasible, and it is narrow.
 
 ## Goals
 
-- Define the `wasm-smtp-direct-sockets` adapter position and scope.
-- Identify the Direct Sockets API surface needed.
-- Define the permission / capability error mapping.
-- Design the browser-side secret handling policy (see also RFC 023).
-- Produce a `DirectSocketsTransport` that implements `Transport`.
-- Explicitly mark the adapter as experimental and not for production
-  web apps.
+- A `DirectSocketsTransport` implementing `Transport` and
+  `StartTlsCapable` over `TCPSocket` streams.
+- TLS in Rust, over the raw stream, reusing the WASI adapter's approach:
+  explicit provider, explicit root store, no process default.
+- Implicit TLS (465) and STARTTLS (587). With TLS in Rust, both are the
+  same code path as the WASI adapter, not a browser capability question.
+- Credential rules (§Credentials) documented in the crate docs and the
+  book, and as far as the adapter can, enforced by its API shape.
+- Marked experimental in every place a reader meets it.
 
 ## Non-goals
 
-- Exposing this adapter to ordinary (non-IWA) web pages.
-- Persisting SMTP credentials in `localStorage` or `IndexedDB`.
-- Permission bypass or silent connection without user consent.
-- Compatibility guarantee across Chrome versions.
+- Ordinary web pages, PWAs, or any non-isolated context. The API does
+  not exist there, and there is no fallback.
+- A WebSocket-to-TCP proxy. That is the right design for ordinary web
+  apps, and it is not this RFC.
+- Credential storage of any kind, encrypted or not.
+- Compatibility guarantees across Chrome versions.
 
 ## Design
 
-### API surface required
-
-```typescript
-// Direct Sockets API (browser-side, TypeScript perspective)
-const socket = await navigator.openTCPSocket({ remoteAddress, remotePort });
-const reader = socket.readable.getReader();
-const writer = socket.writable.getWriter();
-// TLS upgrade: socket.startTLS() (not yet in spec; may be separate API)
-```
-
-The adapter bridges this Web API to the `Transport` trait using
-`wasm-bindgen` + the `web-sys` bindings for Direct Sockets (once
-available in `web-sys`).
-
-### `DirectSocketsTransport`
+### Transport
 
 ```rust
 pub struct DirectSocketsTransport {
-    reader: /* wrapping ReadableStreamDefaultReader */,
-    writer: /* wrapping WritableStreamDefaultWriter */,
+    // TCPSocket's opened streams, wrapped for async byte reads and writes.
 }
 
-impl Transport for DirectSocketsTransport { ... }
+impl Transport for DirectSocketsTransport { /* … */ }
+impl StartTlsCapable for DirectSocketsTransport { /* … */ }
 ```
 
-### TLS strategy
+Opening a socket is `new TCPSocket(host, port)` and awaiting `opened`,
+through `web-sys`. The transport owns the reader and writer, and releases
+them before closing, so a close never races a pending read.
 
-Direct Sockets' TLS support is under discussion in the WICG. Options:
+### TLS
 
-1. **Host-managed TLS:** the browser performs TLS before exposing the
-   stream (analogous to `SecureTransport::On` in Cloudflare).
-2. **`socket.startTLS()`:** a proposed method to upgrade a plaintext
-   connection (analogous to Cloudflare's `start_tls()`).
-3. **Rust TLS over raw streams:** if the spec exposes plaintext bytes,
-   run `rustls` as in the WASI adapter.
+`rustls` over the plaintext stream, as `wasm-smtp-wasi` does it. The
+features the build needs are the two named in §What is known, set by
+this crate only, so no other adapter's dependency graph changes. The
+root store is supplied or bundled, as in the WASI adapter. There is no
+plaintext mode: an SMTP session that cannot complete TLS fails.
 
-Current status (2025): option 1 appears to be the spec direction. The
-adapter will follow whichever path the spec stabilises on.
+### Capability errors
 
-### Permission model
+- The API absent (not an isolated context) → `IoError` naming the IWA
+  requirement.
+- `NotAllowedError` from the constructor (the `direct-sockets` policy not
+  granted) → `IoError` naming the manifest `permissions_policy` key.
+- A connection refused → `IoError`, as every adapter reports it.
 
-Direct Sockets requires the IWA to declare TCP socket permission in its
-manifest. If the API is unavailable (normal web page context), calling
-`navigator.openTCPSocket` throws a `DOMException`. The adapter maps
-this to `IoError` with a descriptive message pointing to the IWA setup
-documentation.
+None of them panics.
 
-### Production readiness disclaimer
+### Credentials (merged from RFC 023, corrected)
 
-The adapter documentation must include a prominent warning:
+These rules are documented in the crate docs and the book. The adapter
+cannot enforce what an application does with a string, so the
+documentation is the mechanism, and the API shape does what it can.
 
-> **Experimental:** `wasm-smtp-direct-sockets` targets Isolated Web Apps
-> and is not suitable for general-purpose web applications. The Direct
-> Sockets API is not available in standard browser contexts.
-> Certificate pinning and credential persistence are not supported.
-> This adapter is not recommended for production deployments without
-> a thorough security review.
+1. **Credentials are call arguments only.** No adapter type stores a
+   username, password, or token. This matches the core's `login` and the
+   component's per-call credentials.
+2. **No browser persistence.** Credentials must not be written to
+   `localStorage`, `sessionStorage`, IndexedDB, Cache Storage, or
+   cookies. Script in the same origin, and extensions with host
+   permissions, can read those.
+3. **Connections come from explicit user action.** Unlike the 2025 draft's
+   premise, **the API does not require a user gesture**. The policy grants
+   the capability for the app's lifetime. So this is an application rule
+   the documentation must state plainly, not a browser guarantee the
+   adapter can lean on.
+4. **Audit without secrets.** Applications should record each send's
+   time, recipient count, and outcome (RFC 012's model) and never the
+   credential.
+5. **TLS always.** There is no plaintext mode (§TLS).
+
+Threat model, to document: a malicious extension with host permissions;
+injected script inside the IWA despite its CSP; a compromised SMTP server
+(prefer SCRAM-SHA-256, where the password never crosses the wire).
+
+On avoiding repeated password entry: RFC 023 suggested OAuth 2.0.
+A fully client-side IWA has no backend redirect endpoint, so this is an
+open question, not a recommendation (§Open questions).
+
+### Experimental disclaimer
+
+In the crate-level rustdoc, the README, and the book chapter: the adapter
+targets Chrome Isolated Web Apps on ChromeOS, is not available to
+ordinary web pages, depends on an incubating API with a negative
+standards position from one engine, and is not recommended for
+production without a security review.
+
+## Conditions for moving to Proposed
+
+The 2025 conditions are replaced. Moving to Proposed needs:
+
+1. **A demonstrated need**: at least one planned IWA deployment of
+   `wasm-smtp`, from a real user.
+2. **A proof of concept**: rustls completing a handshake over a
+   `TCPSocket` inside an IWA, and one SMTP transaction, run once and
+   recorded. The compile probe above does not count.
+3. **A test strategy the gate can run**: Chrome with the isolated-context
+   flag that WPT uses, or a stated reason the adapter is exempt from
+   on-target testing, which would make it the only adapter without it.
 
 ## Security considerations
 
-Browser-side SMTP is a high-risk context:
-
-- **Credential exposure:** SMTP credentials in a browser page can be
-  exfiltrated by XSS or malicious extensions. IWA's CSP and sandboxing
-  mitigate this; standard web pages do not.
-- **No credential persistence:** the adapter must not store credentials
-  in `localStorage`, `IndexedDB`, cookies, or any persistent browser
-  API. Credentials exist only in JS memory for the duration of the call.
-- **User consent:** the connection is initiated by user action (e.g.,
-  submitting a form), not automatically on page load.
-- **TLS required:** no plaintext SMTP connections are exposed. If the
-  Direct Sockets TLS API is unavailable, the adapter falls back to an
-  error, not to plaintext.
-
-See RFC 023 for detailed browser-side secret and consent design.
-
-## Simplicity and maintainability considerations
-
-This adapter has more uncertainty than the others because:
-- The Direct Sockets spec is still in WICG (not W3C) and may change.
-- `web-sys` bindings for Direct Sockets do not yet exist.
-- Browser TLS integration is unspecified.
-
-The adapter should be kept as thin as possible, with the expectation
-that it will need to track spec changes. The core `Transport` trait
-is stable; only the adapter code needs to change when the API evolves.
+Browser-side SMTP is the highest-risk context this project could target.
+The design refuses every weakening it could offer: no plaintext, no
+stored credentials, no verification bypass (RFC 030's invariants apply to
+any root-store input). The largest residual risk is outside the adapter:
+same-origin script and extensions. The documentation has to say so rather
+than imply the policy gate protects credentials. It does not.
 
 ## Alternatives considered
 
-**WebSocket proxy:** route SMTP through a WebSocket-to-TCP proxy server.
-No Direct Sockets needed. This is the production approach for ordinary
-web apps; Direct Sockets is only worth the complexity for IWA / offline-
-first contexts where a backend proxy defeats the purpose.
-
-**Not implementing this adapter:** valid. The IWA market is small today.
-This RFC is Draft; it will stay Draft until there is a real IWA use case.
-
-## Implementation plan
-
-*Not yet implemented. Waiting for Direct Sockets spec stabilisation.*
-
-Conditions for moving to Proposed:
-
-1. Direct Sockets API (including TLS) is at Candidate Recommendation.
-2. `web-sys` crate includes Direct Sockets bindings.
-3. At least one IWA deployment of `wasm-smtp` exists or is planned.
-
-## Acceptance criteria
-
-*Applicable when the adapter is eventually implemented:*
-
-- `DirectSocketsTransport` compiles for `wasm32-unknown-unknown`.
-- Calling the adapter outside an IWA context returns `IoError` with a
-  descriptive message (not a panic).
-- No credential is persisted to any browser storage API.
-- The "Experimental" disclaimer appears in the crate-level rustdoc.
+- **WebSocket proxy.** Works in every browser, and needs a server. The
+  right answer for ordinary web apps; not for an offline-first IWA.
+- **Using the Component Model (RFC 018/030) from JavaScript via `jco`.**
+  The component imports `wasi:sockets`, which a browser does not provide.
+  A shim onto `TCPSocket` could bridge that. It is worth comparing during
+  the proof of concept, because it would reuse the component's interface
+  and trust-anchor model without a new Rust adapter.
+- **Not implementing it.** Still valid. This RFC records the design so
+  that the decision, when a user appears, starts from correct facts.
 
 ## Open questions
 
-1. Does the W3C Direct Sockets spec include a TLS upgrade path? The
-   current WICG text (`TCPSocket`) does not; a separate `SecureSocket`
-   type may be added.
-2. Does Chrome's IWA implementation support STARTTLS (port 587) or only
-   implicit TLS (port 465)?
-3. Is the adapter the right abstraction, or should it be a WASM component
-   with a WIT interface (see RFC 018) that the browser-side JS calls?
+1. Adapter or component shim (§Alternatives)? The proof of concept should
+   try the cheaper one first.
+2. How does an IWA avoid repeated password entry without a backend? Is
+   OAuth 2.0 practical from an IWA at all?
+3. Can on-target tests run in CI, given that IWAs need an isolated
+   context?
+
+## Sources (checked 2026-09-13)
+
+- WICG Direct Sockets: <https://wicg.github.io/direct-sockets/>
+- Chrome for Developers, Direct Sockets: <https://developer.chrome.com/docs/iwa/direct-sockets>
+- blink-dev, Intent to Ship: Direct Sockets API: <https://groups.google.com/a/chromium.org/g/blink-dev/c/5R0P_aYBWQI>
+- iwa-dev, updated feature: Direct Sockets API: <https://groups.google.com/a/chromium.org/g/iwa-dev/c/KZsueK7Q9YU>
+- Chrome Enterprise help, installing IWAs: <https://support.google.com/chrome/a/answer/9367354?hl=en>
+- `web-sys` 0.3.105 on docs.rs: <https://docs.rs/web-sys/0.3.105/web_sys/struct.TcpSocket.html>

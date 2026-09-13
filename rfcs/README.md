@@ -26,8 +26,7 @@ _(empty)_
 
 | ID | Title | Priority |
 |----|-------|----------|
-| [022](./draft/022-direct-sockets-iwa-experimental-adapter.md) | Direct Sockets / IWA experimental adapter | P3 |
-| [023](./draft/023-browser-side-secret-consent-model.md) | Browser-side secret and consent model | P3 |
+| [022](./draft/022-direct-sockets-iwa-experimental-adapter.md) | Direct Sockets adapter for Isolated Web Apps, and its browser credential model | P3 |
 
 ## Implemented
 
@@ -70,8 +69,9 @@ _(empty)_
 
 | ID | Title | Reason |
 |----|-------|--------|
+| [023](./archive/023-browser-side-secret-consent-model.md) | Browser-side secret and consent model | Superseded by RFC 022 |
 | [031](./archive/031-self-tests-for-the-projects-checkers.md) | Self-tests for the project's own checkers | Superseded by RFC 032 |
 
 ---
 
-RFC 000–021 and 024–034 are implemented, except 031, which is superseded by 032; 022–023 are drafts. The next RFC is **035**.
+RFC 000–021 and 024–034 are implemented, except 031, which is superseded by 032; 023 is superseded by 022; 022 is a draft. The next RFC is **035**.

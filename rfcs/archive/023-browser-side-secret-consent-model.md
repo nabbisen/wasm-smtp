@@ -1,9 +1,11 @@
 # RFC 023 — Browser-side secret and consent model
 
-**Status.** Draft
+**Status.** Superseded by RFC 022
 **Priority.** P3
 **Tracks.** Security / Browser
 **Touches.** `docs/src/browser-security.md`, `crates/wasm-smtp-direct-sockets/` (future)
+
+> **Superseded.** Merged into [RFC 022](../draft/022-direct-sockets-iwa-experimental-adapter.md) at the owner's decision on 2026-09-13, as this RFC's open question 3 proposed. The merge corrected one premise below: the Direct Sockets API does **not** require a user gesture. It is gated by the `direct-sockets` permissions policy, so "user-initiated connections" is an application rule, not a browser guarantee. This file is kept as the record.
 
 ## Summary
 
