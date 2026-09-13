@@ -115,6 +115,12 @@ cargo run --locked -p wasm-smtp-component-smoke
 # The book's Rust code blocks, compiled as doctests. Only under the `book`
 # feature, so the workspace run above does not see them.
 cargo test --locked -p wasm-smtp-book --features book
+
+# Documentation with rustdoc's warnings denied, for the targets docs.rs
+# builds. RUSTDOCFLAGS belongs on these two commands only: cargo test reads it
+# too, for doctests.
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p wasm-smtp -p wasm-smtp-tokio -p wasm-smtp-cloudflare -p wasm-smtp-test -p wasm-smtp-component --features wasm-smtp/smtputf8,wasm-smtp/mail-builder,wasm-smtp/tracing
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p wasm-smtp-wasi --target wasm32-wasip2
 ```
 
 That block is the `gate` job in `.github/workflows/ci.yml`, command for

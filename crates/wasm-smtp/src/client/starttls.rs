@@ -52,7 +52,7 @@ impl<T: StartTlsCapable> SmtpClient<T> {
     ///
     /// May only be called immediately after [`Self::connect`]. Calling it
     /// after [`Self::login`] or [`Self::send_mail`] returns
-    /// [`InvalidInputError`] without touching the wire.
+    /// [`InvalidInputError`](crate::InvalidInputError) without touching the wire.
     ///
     /// # Errors
     ///

@@ -134,6 +134,19 @@ jobs:
       - name: Book code blocks
         run: cargo test --locked -p wasm-smtp-book --features book
 
+      # Rustdoc's own warnings, broken intra-doc links among them, fail the
+      # gate, for the targets docs.rs builds (RFC 034 D5). RUSTDOCFLAGS is set
+      # on these two steps only: `cargo test` reads it as well, for doctests.
+      - name: Documentation (published host crates)
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --locked --no-deps -p wasm-smtp -p wasm-smtp-tokio -p wasm-smtp-cloudflare -p wasm-smtp-test -p wasm-smtp-component --features wasm-smtp/smtputf8,wasm-smtp/mail-builder,wasm-smtp/tracing
+
+      - name: Documentation (wasm-smtp-wasi, wasm32-wasip2)
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: cargo doc --locked --no-deps -p wasm-smtp-wasi --target wasm32-wasip2
+
   # Non-blocking early warning about upcoming toolchain breakage.
   stable:
     name: stable (advisory)

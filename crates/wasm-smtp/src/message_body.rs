@@ -1,4 +1,4 @@
-//! Streaming message body source for [`SmtpClient::send_mail_stream`].
+//! Streaming message body source for [`SmtpClient::send_mail_stream`](crate::SmtpClient::send_mail_stream).
 //!
 //! [`MessageBody`] is a project-defined async read abstraction that keeps
 //! `wasm-smtp` runtime-independent. Unlike `tokio::io::AsyncRead`, it has
@@ -42,7 +42,7 @@
 //! The bytes supplied by [`MessageBody::read_chunk`] must be a fully composed
 //! RFC 5322 message with **CRLF line endings**. Dot-stuffing and the
 //! end-of-data terminator (`\r\n.\r\n`) are applied automatically by
-//! [`SmtpClient::send_mail_stream`]; the caller must not add them.
+//! [`SmtpClient::send_mail_stream`](crate::SmtpClient::send_mail_stream); the caller must not add them.
 
 use crate::error::IoError;
 

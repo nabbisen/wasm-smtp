@@ -345,7 +345,7 @@ impl<T: Transport> SmtpClient<T> {
         Ok(outcome)
     }
 
-    /// Send a message supplied as a [`MessageBody`] stream.
+    /// Send a message supplied as a [`MessageBody`](crate::MessageBody) stream.
     ///
     /// This is the streaming variant of [`Self::send_mail_bytes`]. The body
     /// is read in chunks of `chunk_size` bytes (default: 8 KB), dot-stuffed,
