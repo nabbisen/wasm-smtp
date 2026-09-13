@@ -1,10 +1,41 @@
 # RFC 034 — Links that work where the documentation is published
 
-**Status.** Proposed
+**Status.** Accepted (owner, 2026-09-13)
+**Handoff.** [`../handoffs/034-published-documentation-links/implementation-handoff.md`](../handoffs/034-published-documentation-links/implementation-handoff.md)
 **Priority.** P1
 **Tracks.** Documentation / CI
-**Touches.** `README.md`, `crates/wasm-smtp-cloudflare/src/lib.rs` (one rustdoc link), `docs/src/{adapters/wasi,concepts/protocol,concepts/security,core/usage}.md`, `CHANGELOG.md` (two link targets), `crates/wasm-smtp/Cargo.toml` (`[package.metadata.docs.rs]`), a new check under `tools/` with fixtures, `.github/workflows/ci.yml`, `.github/CONTRIBUTING.md`
+**Touches.** `README.md`, `crates/wasm-smtp-cloudflare/src/lib.rs` (one rustdoc link), `docs/src/{adapters/wasi,concepts/protocol,concepts/security,core/usage}.md`, `CHANGELOG.md` (two link targets), `crates/wasm-smtp/src/{client/send.rs,client/starttls.rs,message_body.rs}` (four intra-doc links), `crates/{wasm-smtp,wasm-smtp-wasi}/Cargo.toml` (`[package.metadata.docs.rs]`), a new check under `tools/` with fixtures, `.github/workflows/ci.yml`, `.github/CONTRIBUTING.md`
 **Origin.** The owner found four broken links on <https://crates.io/crates/wasm-smtp> on 2026-09-13 and suspected relative paths. The architect confirmed the cause and found the same class of defect in more places.
+
+## Decisions at acceptance
+
+The owner accepted the RFC on 2026-09-13 and asked for the handoff.
+Neither open question was answered separately, so the architect's stated
+recommendations stand as the defaults, recorded here so they can be
+overridden:
+
+1. **Fixed before 0.18.0.** The release commit is redone after the fix.
+2. **docs.rs documents the core with `smtputf8`, `mail-builder`, and
+   `tracing`.**
+
+## Amendment — 2026-09-13, at acceptance
+
+Preparing the handoff, the architect ran each premise and found the same
+class of defect in two more places. They are added as D5 and D6.
+
+- **D5.** Rustdoc reports **four unresolved intra-doc links** in the core's
+  own documentation, which docs.rs renders as dead text:
+  `client/send.rs:348` (`MessageBody`), `client/starttls.rs:55`
+  (`InvalidInputError`), and `message_body.rs:1` and `:45`
+  (`SmtpClient::send_mail_stream`). They are present at default features
+  too, so docs.rs shows them today.
+- **D6.** **docs.rs documents no functions at all for `wasm-smtp-wasi`**
+  0.17.2. Its connect API is `cfg(target_arch = "wasm32")`, and docs.rs's
+  default landing page is built for `x86_64-unknown-linux-gnu`, where those
+  functions do not exist. Built locally for `wasm32-wasip2`, the crate
+  documents all four with no warnings. On a host build the same crate
+  produces three unresolved-link warnings, which are symptoms of this, not
+  separate defects.
 
 ## Summary
 
@@ -114,6 +145,34 @@ paths docs.rs serves (`transport/trait.Transport.html`,
 It needs fixture tests like the other two guards (RFC 032 D5), and a
 demonstration that each half fails.
 
+### D5. Rustdoc's own broken-link warnings fail the gate
+
+Fix the four links with paths that resolve from their module, such as
+`crate::MessageBody`, and add two gate commands that build
+documentation with warnings denied, for the targets docs.rs uses:
+
+```
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p wasm-smtp -p wasm-smtp-tokio -p wasm-smtp-cloudflare -p wasm-smtp-test -p wasm-smtp-component --features wasm-smtp/smtputf8,wasm-smtp/mail-builder,wasm-smtp/tracing
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps -p wasm-smtp-wasi --target wasm32-wasip2
+```
+
+Verified: the first fails today with exactly the four errors, and the
+second passes. They also produce the `target/doc` trees D4's check reads.
+
+### D6. docs.rs builds the WASI adapter for its target
+
+`crates/wasm-smtp-wasi/Cargo.toml` gains `[package.metadata.docs.rs]`
+with `targets = ["wasm32-wasip2"]`. docs.rs's metadata documentation
+says any rustup-supported target may be used, and that the first entry
+of `targets` becomes the default landing page when `default-target` is
+unset. The crate's own `wasm32-wasip2` build is already in the gate.
+
+**Verifiable only after publishing**, because docs.rs builds on publish. The
+architect checks the landing page and `fn.connect_smtps.html` for
+0.18.0 as part of the release. If docs.rs cannot cross-compile the
+crate, that becomes a follow-up, not a revert: the metadata is correct
+either way.
+
 ### Not in scope
 
 - External links other than docs.rs. They need the network, and a gate
@@ -132,6 +191,4 @@ The owner's call.
 
 ## Open questions
 
-1. Before 0.18.0, or as 0.18.1?
-2. D3: are `smtputf8`, `mail-builder`, and `tracing` the right set to
-   publish, or should docs.rs match only the default reader's view?
+None. Both were settled at acceptance; see *Decisions at acceptance*.

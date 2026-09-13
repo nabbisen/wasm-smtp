@@ -466,10 +466,11 @@ Order is the owner's decision after the RFC 024 roadmap review.
    lint allowed on eight impl blocks where no rewrite works on both
    toolchains; the job now reports every crate. No API or behaviour change.
 9. **Links that work where the documentation is published** (RFC 034,
-   proposed): relative links in the root README break on crates.io, ten
-   docs.rs links name pages rustdoc does not generate, and docs.rs omits
-   the core's feature-gated API. Fix them, publish the core's features on
-   docs.rs, and add an offline gate check for both link kinds.
+   accepted, before 0.18.0): relative links in the root README break on
+   crates.io; ten docs.rs links and four intra-doc links name pages that
+   do not exist; docs.rs omits the core's feature-gated API and every
+   function of the WASI adapter. Fix them, publish the right features and
+   target on docs.rs, and gate both link kinds offline.
 10. Further extension themes (channel binding, DSN, Component Model
    resources, Direct Sockets) await a later planning session.
 

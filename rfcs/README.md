@@ -19,12 +19,11 @@ lifecycle policy is defined in
 | ID | Title | Priority | Handoff |
 |----|-------|----------|---------|
 | [030](./accepted/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface | P2 | [yes](./handoffs/030-component-trust-anchor-configuration/implementation-handoff.md) |
+| [034](./accepted/034-published-documentation-links.md) | Links that work where the documentation is published | P1 | [yes](./handoffs/034-published-documentation-links/implementation-handoff.md) |
 
 ## Proposed
 
-| ID | Title | Priority |
-|----|-------|----------|
-| [034](./proposed/034-published-documentation-links.md) | Links that work where the documentation is published | P1 |
+_(empty)_
 
 ## Draft
 
@@ -76,4 +75,4 @@ lifecycle policy is defined in
 
 ---
 
-RFC 000–021, 024–029, 032 and 033 are implemented; 030 is accepted; 034 is proposed; 031 is superseded by 032; 022–023 are drafts. The next RFC is **035**.
+RFC 000–021, 024–029, 032 and 033 are implemented; 030 and 034 are accepted; 031 is superseded by 032; 022–023 are drafts. The next RFC is **035**.
