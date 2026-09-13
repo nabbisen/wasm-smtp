@@ -2,9 +2,12 @@
 
 WASM Component Model interface for [`wasm-smtp`](https://crates.io/crates/wasm-smtp).
 
-Exports the `smtp-send` WIT interface defined in `wit/smtp.wit`, enabling
-any language with WIT bindings (TypeScript, Go, Python, C, …) to send email
-through `wasm-smtp` without writing Rust.
+Exports the `smtp-send` WIT interface defined in `wit/smtp.wit`. Any
+Component Model host can call the built component to send email through
+`wasm-smtp` without writing Rust, and `jco` generates TypeScript/JavaScript
+types for it.
+
+**0.18.0 breaks the component interface** (`wasm-smtp:smtp@0.2.0`); see "Migrating from 0.1.0" in `docs/src/adapters/component-model.md`.
 
 ## Quick start
 
@@ -21,8 +24,23 @@ cargo test -p wasm-smtp-component
 ```wit
 // wit/smtp.wit (abbreviated)
 interface smtp-send {
+    variant trust-anchors {
+        bundled,
+        custom(string),
+    }
+
+    resource smtp-config {
+        create: static func(
+            host: string,
+            port: u16,
+            ehlo-domain: string,
+            tls-mode: tls-mode,
+            trust: trust-anchors,
+        ) -> result<smtp-config, send-error>;
+    }
+
     send: func(
-        config: smtp-config,
+        config: borrow<smtp-config>,
         credentials: smtp-credentials,
         message: smtp-message,
     ) -> result<send-result, send-error>;
@@ -33,13 +51,17 @@ See [`wit/smtp.wit`](./wit/smtp.wit) for the complete interface.
 
 ## Language bindings
 
-```sh
-# TypeScript / JavaScript
-jco types wit/smtp.wit -o ./types
+To call this component from TypeScript or JavaScript, generate its types
+with jco. Point jco at the `wit` directory, not at `wit/smtp.wit`, so it
+also loads the WASI packages vendored under `wit/deps/`:
 
-# Go
-wit-bindgen go wit/smtp.wit --out-dir ./smtp_bindings
+```sh
+jco types wit -o ./types
 ```
+
+`wit-bindgen go` and `componentize-py … bindings` also read this WIT, but
+they generate bindings for implementing the `smtp-client` world, not for
+calling this component.
 
 ## Building
 
@@ -69,6 +91,10 @@ on every gate run under wasmtime 36.
 
 Credentials are passed as plain strings on each `send` call and are **not**
 retained between calls. See `docs/src/adapters/component-model.md` for the threat model.
+
+Trust anchors (`trust-anchors::custom`) are public CA certificates, not
+secrets, even though an `smtp-config` holds them for its lifetime; see
+"Configuration and trust anchors" in `docs/src/adapters/component-model.md`.
 
 ## License
 

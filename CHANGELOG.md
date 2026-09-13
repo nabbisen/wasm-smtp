@@ -88,7 +88,9 @@ What changes is what the gate reaches, and the order releases happen in.
   WASI packages, and failed as written; jco is now pointed at the `wit`
   directory. Only `jco types` is presented as a way to call the
   component: `wit-bindgen go` and `componentize-py … bindings` generate
-  bindings for implementing its world, not for calling it.
+  bindings for implementing its world, not for calling it; the component
+  crate's own README, its crates.io page, now says the same and shows the
+  0.2.0 interface.
 - **The book's Rust code is compiled.** A new unpublished crate,
   `tools/book`, includes every chapter holding Rust code and runs its
   code blocks as doctests under a dedicated gate command, `cargo test
