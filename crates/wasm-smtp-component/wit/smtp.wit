@@ -36,8 +36,12 @@
 /// cross the host-component boundary in each call. They are not retained
 /// by the component between calls. See docs/src/adapters/component-model.md for
 /// the credential handling threat model.
+///
+/// Trust anchors (`trust-anchors::custom`) are public CA certificates, not
+/// secrets, so they are not covered by those rules even though an
+/// `smtp-config` holds them for its lifetime.
 
-package wasm-smtp:smtp@0.1.0;
+package wasm-smtp:smtp@0.2.0;
 
 /// SMTP send interface — one function, one message, one connection.
 interface smtp-send {
@@ -54,17 +58,62 @@ interface smtp-send {
         starttls,
     }
 
-    /// SMTP server connection parameters.
-    record smtp-config {
-        /// Hostname or IP address of the SMTP submission server.
-        host: string,
-        /// TCP port number. Common values: 465 (implicit TLS), 587 (STARTTLS).
-        port: u16,
-        /// FQDN or address literal to use in the EHLO command, identifying
-        /// this client to the server.
-        ehlo-domain: string,
-        /// TLS mode.
-        tls-mode: tls-mode,
+    /// Which certificate authorities the TLS connection trusts.
+    ///
+    /// There is no value that disables certificate or hostname
+    /// verification, and none will be added.
+    variant trust-anchors {
+        /// The bundled Mozilla root set. The right choice for public
+        /// submission servers.
+        bundled,
+        /// Exactly these certificate authorities, and no others: PEM text
+        /// holding one or more `CERTIFICATE` blocks, as a CA bundle file
+        /// does. Text between blocks, such as comments, is ignored.
+        ///
+        /// This **replaces** the bundled roots. A caller who also wants
+        /// public roots must include them in the bundle.
+        ///
+        /// Checked completely when the configuration is created: at most
+        /// 64 blocks and 256 KiB; every block must be a certificate the
+        /// root store accepts, or creation fails. A rejected bundle never
+        /// falls back to `bundled`.
+        custom(string),
+    }
+
+    /// A validated, immutable connection configuration.
+    ///
+    /// Created once with `create`, which performs every check on its
+    /// arguments, and then only read: there are no setters, so a
+    /// configuration that was accepted cannot later become invalid, and
+    /// `send` never fails because of it. One configuration may be used for
+    /// any number of sends.
+    ///
+    /// New connection options arrive as additional functions on this
+    /// resource in compatible versions of the package, not as changes to
+    /// `create`.
+    resource smtp-config {
+        /// Validate and create a configuration.
+        ///
+        /// - `host`: hostname or IP address of the SMTP submission server.
+        /// - `port`: TCP port. Common values: 465 (implicit TLS), 587
+        ///   (STARTTLS).
+        /// - `ehlo-domain`: FQDN or address literal sent in `EHLO`,
+        ///   identifying this client to the server.
+        /// - `tls-mode`: implicit TLS or STARTTLS.
+        /// - `trust`: which certificate authorities to trust.
+        ///
+        /// Fails with `send-error::invalid-input` when the EHLO domain or the
+        /// trust anchors are rejected. A trust-anchor error names the
+        /// offending block by position and the kind of problem, and never
+        /// repeats any of the supplied text: that text might be a private
+        /// key pasted by mistake.
+        create: static func(
+            host: string,
+            port: u16,
+            ehlo-domain: string,
+            tls-mode: tls-mode,
+            trust: trust-anchors,
+        ) -> result<smtp-config, send-error>;
     }
 
     // ── Authentication ─────────────────────────────────────────────────────
@@ -118,7 +167,9 @@ interface smtp-send {
         /// Authentication rejected by the server (535 or equivalent).
         auth-rejected,
         /// Caller-supplied input is invalid: empty from address, empty
-        /// recipient list, or address containing forbidden characters.
+        /// recipient list, or address containing forbidden characters; or,
+        /// from `smtp-config.create`, an EHLO domain or trust anchors that
+        /// were rejected.
         invalid-input(string),
         /// A send policy rejected the message before any SMTP command
         /// was sent.
@@ -136,13 +187,22 @@ interface smtp-send {
     /// The component applies CRLF-normalised dot-stuffing to `raw-message`
     /// automatically.
     ///
+    /// `config` is borrowed: the caller keeps it, and may reuse it for
+    /// further sends. `send` performs no configuration checks of its own;
+    /// those all happened in `smtp-config.create`.
+    ///
     /// # Example (pseudocode)
     ///
     /// ```
+    /// let config = smtp-config.create(
+    ///   "smtp.example.com", 465, "client.example.com", implicit,
+    ///   trust-anchors::bundled,
+    /// )?;
+    /// // For a server behind a private CA instead:
+    /// //   trust-anchors::custom(read-file("corporate-root-ca.pem"))
+    ///
     /// let result = smtp-send.send(
-    ///   smtp-config { host: "smtp.example.com", port: 465,
-    ///                 ehlo-domain: "client.example.com",
-    ///                 tls-mode: implicit },
+    ///   config,
     ///   smtp-credentials { username: "user@example.com",
     ///                      password: "secret" },
     ///   smtp-message {
@@ -155,7 +215,7 @@ interface smtp-send {
     /// );
     /// ```
     send: func(
-        config: smtp-config,
+        config: borrow<smtp-config>,
         credentials: smtp-credentials,
         message: smtp-message,
     ) -> result<send-result, send-error>;

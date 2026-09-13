@@ -247,12 +247,23 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
     let bindings = SmtpClient::instantiate(&mut store, &component, &linker)
         .map_err(|e| format!("instantiating the component failed: {e:?}"))?;
 
-    let config = smtp_send::SmtpConfig {
-        host: "127.0.0.1".to_owned(),
-        port,
-        ehlo_domain: EHLO.to_owned(),
-        tls_mode: smtp_send::TlsMode::Implicit,
-    };
+    let api = bindings.wasm_smtp_smtp_smtp_send();
+
+    // The configuration is a resource validated once, at creation (RFC 030
+    // D1). `bundled` trusts only the adapter's Mozilla roots, which did not
+    // sign the run's certificate, so the handshake below must be refused.
+    let config = api
+        .smtp_config()
+        .call_create(
+            &mut store,
+            "127.0.0.1",
+            port,
+            EHLO,
+            smtp_send::TlsMode::Implicit,
+            &smtp_send::TrustAnchors::Bundled,
+        )
+        .map_err(|e| format!("smtp-config.create trapped: {e:?}"))?
+        .map_err(|e| format!("smtp-config.create rejected a valid configuration: {e:?}"))?;
     let credentials = smtp_send::SmtpCredentials {
         username: "smoke@example.com".to_owned(),
         password: "secret".to_owned(),
@@ -272,19 +283,20 @@ fn call_send(wasm: &PathBuf, port: u16, ca_pem: &str) -> Result<Outcome, String>
             .to_owned(),
     };
 
-    // The trust anchor has to reach the guest somehow, and the WIT has no
-    // field for it: `smtp-config` carries host, port, EHLO domain, and TLS
-    // mode only. The component builds its root store from the adapter's
-    // defaults — the bundled Mozilla set — so a run-generated CA cannot be
-    // injected through the interface. Recorded here because it shapes what
-    // this harness can assert; see the review request.
+    // The run's CA is not used here: this case proves `bundled` refuses it.
     let _ = ca_pem;
 
-    match bindings
-        .wasm_smtp_smtp_smtp_send()
-        .call_send(&mut store, &config, &credentials, &message)
-        .map_err(|e| format!("the call trapped: {e:?}"))?
-    {
+    let sent = api
+        .call_send(&mut store, config, &credentials, &message)
+        .map_err(|e| format!("the call trapped: {e:?}"))?;
+
+    // The configuration outlives the send, as a borrow should allow, and is
+    // released explicitly.
+    config
+        .resource_drop(&mut store)
+        .map_err(|e| format!("dropping smtp-config failed: {e:?}"))?;
+
+    match sent {
         Ok(result) => Ok(Outcome::Ok(result.reply_code)),
         Err(e) => Ok(Outcome::Err(format!("{e:?}"))),
     }

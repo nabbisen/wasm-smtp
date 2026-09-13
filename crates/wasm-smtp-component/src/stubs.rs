@@ -5,19 +5,22 @@
 //! and run without a WASM runtime.
 
 /// How to establish TLS.
+// Named by `ConfigState` on every target. On native hosts nothing constructs
+// `Starttls`, not even the unit tests; on wasm32 the generated type is used.
+#[allow(dead_code)]
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TlsMode {
     Implicit,
     Starttls,
 }
 
-/// SMTP server connection parameters.
+/// Which certificate authorities to trust (RFC 030 D2).
+// Constructed only by the native unit tests, for the same reason as `TlsMode`.
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
-pub struct SmtpConfig {
-    pub host: String,
-    pub port: u16,
-    pub ehlo_domain: String,
-    pub tls_mode: TlsMode,
+pub enum TrustAnchors {
+    Bundled,
+    Custom(String),
 }
 
 /// SMTP authentication credentials.

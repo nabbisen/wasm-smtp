@@ -36,9 +36,9 @@
 
 // ── Trust anchors (RFC 030 D3) ────────────────────────────────────────────
 
-// Parsed at `smtp-config` creation, not at `send`. Nothing uses it until the
-// resource is wired in (RFC 030 S3), hence the allowance for this slice.
-#[allow(dead_code)]
+// Parsed when an `smtp-config` is created, never at `send`. On native hosts
+// only the unit tests reach it.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
 mod trust;
 
 // ── WIT bindings (wasm32 only) ────────────────────────────────────────────
@@ -87,7 +87,8 @@ mod export_glue {
 
 #[cfg(target_arch = "wasm32")]
 use bindings::exports::wasm_smtp::smtp::smtp_send::{
-    Guest, SendError, SendResult, SmtpConfig, SmtpCredentials, SmtpMessage, TlsMode,
+    Guest, GuestSmtpConfig, SendError, SendResult, SmtpConfig, SmtpConfigBorrow, SmtpCredentials,
+    SmtpMessage, TlsMode, TrustAnchors,
 };
 
 /// Native-only stubs so the crate compiles and tests on non-WASM hosts.
@@ -95,12 +96,72 @@ use bindings::exports::wasm_smtp::smtp::smtp_send::{
 mod stubs;
 
 #[cfg(not(target_arch = "wasm32"))]
-use stubs::{SendError, SendResult, SmtpConfig, SmtpCredentials, SmtpMessage};
+use stubs::{SendError, SendResult, SmtpCredentials, SmtpMessage, TlsMode, TrustAnchors};
 
-// `TlsMode` is referenced by the native unit tests only; on `wasm32` it comes
-// from the generated bindings above.
-#[cfg(all(not(target_arch = "wasm32"), test))]
-use stubs::TlsMode;
+// ── The `smtp-config` resource (RFC 030 D1) ───────────────────────────────
+
+/// The validated contents of an `smtp-config` resource.
+///
+/// Built only by `validate`, which performs every check the configuration
+/// gets, and immutable afterwards: the fields are private and nothing
+/// writes them. `send` therefore never validates a configuration; it only
+/// reads one.
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+pub struct ConfigState {
+    host: String,
+    port: u16,
+    ehlo_domain: String,
+    tls_mode: TlsMode,
+    /// `None` connects with the adapter's bundled roots; `Some` holds
+    /// exactly the caller's trust anchors, which replace them.
+    roots: Option<rustls::RootCertStore>,
+}
+
+#[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+impl ConfigState {
+    /// Check the arguments of `smtp-config.create` and build the state.
+    ///
+    /// The EHLO domain gets the core's existing check, the one a connection
+    /// would otherwise apply; host and port have no checks of their own,
+    /// and none are invented here. Trust anchors are parsed completely.
+    /// Every rejection is `invalid-input` with a fixed message: neither
+    /// check repeats its input.
+    fn validate(
+        host: String,
+        port: u16,
+        ehlo_domain: String,
+        tls_mode: TlsMode,
+        trust: &TrustAnchors,
+    ) -> Result<Self, SendError> {
+        wasm_smtp::protocol::validate_ehlo_domain(&ehlo_domain)
+            .map_err(|e| SendError::InvalidInput(e.to_string()))?;
+        let choice = match trust {
+            TrustAnchors::Bundled => trust::Trust::Bundled,
+            TrustAnchors::Custom(pem) => trust::Trust::Custom(pem),
+        };
+        let roots = trust::resolve(choice).map_err(|e| SendError::InvalidInput(e.to_string()))?;
+        Ok(Self {
+            host,
+            port,
+            ehlo_domain,
+            tls_mode,
+            roots,
+        })
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl GuestSmtpConfig for ConfigState {
+    fn create(
+        host: String,
+        port: u16,
+        ehlo_domain: String,
+        tls_mode: TlsMode,
+        trust: TrustAnchors,
+    ) -> Result<SmtpConfig, SendError> {
+        Self::validate(host, port, ehlo_domain, tls_mode, &trust).map(SmtpConfig::new)
+    }
+}
 
 // ── Synchronous driver for the async client (wasm32 only) ─────────────────
 
@@ -143,25 +204,40 @@ impl SmtpSendImpl {
     ///
     /// Connects, authenticates, sends one message, and quits. A fresh TCP
     /// connection is used for every call; nothing is retained afterwards.
+    // Takes credentials and message by value to match the native stand-in
+    // below, whose signature the generated `Guest::send` fixes.
+    #[allow(clippy::needless_pass_by_value)]
     #[cfg(target_arch = "wasm32")]
     pub fn send_impl(
-        config: SmtpConfig,
+        config: &ConfigState,
         credentials: SmtpCredentials,
         message: SmtpMessage,
     ) -> Result<SendResult, SendError> {
+        // No configuration checks here: `ConfigState` can only exist once
+        // `smtp-config.create` has accepted it (RFC 030 D1).
+        //
+        // `custom` anchors replace the adapter's roots entirely; `bundled`
+        // leaves the adapter's default in place.
+        let options = match &config.roots {
+            Some(roots) => wasm_smtp_wasi::ConnectOptions::default().with_root_store(roots.clone()),
+            None => wasm_smtp_wasi::ConnectOptions::default(),
+        };
+
         // The two connect helpers are distinct async fns, so each one is
         // driven inside its own match arm rather than through a shared
         // future binding.
         let client_result = match config.tls_mode {
-            TlsMode::Implicit => block_on(wasm_smtp_wasi::connect_smtps(
+            TlsMode::Implicit => block_on(wasm_smtp_wasi::connect_smtps_with(
                 &config.host,
                 config.port,
                 &config.ehlo_domain,
+                options,
             )),
-            TlsMode::Starttls => block_on(wasm_smtp_wasi::connect_smtp_starttls(
+            TlsMode::Starttls => block_on(wasm_smtp_wasi::connect_smtp_starttls_with(
                 &config.host,
                 config.port,
                 &config.ehlo_domain,
+                options,
             )),
         };
         let mut client = client_result.map_err(smtp_error_to_wit)?;
@@ -192,7 +268,7 @@ impl SmtpSendImpl {
     #[allow(clippy::needless_pass_by_value)]
     #[cfg(not(target_arch = "wasm32"))]
     pub fn send_impl(
-        config: SmtpConfig,
+        config: &ConfigState,
         credentials: SmtpCredentials,
         message: SmtpMessage,
     ) -> Result<SendResult, SendError> {
@@ -210,12 +286,14 @@ impl SmtpSendImpl {
 
 #[cfg(target_arch = "wasm32")]
 impl Guest for SmtpSendImpl {
+    type SmtpConfig = ConfigState;
+
     fn send(
-        config: SmtpConfig,
+        config: SmtpConfigBorrow<'_>,
         credentials: SmtpCredentials,
         message: SmtpMessage,
     ) -> Result<SendResult, SendError> {
-        Self::send_impl(config, credentials, message)
+        Self::send_impl(config.get(), credentials, message)
     }
 }
 
@@ -252,16 +330,61 @@ mod tests {
         assert!(matches!(e, SendError::AuthRejected));
     }
 
+    fn create(ehlo: &str, trust: &TrustAnchors) -> Result<ConfigState, SendError> {
+        ConfigState::validate(
+            "smtp.example.com".into(),
+            465,
+            ehlo.into(),
+            TlsMode::Implicit,
+            trust,
+        )
+    }
+
+    fn generated_cert_and_key() -> (String, String) {
+        let certified =
+            rcgen::generate_simple_self_signed(vec!["ca.example".to_owned()]).expect("rcgen");
+        (certified.cert.pem(), certified.signing_key.serialize_pem())
+    }
+
     #[test]
-    fn smtp_config_fields_accessible() {
-        let cfg = SmtpConfig {
-            host: "smtp.example.com".into(),
-            port: 465,
-            ehlo_domain: "client.example.com".into(),
-            tls_mode: TlsMode::Implicit,
-        };
+    fn create_with_bundled_keeps_the_adapter_roots() {
+        let cfg = create("client.example.com", &TrustAnchors::Bundled).expect("valid config");
         assert_eq!(cfg.host, "smtp.example.com");
         assert_eq!(cfg.port, 465);
+        assert!(cfg.roots.is_none(), "bundled must not build a custom store");
+    }
+
+    #[test]
+    fn create_with_custom_holds_exactly_those_roots() {
+        let (cert, _) = generated_cert_and_key();
+        let cfg = create("client.example.com", &TrustAnchors::Custom(cert)).expect("valid config");
+        assert_eq!(cfg.roots.as_ref().map(rustls::RootCertStore::len), Some(1));
+    }
+
+    #[test]
+    fn create_rejects_an_invalid_ehlo_domain_as_invalid_input() {
+        let err = create("", &TrustAnchors::Bundled)
+            .err()
+            .expect("empty EHLO domain");
+        assert!(matches!(err, SendError::InvalidInput(_)), "{err:?}");
+    }
+
+    #[test]
+    fn create_rejects_a_private_key_without_echoing_it_or_falling_back() {
+        let (_, key) = generated_cert_and_key();
+        let err = create("client.example.com", &TrustAnchors::Custom(key.clone()))
+            .err()
+            .expect("a private key is not a trust anchor");
+        let SendError::InvalidInput(message) = err else {
+            panic!("expected invalid-input");
+        };
+        assert!(!message.contains("PRIVATE KEY"), "{message}");
+        for line in key
+            .lines()
+            .filter(|l| !l.starts_with("-----") && !l.is_empty())
+        {
+            assert!(!message.contains(line), "{message}");
+        }
     }
 
     #[test]
