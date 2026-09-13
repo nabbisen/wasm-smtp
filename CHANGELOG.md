@@ -83,6 +83,12 @@ What changes is what the gate reaches, and the order releases happen in.
 
 ### Documentation
 
+- **The component's binding instructions are corrected.** The generator
+  commands pointed at `wit/smtp.wit`, which does not load the vendored
+  WASI packages, and failed as written; jco is now pointed at the `wit`
+  directory. Only `jco types` is presented as a way to call the
+  component: `wit-bindgen go` and `componentize-py … bindings` generate
+  bindings for implementing its world, not for calling it.
 - **The book's Rust code is compiled.** A new unpublished crate,
   `tools/book`, includes every chapter holding Rust code and runs its
   code blocks as doctests under a dedicated gate command, `cargo test

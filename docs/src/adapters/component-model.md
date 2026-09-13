@@ -198,30 +198,20 @@ as a `send-error` rather than trapping or hanging.
 
 ## Language bindings
 
-Point each generator at the `wit` **directory**, not at `wit/smtp.wit`.
-The world imports WASI packages vendored under `wit/deps/`, and given the
-single file the generators do not load them: they stop with
+To call this component from TypeScript or JavaScript, generate its types
+with jco. Point jco at the `wit` **directory**, not at `wit/smtp.wit`: the
+world imports WASI packages vendored under `wit/deps/`, and given the single
+file jco does not load them and stops with
 `package 'wasi:sockets@0.2.12' not found`.
-
-### TypeScript / JavaScript (via jco)
 
 ```sh
 npm install -g @bytecodealliance/jco
 jco types wit -o ./smtp-types
 ```
 
-### Go (via wit-bindgen)
-
-```sh
-wit-bindgen go wit --out-dir ./smtp_bindings
-```
-
-### Python (via componentize-py)
-
-```sh
-pip install componentize-py
-componentize-py --wit-path wit bindings .
-```
+`wit-bindgen go` and `componentize-py … bindings` also read this WIT, but
+they generate bindings for implementing the `smtp-client` world, not for
+calling this component.
 
 ## Calling from TypeScript
 

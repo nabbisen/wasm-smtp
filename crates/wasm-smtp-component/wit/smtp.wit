@@ -17,20 +17,16 @@
 ///
 /// ## Language bindings
 ///
-/// Generate bindings for any language that supports WIT. Point the
-/// generator at the `wit` directory, so it also loads the WASI packages
-/// vendored under `wit/deps/`:
+/// To call this component from TypeScript or JavaScript, generate its types
+/// with jco. Point jco at the `wit` directory, so it also loads the WASI
+/// packages vendored under `wit/deps/`:
 ///
 /// ```sh
-/// # TypeScript / JavaScript (via jco)
 /// jco types wit -o ./types
-///
-/// # Go (via wit-bindgen go)
-/// wit-bindgen go wit --out-dir ./smtp
-///
-/// # Python (via componentize-py)
-/// componentize-py --wit-path wit bindings .
 /// ```
+///
+/// `wit-bindgen go` and `componentize-py … bindings` generate bindings for
+/// implementing this world, not for calling this component.
 ///
 /// ## Security note
 ///
