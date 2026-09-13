@@ -213,3 +213,83 @@ Once 0.18.0 is published, the architect checks four things:
 - docs.rs: `wasm-smtp` documents `send_mail_smtputf8`;
 - docs.rs: `wasm-smtp-wasi`'s landing page is the `wasm32-wasip2` build;
 - docs.rs: `wasm_smtp_wasi/fn.connect_smtps.html` returns 200.
+
+---
+
+# Revision 2 — 2026-09-13, before work starts
+
+The owner confirmed both decisions, and added three README changes. Read
+RFC 034 amendments **D7** and **D8**. This revision changes S9, and adds
+S9b and S11b. Everything else stands.
+
+## Changes to S9
+
+- **S9.1:** the License badge target and `[TERMS_OF_USE.md]` still become
+  absolute URLs, and the unused `[LICENSE]` and `[NOTICE]` definitions are
+  still removed. **`[docs/src]` is not fixed. It is deleted** with the
+  Documentation section in S9b.
+
+## S9b. The README's first screen (D7)
+
+One commit, after S9.
+
+1. **Top.** Directly after `# wasm-smtp`, the badge row becomes the License
+   badge and a documentation badge:
+   `[![Documentation](https://img.shields.io/badge/docs-book-blue)](https://nabbisen.github.io/wasm-smtp/)`.
+   The architect confirmed that this shields.io URL returns an SVG. Put
+   the License badge first, as it is now.
+2. **One line** after the opening paragraph:
+   `Documentation: <https://nabbisen.github.io/wasm-smtp/>`. No further
+   description.
+3. **`## Acceptable use`** moves to directly after that line, above
+   `## Minimum usage`, with its text unchanged.
+4. **`## Documentation` is removed**, including its `docs/src` sentence
+   and the `[docs/src]` definition.
+5. **`### Minimum supported Rust version` is removed** from the README.
+   In `docs/src/intro.md`, add `## Minimum supported Rust version` after
+   the paragraph that ends "they never need to fork the protocol
+   implementation." and before `## What this project is for`, with the same
+   substance: 1.88, Rust 2024 edition, declared as `rust-version` in the
+   workspace manifest; the repository pins that toolchain in
+   `rust-toolchain.toml`, which CI enforces.
+6. No other section moves, and no wording changes, except the one new
+   Documentation line and the moved MSRV text.
+7. `mdbook build docs` stays clean. Command 22 is unaffected, because the
+   new section has no Rust code block. Paste the README's heading list
+   before and after.
+
+## S11b. The MSRV in the doc-version guard (D8)
+
+One commit, alongside S11.
+
+1. `tools/check-doc-versions.sh` also reads `[workspace.package]
+   rust-version` as `N.N`, the same way it reads `version`. If it cannot,
+   it exits 2 with a reason, like the other two readers.
+2. In every file it scans, it fails any line that contains `MSRV` or
+   `Minimum supported Rust version` **and** a `N.N` version different from
+   `rust-version`. The message has the same shape:
+   `file:line: found "X.Y", expected "A.B"`.
+3. The scan also covers `.github/CONTRIBUTING.md`.
+4. **Fixtures.** Every existing `doc-versions` fixture manifest needs a
+   `rust-version` line, or the new reader makes it exit 2. Add that line
+   and nothing else, and say so. New cases:
+   - `stale-msrv`: a book line stating another version, which fails;
+   - `correct-msrv`: which passes;
+   - `unreadable-rust-version`: which exits 2;
+   - `msrv-in-contributing`: a stale line in `.github/CONTRIBUTING.md`,
+     which fails.
+5. **Demonstrate failure** on the real tree: change the intro's `1.88` to
+   `1.87`, and command 14 goes red naming the line. Revert.
+6. Update the script's header to name the new reader and the new file.
+
+## Changes to S12
+
+The `[0.18.0]` Documentation bullet also covers the README's new first
+screen and the MSRV moving to the book, which the guard now checks.
+
+## Review request
+
+Unchanged path, plus:
+- S9b's before/after README heading list;
+- the intro diff;
+- S11b's fixture table and its demonstration.

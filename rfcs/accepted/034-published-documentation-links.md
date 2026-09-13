@@ -10,9 +10,9 @@
 ## Decisions at acceptance
 
 The owner accepted the RFC on 2026-09-13 and asked for the handoff.
-Neither open question was answered separately, so the architect's stated
-recommendations stand as the defaults, recorded here so they can be
-overridden:
+Neither open question was answered at acceptance, so the architect
+proceeded on the stated recommendations, and **the owner confirmed both**
+the same day:
 
 1. **Fixed before 0.18.0.** The release commit is redone after the fix.
 2. **docs.rs documents the core with `smtputf8`, `mail-builder`, and
@@ -36,6 +36,30 @@ class of defect in two more places. They are added as D5 and D6.
   documents all four with no warnings. On a host build the same crate
   produces three unresolved-link warnings, which are symptoms of this, not
   separate defects.
+
+## Amendment — 2026-09-13, the owner's README structure
+
+**D7. The README's first screen.** The owner asked for three changes to
+`README.md`. Its first screen is what crates.io shows for three crates,
+so the changes belong in this RFC and in 0.18.0:
+
+1. **Documentation at the top.** A documentation badge next to the
+   License badge, linking the published book, and one short line under
+   the opening paragraph with the link. The closing `## Documentation`
+   section is removed, `docs/src` sentence and all.
+2. **Acceptable use near the top**, directly after the opening paragraph
+   and above `## Minimum usage`, with its text unchanged.
+3. **No MSRV section in the README.** It moves to the book's
+   Introduction, where readers deciding whether to use the crates look.
+
+**D8. The MSRV is a constant, so it is checked.** Moving the MSRV into
+the book makes it a second hand-kept copy of `rust-version`. That is the
+defect RFC 029's guard exists for, in a new place. `check-doc-versions.sh`
+also reads `[workspace.package] rust-version`. It fails any line
+that states the MSRV, meaning one containing `MSRV` or `Minimum supported
+Rust version` together with a `N.N` version, when that version differs.
+Its scan gains `.github/CONTRIBUTING.md`, which states the MSRV today
+("currently 1.88") without being checked.
 
 ## Summary
 
