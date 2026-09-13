@@ -1,8 +1,40 @@
 ## [Unreleased]
 
-RFC 032: verification coverage. Nothing a consumer receives changes — no
-published crate's source, manifest, dependencies, or built artifact. What
-changes is what the gate reaches, and the order releases happen in.
+### Breaking — for component consumers only
+
+RFC 030. The Component Model interface can now say which certificate
+authorities to trust, so a component caller can send through a server
+behind a private certificate authority. Adding that required breaking the
+WIT interface once: the package moves from `wasm-smtp:smtp@0.1.0` to
+`wasm-smtp:smtp@0.2.0`.
+
+**The Rust APIs of `wasm-smtp`, `wasm-smtp-tokio`, `wasm-smtp-wasi`, and
+`wasm-smtp-cloudflare` are unchanged.** Rust callers change nothing.
+`wasm-smtp-component`'s own `pub` Rust items exist to implement the
+component, and they follow the interface.
+
+- **`smtp-config` is a resource, not a record.** Create it once with
+  `smtp-config.create(host, port, ehlo-domain, tls-mode, trust)`, which
+  checks everything and can fail with `invalid-input`. It is immutable and
+  can be reused. `send` now takes `borrow<smtp-config>`.
+- **Trust is explicit.** `trust-anchors::bundled` is 0.1.0's behaviour.
+  `trust-anchors::custom(pem)` trusts exactly the certificate authorities
+  in a PEM bundle, replacing the bundled roots rather than adding to them.
+  A bundle is accepted only if every block is a certificate the root
+  store accepts; otherwise `create` fails, never falling back to the
+  bundled roots and never repeating the rejected text in its error. There
+  is no way to disable verification.
+- **Migration:** replace the record with `smtp-config.create(…,
+  trust-anchors::bundled)` and pass the result to `send`. The
+  component-model chapter shows before and after.
+- **The component's success path is now tested end to end.** The host
+  harness sends through the component in both TLS modes with the run's
+  own certificate authority, and checks that `bundled` refuses it and that
+  a private key given as `custom` is rejected without being echoed.
+
+RFC 032: verification coverage. Nothing in RFC 032 reaches a consumer —
+no published crate's source, manifest, dependencies, or built artifact.
+What changes is what the gate reaches, and the order releases happen in.
 
 ### Testing
 

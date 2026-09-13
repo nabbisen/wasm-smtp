@@ -13,6 +13,12 @@ three directories. The declared minor is documentation of the host
 requirement, not a description of the artifact, which imports two WASI
 minors (0.2.12 from the `wasi` crate, 0.2.3 from the Rust standard
 library) and did not change at all when the annotations did.
+Amended by RFC 030 (0.18.0): the WIT package moves to
+`wasm-smtp:smtp@0.2.0`. `smtp-config` is no longer a record but an
+immutable resource created by a fallible static `create`, which takes an
+explicit `trust-anchors` choice (`bundled` or `custom` PEM) and performs
+all configuration checks; `send` takes `borrow<smtp-config>`. The Rust
+crates' APIs are unaffected.
 **Priority.** P2
 **Tracks.** Component Model / WIT
 **Touches.** `wit/` (new), `docs/src/component-model.md`
