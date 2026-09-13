@@ -77,8 +77,10 @@ interface smtp-send {
         ///
         /// Checked completely when the configuration is created: at most
         /// 64 blocks and 256 KiB; every block must be a certificate the
-        /// root store accepts, or creation fails. A rejected bundle never
-        /// falls back to `bundled`.
+        /// root store accepts, or creation fails. A line that looks like a
+        /// PEM boundary but is not an exact one, or is one in the wrong
+        /// place, also fails creation: it is never skipped as a comment.
+        /// A rejected bundle never falls back to `bundled`.
         custom(string),
     }
 

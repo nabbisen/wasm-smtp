@@ -13,7 +13,12 @@
 //!    "trust these three" into "trust whichever of these three parsed".
 //! 4. Text outside PEM blocks is ignored, because real bundles carry
 //!    comments, but every block must be labelled `CERTIFICATE`. A private
-//!    key pasted by mistake fails; it is not skipped.
+//!    key pasted by mistake fails; it is not skipped. And a line that only
+//!    *resembles* a PEM boundary is not text (RFC 030 A1): any line holding
+//!    `-----BEGIN` or `-----END` must be an exact boundary in the right
+//!    place, or the input fails. Without that, an indented key, or an
+//!    indented second certificate, would be skipped as a comment — the
+//!    quiet shrinking of the trust set this module exists to prevent.
 //! 5. Errors never contain the input: no PEM text, no label read from the
 //!    input, no decoded bytes. They name a block ordinal and a fixed
 //!    reason, and every message is built in [`TrustError`]'s `Display`.
@@ -48,6 +53,9 @@ const BEGIN: &str = "-----BEGIN ";
 const DASHES: &str = "-----";
 const CERTIFICATE_LABEL: &str = "CERTIFICATE";
 const CERTIFICATE_END: &str = "-----END CERTIFICATE-----";
+/// A line containing either of these anywhere is a PEM boundary line.
+const BEGIN_MARK: &str = "-----BEGIN";
+const END_MARK: &str = "-----END";
 
 /// The caller's trust choice, as the WIT `trust-anchors` variant carries it.
 #[derive(Debug, Clone, Copy)]
@@ -65,6 +73,7 @@ pub(crate) enum Reason {
     TooManyBlocks,
     NoCertificates,
     NotACertificate,
+    MisplacedBoundary,
     Unterminated,
     MalformedBase64,
     RejectedByRootStore,
@@ -115,6 +124,7 @@ impl fmt::Display for TrustError {
             Reason::TooManyBlocks => "more than 64 PEM blocks",
             Reason::NoCertificates => "no certificate blocks",
             Reason::NotACertificate => "not a certificate",
+            Reason::MisplacedBoundary => "malformed or misplaced PEM boundary line",
             Reason::Unterminated => "block has no matching END line",
             Reason::MalformedBase64 => "malformed base64",
             Reason::RejectedByRootStore => "rejected by the root store",
@@ -154,9 +164,15 @@ pub(crate) fn parse_custom(pem: &str) -> Result<RootCertStore, TrustError> {
     while let Some(line) = lines.next() {
         let start = offset;
         offset += line.len();
-        let Some(label) = begin_label(line) else {
+        let label = match classify(line) {
             // Text outside a block: a comment in a bundle (rule 4).
-            continue;
+            Line::Text => continue,
+            Line::Begin(label) => label,
+            // An END line with no block open, or anything that only resembles
+            // a boundary: never skipped as a comment (A1).
+            Line::EndCertificate | Line::Misplaced => {
+                return Err(TrustError::at(blocks + 1, Reason::MisplacedBoundary));
+            }
         };
 
         blocks += 1;
@@ -167,18 +183,22 @@ pub(crate) fn parse_custom(pem: &str) -> Result<RootCertStore, TrustError> {
             return Err(TrustError::at(blocks, Reason::NotACertificate));
         }
 
-        // Find this block's END line. Another BEGIN first means the block
-        // was never closed.
+        // Inside a certificate block the only boundary allowed is its own
+        // exact END line. Another BEGIN first means the block was never
+        // closed; any other boundary-like line is malformed (A1).
         let mut end = None;
         for body_line in lines.by_ref() {
             offset += body_line.len();
-            let trimmed = body_line.trim_end();
-            if trimmed == CERTIFICATE_END {
-                end = Some(offset);
-                break;
-            }
-            if trimmed.starts_with(BEGIN) {
-                return Err(TrustError::at(blocks, Reason::Unterminated));
+            match classify(body_line) {
+                Line::Text => {}
+                Line::EndCertificate => {
+                    end = Some(offset);
+                    break;
+                }
+                Line::Begin(_) => return Err(TrustError::at(blocks, Reason::Unterminated)),
+                Line::Misplaced => {
+                    return Err(TrustError::at(blocks, Reason::MisplacedBoundary));
+                }
             }
         }
         let Some(end) = end else {
@@ -201,9 +221,37 @@ pub(crate) fn parse_custom(pem: &str) -> Result<RootCertStore, TrustError> {
     Ok(store)
 }
 
-/// The label of a `-----BEGIN <label>-----` line, if this is one.
-fn begin_label(line: &str) -> Option<&str> {
-    line.trim_end().strip_prefix(BEGIN)?.strip_suffix(DASHES)
+/// What one line of `custom` input is, for the scanner (RFC 030 A1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Line<'a> {
+    /// Anything without `-----BEGIN` or `-----END` in it.
+    Text,
+    /// Exactly `-----BEGIN <label>-----`, with this label.
+    Begin(&'a str),
+    /// Exactly `-----END CERTIFICATE-----`.
+    EndCertificate,
+    /// Holds `-----BEGIN` or `-----END` but is neither exact form: indented,
+    /// with trailing text, mid-line, or an END line for another label.
+    Misplaced,
+}
+
+/// Classify a line after removing trailing whitespace, `\r` included. Every
+/// decision about what counts as a boundary is made here, and only here.
+fn classify(line: &str) -> Line<'_> {
+    let line = line.trim_end();
+    if !line.contains(BEGIN_MARK) && !line.contains(END_MARK) {
+        return Line::Text;
+    }
+    if line == CERTIFICATE_END {
+        return Line::EndCertificate;
+    }
+    match line
+        .strip_prefix(BEGIN)
+        .and_then(|rest| rest.strip_suffix(DASHES))
+    {
+        Some(label) => Line::Begin(label),
+        None => Line::Misplaced,
+    }
 }
 
 #[cfg(test)]
@@ -305,6 +353,130 @@ mod tests {
         assert_eq!(reason_of(&nested), (Some(1), Reason::Unterminated));
     }
 
+    /// Indent every line of a PEM object by one space.
+    fn indented(pem: &str) -> String {
+        let mut out = String::new();
+        for line in pem.lines() {
+            out.push(' ');
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    /// Put trailing text after the BEGIN line of a PEM object.
+    fn with_trailing_text(pem: &str) -> String {
+        let mut lines = pem.lines();
+        let mut out = format!("{} extra\n", lines.next().expect("BEGIN line"));
+        for line in lines {
+            out.push_str(line);
+            out.push('\n');
+        }
+        out
+    }
+
+    // ── RFC 030 A1: every row of review 1's probe table ──
+
+    #[test]
+    fn two_exact_certificates_are_both_trusted() {
+        let (a, _) = cert_and_key();
+        let (b, _) = cert_and_key();
+        assert_eq!(
+            parse_custom(&format!("{a}{b}"))
+                .expect("two certificates")
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn an_indented_private_key_is_rejected_not_skipped() {
+        let (cert, key) = cert_and_key();
+        let input = format!("{cert}{}", indented(&key));
+        assert_eq!(reason_of(&input), (Some(2), Reason::MisplacedBoundary));
+    }
+
+    #[test]
+    fn an_indented_second_certificate_fails_the_whole_input() {
+        let (a, _) = cert_and_key();
+        let (b, _) = cert_and_key();
+        let input = format!("{a}{}", indented(&b));
+        // The property: creation fails. Trusting only the first certificate
+        // would be the silent partial acceptance rule 3 forbids.
+        assert!(
+            parse_custom(&input).is_err(),
+            "an indented certificate must not be dropped"
+        );
+        assert_eq!(reason_of(&input), (Some(2), Reason::MisplacedBoundary));
+    }
+
+    #[test]
+    fn a_key_begin_line_with_trailing_text_is_rejected() {
+        let (cert, key) = cert_and_key();
+        let input = format!("{cert}{}", with_trailing_text(&key));
+        assert_eq!(reason_of(&input), (Some(2), Reason::MisplacedBoundary));
+    }
+
+    #[test]
+    fn a_certificate_begin_line_with_trailing_text_is_rejected() {
+        let (a, _) = cert_and_key();
+        let (b, _) = cert_and_key();
+        let input = format!("{a}{}", with_trailing_text(&b));
+        assert_eq!(reason_of(&input), (Some(2), Reason::MisplacedBoundary));
+    }
+
+    #[test]
+    fn a_stray_end_line_outside_any_block_is_rejected() {
+        let (cert, _) = cert_and_key();
+        let input = format!("{cert}-----END CERTIFICATE-----\n");
+        assert_eq!(reason_of(&input), (Some(2), Reason::MisplacedBoundary));
+    }
+
+    #[test]
+    fn a_boundary_in_the_middle_of_a_line_is_rejected() {
+        let (cert, _) = cert_and_key();
+        let input = format!("{cert}note: -----BEGIN PRIVATE KEY-----\n");
+        assert_eq!(reason_of(&input), (Some(2), Reason::MisplacedBoundary));
+    }
+
+    #[test]
+    fn a_foreign_end_line_inside_a_certificate_block_is_rejected() {
+        let (cert, _) = cert_and_key();
+        let input = cert.replacen(
+            "-----BEGIN CERTIFICATE-----\n",
+            "-----BEGIN CERTIFICATE-----\n-----END PRIVATE KEY-----\n",
+            1,
+        );
+        assert_eq!(reason_of(&input), (Some(1), Reason::MisplacedBoundary));
+    }
+
+    #[test]
+    fn only_an_indented_certificate_is_rejected_as_a_misplaced_boundary() {
+        let (cert, _) = cert_and_key();
+        assert_eq!(
+            reason_of(&indented(&cert)),
+            (Some(1), Reason::MisplacedBoundary)
+        );
+    }
+
+    #[test]
+    fn a_system_bundle_shape_is_accepted() {
+        // Shaped like /etc/ssl/certs/ca-certificates.crt: `#` comment lines,
+        // blank lines, and exact CERTIFICATE blocks, nothing else.
+        use core::fmt::Write as _;
+
+        let mut bundle = String::new();
+        for i in 0..3 {
+            let (cert, _) = cert_and_key();
+            write!(
+                bundle,
+                "# Example Root CA {i}\n# SHA-256 fingerprint: 00:11:22:33\n{cert}\n"
+            )
+            .expect("writing to a String cannot fail");
+        }
+        assert_eq!(parse_custom(&bundle).expect("system bundle shape").len(), 3);
+    }
+
     #[test]
     fn no_blocks_is_rejected() {
         assert_eq!(reason_of(""), (None, Reason::NoCertificates));
@@ -372,6 +544,8 @@ mod tests {
             key.clone(),
             format!("{cert}{key}"),
             format!("# note\n{key}"),
+            format!("{cert}{}", indented(&key)),
+            format!("{cert}{}", with_trailing_text(&key)),
         ] {
             let message = parse_custom(&input)
                 .expect_err("a key is not trust input")
@@ -415,6 +589,10 @@ mod tests {
             (
                 TrustError::at(2, Reason::NotACertificate),
                 "trust anchors: block 2: not a certificate",
+            ),
+            (
+                TrustError::at(2, Reason::MisplacedBoundary),
+                "trust anchors: block 2: malformed or misplaced PEM boundary line",
             ),
             (
                 TrustError::at(1, Reason::Unterminated),

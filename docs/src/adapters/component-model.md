@@ -78,6 +78,11 @@ Three things to know about `custom`:
    be a `CERTIFICATE` that the root store accepts. A private key pasted by
    mistake, a block that does not parse, a bundle with no certificates,
    more than 64 blocks, or more than 256 KiB of text makes `create` fail.
+   So does any line that looks like a PEM boundary but is not an exact one,
+   or is one in the wrong place: an indented or trailing-text
+   `-----BEGIN` line, a stray `-----END` line, or a boundary in the middle
+   of a line. Such a line is never skipped as a comment, because skipping
+   it could silently drop a certificate from the bundle.
    A rejected bundle is an error, never a quiet switch to `bundled`. The
    error names the block by position and the kind of problem, such as
    `trust anchors: block 2: not a certificate`, and never repeats any of

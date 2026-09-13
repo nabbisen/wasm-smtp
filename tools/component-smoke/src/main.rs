@@ -206,6 +206,26 @@ fn refused(wasm: &Path, cert_pem: &str, key_pem: &str) -> Result<(), String> {
 /// `create` with the run's private key as `custom`: `invalid-input`, and
 /// nothing from the key in the message.
 fn private_key_create(wasm: &Path, key_pem: &str) -> Result<(), String> {
+    // The key as generated, and the same key indented by one space. The
+    // indented form must be rejected too, not skipped as comment text: a
+    // line that only resembles a PEM boundary fails `create` (RFC 030 A1).
+    let mut indented = String::new();
+    for line in key_pem.lines() {
+        indented.push(' ');
+        indented.push_str(line);
+        indented.push('\n');
+    }
+    for (form, input) in [("as generated", key_pem), ("indented", indented.as_str())] {
+        let message =
+            create_with_custom(wasm, input).map_err(|e| format!("private key {form}: {e}"))?;
+        check_no_echo(&message, key_pem).map_err(|e| format!("private key {form}: {e}"))?;
+    }
+    Ok(())
+}
+
+/// Call `smtp-config.create` with `input` as `custom` trust anchors and
+/// return the `invalid-input` message it must fail with.
+fn create_with_custom(wasm: &Path, input: &str) -> Result<String, String> {
     // No network for this case: it must fail before a connection could
     // exist, so the host permits none.
     let (mut store, client) = instantiate(wasm, None)?;
@@ -218,18 +238,17 @@ fn private_key_create(wasm: &Path, key_pem: &str) -> Result<(), String> {
             465,
             EXPECTED.ehlo,
             smtp_send::TlsMode::Implicit,
-            &smtp_send::TrustAnchors::Custom(key_pem.to_owned()),
+            &smtp_send::TrustAnchors::Custom(input.to_owned()),
         )
         .map_err(|e| format!("smtp-config.create trapped: {e:?}"))?;
-    let message = match created {
-        Err(smtp_send::SendError::InvalidInput(message)) => message,
-        Err(other) => return Err(format!("expected invalid-input, got {other:?}")),
+    match created {
+        Err(smtp_send::SendError::InvalidInput(message)) => Ok(message),
+        Err(other) => Err(format!("expected invalid-input, got {other:?}")),
         Ok(config) => {
             let _ = config.resource_drop(&mut store);
-            return Err("a private key was accepted as a trust anchor".to_owned());
+            Err("a private key was accepted as a trust anchor".to_owned())
         }
-    };
-    check_no_echo(&message, key_pem)
+    }
 }
 
 /// What the component's `send` returned.

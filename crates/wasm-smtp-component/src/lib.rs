@@ -362,6 +362,29 @@ mod tests {
     }
 
     #[test]
+    fn create_fails_when_a_second_certificate_is_indented() {
+        // RFC 030 A1: an indented block is not a comment. Trusting only the
+        // first certificate would be silent partial acceptance, so the
+        // configuration must not be created at all.
+        let (first, _) = generated_cert_and_key();
+        let (second, _) = generated_cert_and_key();
+        let mut indented = String::new();
+        for line in second.lines() {
+            indented.push(' ');
+            indented.push_str(line);
+            indented.push('\n');
+        }
+        let result = create(
+            "client.example.com",
+            &TrustAnchors::Custom(format!("{first}{indented}")),
+        );
+        assert!(
+            matches!(result, Err(SendError::InvalidInput(_))),
+            "create must fail, not trust one of two certificates"
+        );
+    }
+
+    #[test]
     fn create_rejects_an_invalid_ehlo_domain_as_invalid_input() {
         let err = create("", &TrustAnchors::Bundled)
             .err()

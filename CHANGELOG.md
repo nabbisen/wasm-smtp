@@ -21,8 +21,9 @@ component, and they follow the interface.
   `trust-anchors::custom(pem)` trusts exactly the certificate authorities
   in a PEM bundle, replacing the bundled roots rather than adding to them.
   A bundle is accepted only if every block is a certificate the root
-  store accepts; otherwise `create` fails, never falling back to the
-  bundled roots and never repeating the rejected text in its error. There
+  store accepts, and every line that looks like a PEM boundary is an exact
+  one in the right place; otherwise `create` fails, never falling back to
+  the bundled roots and never repeating the rejected text in its error. There
   is no way to disable verification.
 - **Migration:** replace the record with `smtp-config.create(…,
   trust-anchors::bundled)` and pass the result to `send`. The
