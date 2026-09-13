@@ -454,12 +454,12 @@ Order is the owner's decision after the RFC 024 roadmap review.
    validated, immutable resource with an explicit trust choice, strict
    PEM parsing that never falls back or echoes its input, and room for
    later options without another break. WIT package `0.2.0`.
-7. **Verification coverage** (RFC 032, accepted; supersedes RFC 031):
-   the tokio adapter has never completed a send over a socket in a
-   test, the book's code compiles nowhere, advisories are scanned only
-   on push, and the smoke test's host is an unsupported wasmtime. Close
-   those, add fixture tests for the two shell guards, and tag a
-   release only after CI has passed on its commit.
+7. ✅ **Verification coverage** (RFC 032, supersedes RFC 031; ships in
+   0.18.0): the tokio adapter sends end to end over loopback; the book's
+   Rust code is compiled by its own gate command; the core's 30
+   feature-gated tests run; the shell guards have fixture tests; a weekly
+   scheduled run scans advisories and runs ignored tests; CI actions are
+   SHA-pinned; and a release is tagged only after CI passes on its commit.
 8. ✅ **Stable-toolchain lint currency** (RFC 033, on `main`, ships with
    the next release): the advisory stable Clippy job is green again. Six
    lints fixed, including base64 with a new round-trip test; one pedantic

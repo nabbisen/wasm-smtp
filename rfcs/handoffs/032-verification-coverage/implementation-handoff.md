@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 032: Verification coverage
 
-**Governing RFC.** [`../../accepted/032-verification-coverage.md`](../../accepted/032-verification-coverage.md) — read §Resolution of the open questions; all three were settled at acceptance.
+**Governing RFC.** [`../../done/032-verification-coverage.md`](../../done/032-verification-coverage.md) — read §Resolution of the open questions; all three were settled at acceptance.
 **Prepared.** 2026-09-13 by the architect. Baseline: the commit accepting RFC 032, on top of `bd1c121` (Release 0.17.2).
 **Starts.** After 0.17.2 is tagged and published. Do not branch from, amend, or rebase anything at or before `bd1c121`.
 **Target release.** None required. No published crate's API, dependencies, or artifact changes; the work lands on `main` and rides with whatever release comes next. Say in the review request if you find a reason that is not true.

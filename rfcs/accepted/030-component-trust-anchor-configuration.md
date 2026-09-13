@@ -8,6 +8,21 @@
 **Origin.** Recommended by the dev team during RFC 028 implementation; endorsed by the architect in `.git-exclude/reviewed/028-wasi-contract-alignment-review-1.md` §5.
 **Target release.** 0.18.0, with the WIT package at `wasm-smtp:smtp@0.2.0`.
 
+## Amendment — 2026-09-13, after review 1
+
+**A1. What a PEM boundary line is.** As accepted, D3 said text outside
+PEM blocks is ignored, without defining a boundary line. The
+implementation followed that wording faithfully and treated any line
+that was not an exact boundary as text. An architect probe then showed
+that an indented private key was skipped rather than rejected, and that an
+indented second certificate was dropped while `create` succeeded:
+invariants 3 and 4 did not hold. It failed closed, since the trust set
+only shrank, but it was silent. The grammar is now in D3 (the paragraph
+headed "Boundary lines"). It was checked against a real system CA
+bundle, whose 242 boundary lines are all exact, and it is enforced by a
+test for each probed input. The gap was in this RFC, not in the
+implementation.
+
 ## Owner decisions at acceptance
 
 1. **Accepted.**
@@ -168,6 +183,15 @@ meet this RFC.
    real private-CA bundle and far below a size worth worrying about.
 8. **No verification bypass.** There is no variant, flag, or value that
    disables certificate or hostname verification.
+
+**Boundary lines (amendment A1).** A line containing `-----BEGIN` or
+`-----END` anywhere is a boundary line, and it is never skipped as text.
+Outside a block it must be exactly `-----BEGIN <label>-----`; inside a
+certificate block, the only boundary allowed is exactly
+`-----END CERTIFICATE-----`. Anything else — indented, with trailing
+text, mid-line, a stray END, or an END for another label — fails
+`create` with its own fixed reason. Lines are compared after removing
+trailing whitespace, `\r` included.
 
 All rejections are `send-error::invalid-input`: the data is the caller's,
 and that tells them where to look.
