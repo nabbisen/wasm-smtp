@@ -15,6 +15,11 @@ categories = ["email", "network-programming", "wasm"]
 [lib]
 path = "src/lib.rs"
 
+# docs.rs builds for wasm32-wasip2: the connect API is
+# `cfg(target_arch = "wasm32")` and does not exist on a host build.
+[package.metadata.docs.rs]
+targets = ["wasm32-wasip2"]
+
 [features]
 # Trust-anchor source. Pick exactly one.
 # native-roots: use the OS trust store at runtime (not applicable on WASI,

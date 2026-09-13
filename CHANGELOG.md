@@ -938,8 +938,8 @@ post-`DATA` reply text, but the previous API discarded it.
 This release closes the last item from the production-deployment
 feedback documented in v0.9.4's acknowledgements section.
 
-[`SendOutcome`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SendOutcome.html
-[`SmtpClient::send_mail`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.send_mail
+[`SendOutcome`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/outcome/struct.SendOutcome.html
+[`SmtpClient::send_mail`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/client/struct.SmtpClient.html#method.send_mail
 
 
 This release adds three observability and ergonomics improvements
@@ -1397,7 +1397,7 @@ bump.
 - ROADMAP Phase 12 reflects this item as complete.
 
 [`std::error::Error::source`]: https://doc.rust-lang.org/std/error/trait.Error.html#method.source
-[`wasm_smtp::IoError`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.IoError.html
+[`wasm_smtp::IoError`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/struct.IoError.html
 
 ## [0.7.0] — 2026-04-29
 

@@ -15,6 +15,11 @@ categories = ["email", "network-programming", "wasm"]
 [lib]
 path = "src/lib.rs"
 
+# docs.rs builds with gate command 5's feature set, so the SMTPUTF8,
+# mail-builder, and tracing APIs are documented where readers look.
+[package.metadata.docs.rs]
+features = ["smtputf8", "mail-builder", "tracing"]
+
 [features]
 # Default features. `xoauth2`, `scram-sha-256`, and `oauthbearer` are
 # enabled by default because they represent modern, secure authentication

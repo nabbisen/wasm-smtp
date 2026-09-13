@@ -134,4 +134,4 @@ DNS resolution uses `wasi:sockets/ip-name-lookup`. TCP connections use
 `wasi:sockets/tcp`. Both require the runtime to grant the corresponding
 capabilities (wasmtime: `--allow-ip-name-lookup`, `--inherit-network`).
 
-[`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/trait.Transport.html
+[`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/transport/trait.Transport.html

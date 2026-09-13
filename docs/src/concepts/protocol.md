@@ -319,14 +319,14 @@ When the server does not advertise the extension, the crate does
 in a reply: the wire format is preserved verbatim in the reply text,
 and `enhanced` is `None`.
 
-[`SmtpClient::login`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.login
-[`SmtpClient::login_with`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.login_with
-[`SmtpClient::login_xoauth2`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SmtpClient.html#method.login_xoauth2
+[`SmtpClient::login`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/client/struct.SmtpClient.html#method.login
+[`SmtpClient::login_with`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/client/struct.SmtpClient.html#method.login_with
+[`SmtpClient::login_xoauth2`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/client/struct.SmtpClient.html#method.login_xoauth2
 [`AuthError::Rejected`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.AuthError.html#variant.Rejected
 [`AuthError::Rejected { code, enhanced, message }`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.AuthError.html#variant.Rejected
 [`AuthError::UnsupportedMechanism`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.AuthError.html#variant.UnsupportedMechanism
 [`ProtocolError::UnexpectedCode`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/enum.ProtocolError.html#variant.UnexpectedCode
-[`EnhancedStatus`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.EnhancedStatus.html
+[`EnhancedStatus`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/protocol/struct.EnhancedStatus.html
 
 ## SMTPUTF8 (RFC 6531) — feature-gated
 

@@ -117,5 +117,5 @@ worked example returns `503` and never opens a session.
 impersonate other senders, or to deliver mail that violates the policy
 of any SMTP server. See [`TERMS_OF_USE.md`].
 
-[`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/trait.Transport.html
+[`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/transport/trait.Transport.html
 [`TERMS_OF_USE.md`]: https://github.com/nabbisen/wasm-smtp/blob/main/TERMS_OF_USE.md

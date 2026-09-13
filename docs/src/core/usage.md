@@ -247,7 +247,7 @@ recognisable pattern (Microsoft Exchange / O365 most notably),
 will hold the verbatim reply for application-side parsing if
 you really need it.
 
-[`SendOutcome`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.SendOutcome.html
+[`SendOutcome`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/outcome/struct.SendOutcome.html
 
 ## Reading enhanced status codes
 

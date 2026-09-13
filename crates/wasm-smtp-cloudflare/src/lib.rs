@@ -71,9 +71,9 @@
 //! — but at runtime, `worker::Socket` requires the Workers runtime.
 //!
 //! [`wasm-smtp`]: https://docs.rs/wasm-smtp
-//! [`wasm-smtp::Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/trait.Transport.html
-//! [`wasm-smtp::StartTlsCapable`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/trait.StartTlsCapable.html
-//! [`wasm-smtp::IoError`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/struct.IoError.html
+//! [`wasm-smtp::Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/transport/trait.Transport.html
+//! [`wasm-smtp::StartTlsCapable`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/transport/trait.StartTlsCapable.html
+//! [`wasm-smtp::IoError`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/error/struct.IoError.html
 
 pub mod adapter;
 pub mod integration;

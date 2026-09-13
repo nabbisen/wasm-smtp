@@ -1,6 +1,6 @@
 # wasm-smtp
 
-[![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](LICENSE)
+[![License](https://img.shields.io/github/license/nabbisen/wasm-smtp)](https://github.com/nabbisen/wasm-smtp/blob/main/LICENSE)
 
 Rust crates for sending mail by SMTP from WebAssembly runtimes. The
 project separates the protocol implementation from the runtime-specific
@@ -153,8 +153,6 @@ error taxonomy, security and anti-abuse guidance, and end-to-end usage.
 The source lives in [`docs/src`] if you would rather read it in the
 repository or build it yourself with `mdbook build docs`.
 
-[`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/trait.Transport.html
+[`Transport`]: https://docs.rs/wasm-smtp/latest/wasm_smtp/transport/trait.Transport.html
 [`docs/src`]: ./docs/src
-[`LICENSE`]: ./LICENSE
-[`NOTICE`]: ./NOTICE
-[`TERMS_OF_USE.md`]: ./TERMS_OF_USE.md
+[`TERMS_OF_USE.md`]: https://github.com/nabbisen/wasm-smtp/blob/main/TERMS_OF_USE.md
