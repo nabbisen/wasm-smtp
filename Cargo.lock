@@ -2507,6 +2507,9 @@ dependencies = [
 name = "wasm-smtp-component"
 version = "0.17.2"
 dependencies = [
+ "rcgen",
+ "rustls",
+ "rustls-pki-types",
  "wasi 0.14.7+wasi-0.2.4",
  "wasm-smtp",
  "wasm-smtp-test",

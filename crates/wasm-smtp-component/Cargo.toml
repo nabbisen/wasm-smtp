@@ -26,6 +26,11 @@ native-roots  = ["wasm-smtp-wasi/native-roots"]
 [dependencies]
 wasm-smtp      = { path = "../wasm-smtp",      version = "0.17.2", default-features = false }
 wasm-smtp-wasi = { path = "../wasm-smtp-wasi", version = "0.17.2", default-features = false }
+# Trust-anchor parsing (RFC 030): the root store type the WASI adapter
+# connects with, and PEM base64 decoding. Both are already in the adapter's
+# graph at these versions; `std` only, so no crypto provider is chosen here.
+rustls = { version = "0.23.44", default-features = false, features = ["std"] }
+rustls-pki-types = { workspace = true, features = ["std"] }
 
 # wit-bindgen generates the WIT bindings at compile time via a proc macro.
 # The generated Guest trait is implemented in src/lib.rs.
@@ -47,6 +52,11 @@ wasi = { version = "0.14", default-features = false }
 
 [dev-dependencies]
 wasm-smtp-test = { path = "../wasm-smtp-test" }
+
+# Real certificates and a real private key for the trust-anchor tests,
+# generated per run. Native only: the tests do not run on wasm32.
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+rcgen = "0.14"
 
 # This crate cannot use `[lints] workspace = true` unchanged. The workspace
 # sets `unsafe_code = "forbid"`, and `forbid` cannot be lifted anywhere in the
