@@ -36,7 +36,7 @@ issue another `send_mail` and the crate will start a fresh SMTP
 transaction (`MAIL FROM:` → `RCPT TO:` → `DATA` → body) over the
 same connection.
 
-```rust,ignore
+```rust,no_run
 use wasm_smtp::SmtpClient;
 use wasm_smtp_tokio::TokioTlsTransport;
 
@@ -100,7 +100,7 @@ concern. For longer-lived connections, treat any `send_mail` failure
 that comes with `SmtpError::Io` as a signal to drop the connection
 and reconnect:
 
-```rust,ignore
+```rust,no_run
 use wasm_smtp::SmtpError;
 # async fn try_send(client: &mut wasm_smtp::SmtpClient<impl wasm_smtp::Transport>) -> Result<(), SmtpError> {
 match client.send_mail("a@x.com", &["b@x.com"], "...").await {

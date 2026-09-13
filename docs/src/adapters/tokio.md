@@ -77,7 +77,7 @@ wasm-smtp-tokio = "0.17"
 
 ## Implicit TLS (port 465)
 
-```rust,ignore
+```rust,no_run
 use wasm_smtp::SmtpClient;
 use wasm_smtp_tokio::TokioTlsTransport;
 
@@ -102,7 +102,7 @@ client.quit().await?;
 
 ## STARTTLS (port 587)
 
-```rust,ignore
+```rust,no_run
 use wasm_smtp::SmtpClient;
 use wasm_smtp_tokio::TokioPlainTransport;
 

@@ -58,10 +58,12 @@ changes is what the gate reaches, and the order releases happen in.
   cannot compile on a host say why beside them: two call
   `wasm32-wasip2`-only functions (compiled on that target by the smoke
   example instead), and one lists signatures. A test fails if a chapter
-  with Rust code is added without being compiled. The feature it needs
+  with Rust code is added without being compiled. Four examples that were
+  marked as not compiled, though they did, are now checked too. The feature it needs
   stays out of the workspace-wide test run.
 - **Pull requests build the book**, so a book that fails to build is seen
-  before merge. Only pushes to `main` deploy it.
+  before merge. Only pushes to `main` deploy it, and only the deploy job
+  holds the Pages write and identity-token permissions.
 - **Three code examples in the book were wrong, not merely uncompiled**,
   and are fixed (RFC 032). The error-classification match in
   *Errors* had comments where Rust requires expressions; the policy
