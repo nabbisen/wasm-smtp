@@ -83,6 +83,22 @@ What changes is what the gate reaches, and the order releases happen in.
 
 ### Documentation
 
+- **Links resolve where the documentation is read** (RFC 034). crates.io
+  resolves a README's relative links from the crate's directory, so the
+  shared root README's License badge and terms link were broken on three
+  crate pages; they are absolute now. docs.rs links name the module paths
+  rustdoc generates (`transport/trait.Transport.html`, not
+  `trait.Transport.html`), and four intra-doc links in the core resolve.
+  docs.rs documents `wasm-smtp` with `smtputf8`, `mail-builder`, and
+  `tracing`, and builds `wasm-smtp-wasi` for `wasm32-wasip2`, the only
+  target where its connect functions exist. The README's first screen now
+  carries a documentation badge and link, with acceptable use directly
+  below; its Documentation and MSRV sections are gone, and the minimum
+  supported Rust version is stated in the book's Introduction instead.
+  Three gate commands keep this true: rustdoc with warnings denied for
+  both docs.rs targets, and an offline check of README and docs.rs links;
+  the documentation version guard also checks every stated MSRV against
+  `rust-version`.
 - **The component's binding instructions are corrected.** The generator
   commands pointed at `wit/smtp.wit`, which does not load the vendored
   WASI packages, and failed as written; jco is now pointed at the `wit`
