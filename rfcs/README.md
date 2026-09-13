@@ -18,7 +18,6 @@ lifecycle policy is defined in
 
 | ID | Title | Priority | Handoff |
 |----|-------|----------|---------|
-| [030](./accepted/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface | P2 | [yes](./handoffs/030-component-trust-anchor-configuration/implementation-handoff.md) |
 | [034](./accepted/034-published-documentation-links.md) | Links that work where the documentation is published | P1 | [yes](./handoffs/034-published-documentation-links/implementation-handoff.md) |
 
 ## Proposed
@@ -64,8 +63,9 @@ _(empty)_
 | [027](./done/027-docs-publication-dependency-currency.md) | Documentation publication and dependency currency ([handoff](./handoffs/027-docs-publication-dependency-currency/implementation-handoff.md)) | 0.17.0 |
 | [028](./done/028-wasi-contract-version-alignment.md) | WASI contract version alignment and component execution ([handoff](./handoffs/028-wasi-contract-alignment/implementation-handoff.md)) | 0.17.2 |
 | [029](./done/029-documentation-version-audit-and-guard.md) | Documentation version audit, and a guard so it stops recurring ([handoff](./handoffs/029-documentation-version-audit/implementation-handoff.md)) | 0.17.1 |
-| [032](./done/032-verification-coverage.md) | Verification coverage: what the gate does not yet reach ([handoff](./handoffs/032-verification-coverage/implementation-handoff.md)) | 0.18.0 (pending release) |
-| [033](./done/033-stable-toolchain-lint-currency.md) | Stable-toolchain lint currency ([handoff](./handoffs/033-stable-toolchain-lint-currency/implementation-handoff.md)) | 0.18.0 (pending release) |
+| [030](./done/030-component-trust-anchor-configuration.md) | Trust-anchor configuration for the Component Model interface ([handoff](./handoffs/030-component-trust-anchor-configuration/implementation-handoff.md)) | 0.18.0 |
+| [032](./done/032-verification-coverage.md) | Verification coverage: what the gate does not yet reach ([handoff](./handoffs/032-verification-coverage/implementation-handoff.md)) | 0.18.0 |
+| [033](./done/033-stable-toolchain-lint-currency.md) | Stable-toolchain lint currency ([handoff](./handoffs/033-stable-toolchain-lint-currency/implementation-handoff.md)) | 0.18.0 |
 
 ## Archive
 
@@ -75,4 +75,4 @@ _(empty)_
 
 ---
 
-RFC 000–021, 024–029, 032 and 033 are implemented; 030 and 034 are accepted; 031 is superseded by 032; 022–023 are drafts. The next RFC is **035**.
+RFC 000–021 and 024–033 are implemented, except 031, which is superseded by 032; 034 is accepted; 022–023 are drafts. The next RFC is **035**.

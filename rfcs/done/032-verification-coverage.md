@@ -1,6 +1,6 @@
 # RFC 032 — Verification coverage: what the gate does not yet reach
 
-**Status.** Implemented (on `main` at `32ba755`, 2026-09-13; ships in 0.18.0)
+**Status.** Implemented (0.18.0)
 **Handoff.** [`../handoffs/032-verification-coverage/implementation-handoff.md`](../handoffs/032-verification-coverage/implementation-handoff.md)
 **Priority.** P2
 **Tracks.** Testing / CI / Documentation

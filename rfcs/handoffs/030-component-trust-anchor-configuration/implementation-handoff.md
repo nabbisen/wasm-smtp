@@ -1,6 +1,6 @@
 # Developer Handoff — RFC 030: Component trust-anchor configuration
 
-**Governing RFC.** [`../../accepted/030-component-trust-anchor-configuration.md`](../../accepted/030-component-trust-anchor-configuration.md) — D3's eight invariants are fixed; nothing in this handoff relaxes them.
+**Governing RFC.** [`../../done/030-component-trust-anchor-configuration.md`](../../done/030-component-trust-anchor-configuration.md) — D3's eight invariants are fixed; nothing in this handoff relaxes them.
 **Prepared.** 2026-09-13 by the architect.
 **Starts.** After RFC 032's review request is **approved**, not merely submitted. Both touch `tools/component-smoke/`, and RFC 032 S2 moves the transcript assertions this work reuses.
 **Target release.** 0.18.0; WIT package `wasm-smtp:smtp@0.2.0`. The owner has approved the version. Release approval remains the owner's: this handoff ends at a release commit.

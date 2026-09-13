@@ -1,6 +1,6 @@
 # RFC 030 — Trust-anchor configuration for the Component Model interface
 
-**Status.** Accepted (owner, 2026-09-13)
+**Status.** Implemented (0.18.0)
 **Priority.** P2
 **Tracks.** Component Model / WIT / Security / Testing
 **Touches.** `crates/wasm-smtp-component/{wit/smtp.wit,src/**,Cargo.toml}`, `tools/component-smoke/`, `docs/src/adapters/component-model.md`, `CHANGELOG.md`, `rfcs/done/018-*` (amendment note)
